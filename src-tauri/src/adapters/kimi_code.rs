@@ -211,6 +211,7 @@ fn scan_wire(path: &Path, usage: &mut TokenUsage, model: &mut Option<String>) {
                 cache_write: n("inputCacheCreation"),
                 cache_read: n("inputCacheRead"),
                 output: n("output"),
+                unsplit: 0,
                 calls: 1,
             });
         }

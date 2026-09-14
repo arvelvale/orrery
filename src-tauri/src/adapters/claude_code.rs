@@ -211,6 +211,7 @@ fn scan_jsonl(path: &Path, want_meta: bool) -> Scan {
                     cache_write: n("cache_creation_input_tokens"),
                     cache_read: n("cache_read_input_tokens"),
                     output: n("output_tokens"),
+                    unsplit: 0,
                     calls: 1,
                 },
             );

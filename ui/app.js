@@ -10,8 +10,10 @@ const HARNESS = {
   cc:   { id: "cc",   label: "CC",   name: "Claude Code", badge: "cc" },
   kimi: { id: "kimi", label: "KIMI", name: "Kimi Code",   badge: "kimi" },
   dsh:  { id: "dsh",  label: "DSH",  name: "DSH",         badge: "dsh" },
-  mimo: { id: "mimo", label: "MIMO", name: "MiMoCode",    badge: "mimo" },
+  codex: { id: "codex", label: "CODEX", name: "Codex",     badge: "codex" },
 };
+
+const HARNESS_IDS = Object.keys(HARNESS);
 
 const MODELS = [
   { id: "claude-opus-5", vendor: "anthropic", note: "models.note.flagship" },
@@ -19,7 +21,7 @@ const MODELS = [
   { id: "kimi-k2.5", vendor: "moonshot", note: "models.note.kimi" },
   { id: "gpt-5.2", vendor: "openai", note: "models.note.openai" },
   { id: "deepseek-v3.2", vendor: "deepseek", note: "models.note.value" },
-  { id: "mimo-v2.5-pro", vendor: "xiaomi", note: "models.note.mimo" },
+  { id: "gpt-5.3-codex", vendor: "openai", note: "models.note.codex" },
 ];
 
 /*
@@ -109,7 +111,7 @@ const SEED_SESSIONS = [
   },
   {
     id: "d4c71a58",
-    harness: "mimo",
+    harness: "codex",
     title: {
       en: "todo-api · Write OpenAPI docs",
       "zh-CN": "todo-api · 编写 OpenAPI 文档",
@@ -121,7 +123,7 @@ const SEED_SESSIONS = [
       ja: "14 個のエンドポイントをすべて記述し、例はテストから生成。",
     },
     project: "~/code/todo-api",
-    model: "mimo-v2.5-pro",
+    model: "gpt-5.3-codex",
     status: "done",
     ago: 26 * 60 * MIN,
     usage: { input: 2600, cache_write: 3900, cache_read: 23300, output: 1900, calls: 14 },
@@ -159,7 +161,7 @@ const SEED_SESSIONS = [
   },
   {
     id: "f90a3d21",
-    harness: "mimo",
+    harness: "codex",
     title: {
       en: "chess-bot · Tune search depth",
       "zh-CN": "chess-bot · 调整搜索深度",
@@ -171,7 +173,7 @@ const SEED_SESSIONS = [
       ja: "定跡データで探索深度 6 と 7 を比較中。",
     },
     project: "~/code/chess-bot",
-    model: "mimo-v2.5-pro",
+    model: "gpt-5.3-codex",
     status: "running",
     ago: 20_000,
     usage: { input: 900, cache_write: 1400, cache_read: 5300, output: 600, calls: 5 },
@@ -188,7 +190,7 @@ const DEFAULT_ROUTES = {
   cc: "claude-sonnet-5",
   kimi: "kimi-k2.5",
   dsh: "deepseek-v3.2",
-  mimo: "mimo-v2.5-pro",
+  codex: "gpt-5.3-codex",
 };
 
 function seedSessions() {
@@ -227,7 +229,7 @@ function sessionTitle(s) {
 }
 
 function usageTotal(u) {
-  return u ? u.input + u.cache_write + u.cache_read + u.output : 0;
+  return u ? u.input + u.cache_write + u.cache_read + u.output + (u.unsplit || 0) : 0;
 }
 
 /* ── Tauri bridge ── */
@@ -322,7 +324,7 @@ async function loadNativeStorage() {
 /** 无原生统计时（浏览器预览）按当前会话列表汇总 */
 function storageRows() {
   if (state.storage) return state.storage;
-  return ["cc", "kimi", "dsh", "mimo"].map((hid) => {
+  return HARNESS_IDS.map((hid) => {
     const list = state.sessions.filter((s) => s.harness === hid);
     const bytes = list.reduce((n, s) => n + (s.sizeBytes || 0), 0);
     return { harness: hid, connected: list.length > 0, sessions: list.length, sessionBytes: bytes, rootBytes: bytes, root: "" };
@@ -431,7 +433,7 @@ function renderAnnunciator(boot = false) {
   bar.innerHTML = "";
   const items = [
     { id: "proxy", label: "PRX", state: state.proxyOnline ? "run" : "warn", title: t(state.proxyOnline ? "lamp.proxyOn" : "lamp.proxyOff") },
-    ...["cc", "kimi", "dsh", "mimo"].map((hid) => ({
+    ...HARNESS_IDS.map((hid) => ({
       id: hid,
       label: HARNESS[hid].label,
       state: harnessLampState(hid),
@@ -463,7 +465,7 @@ function renderAnnunciator(boot = false) {
 
 function renderFilters() {
   const wrap = $("#filters");
-  const keys = ["all", "cc", "kimi", "dsh", "mimo"];
+  const keys = ["all", ...HARNESS_IDS];
   wrap.innerHTML = "";
   keys.forEach((k) => {
     const b = document.createElement("button");
@@ -483,7 +485,7 @@ function renderFilters() {
 function renderNavFilters() {
   const wrap = $("#nav-filters");
   wrap.innerHTML = "";
-  ["cc", "kimi", "dsh", "mimo"].forEach((hid) => {
+  HARNESS_IDS.forEach((hid) => {
     const count = state.sessions.filter((s) => s.harness === hid).length;
     const b = document.createElement("button");
     b.type = "button";
@@ -608,6 +610,8 @@ function usageSplitHtml(u) {
     ["usage.cacheWrite", u.cache_write],
     ["usage.cacheRead", u.cache_read],
     ["usage.output", u.output],
+    // 旧版 Codex 只记总数、没有分项，单列出来而不是猜测拆分
+    ...(u.unsplit ? [["usage.unsplit", u.unsplit]] : []),
   ].map(([k, v]) => `<span>${escapeHtml(t(k))} ${formatTok(v)}</span>`).join("");
 }
 
@@ -699,7 +703,7 @@ async function copyText(text) {
 function renderModels() {
   const routes = $("#routes");
   routes.innerHTML = "";
-  ["cc", "kimi", "dsh", "mimo"].forEach((hid) => {
+  HARNESS_IDS.forEach((hid) => {
     const h = HARNESS[hid];
     const row = document.createElement("div");
     row.className = "route";
@@ -808,7 +812,7 @@ function renderStatus() {
     cc: "~/.claude/projects/",
     kimi: "~/.kimi-code/sessions/",
     dsh: "~/.dsh/sessions/",
-    mimo: "~/.local/share/mimocode/sessions/",
+    codex: "~/.codex/sessions/",
   };
   const cards = [
     {
@@ -821,7 +825,7 @@ function renderStatus() {
         [t("status.note"), t("status.proxyNote")],
       ],
     },
-    ...["cc", "kimi", "dsh", "mimo"].map((hid) => {
+    ...HARNESS_IDS.map((hid) => {
       const h = HARNESS[hid];
       const list = state.sessions.filter((s) => s.harness === hid);
       const running = list.filter((s) => s.status === "running").length;

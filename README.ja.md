@@ -6,7 +6,7 @@
 
 **AI コーディングエージェントのための、ローカルファーストなコックピット。**
 
-手元の Claude Code・Kimi Code のセッションをひとつのウィンドウに集約します。トークン、ディスク使用量、プロジェクト、サブエージェントまで一目で把握でき、データは PC の外に出ません。
+手元の Claude Code・Kimi Code・DSH（DeepSeek）・Codex のセッションをひとつのウィンドウに集約します。トークン、ディスク使用量、プロジェクト、サブエージェントまで一目で把握でき、データは PC の外に出ません。
 
 <p>
   <a href="https://github.com/arvelvale/openplane/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/arvelvale/openplane?style=flat-square&color=0B6BCB" /></a>
@@ -24,8 +24,8 @@
 <p>
   <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-対応済み-0F9D6E?style=flat-square" />
   <img alt="Kimi Code" src="https://img.shields.io/badge/Kimi%20Code-対応済み-0F9D6E?style=flat-square" />
-  <img alt="DSH" src="https://img.shields.io/badge/DSH-予定-9AA8B8?style=flat-square" />
-  <img alt="MiMoCode" src="https://img.shields.io/badge/MiMoCode-予定-9AA8B8?style=flat-square" />
+  <img alt="DSH" src="https://img.shields.io/badge/DSH%20(DeepSeek)-対応済み-0F9D6E?style=flat-square" />
+  <img alt="Codex" src="https://img.shields.io/badge/Codex-対応済み-0F9D6E?style=flat-square" />
 </p>
 
 [English](README.md) · [简体中文](README.zh-CN.md) · **日本語**
@@ -53,6 +53,8 @@ Openplane は、各ツールがすでにディスクへ書き出しているデ�
 |---|:---:|---|
 | セッションハブ：Claude Code | ✅ | `~/.claude/projects`、サブエージェントは親セッションに統合 |
 | セッションハブ：Kimi Code | ✅ | `~/.kimi-code/sessions`、新旧両方の `state.json` 形式に対応 |
+| セッションハブ：DSH（DeepSeek） | ✅ | `~/.dsh/sessions`、zstd 圧縮のイベントログ、v0 / v3 形式に対応 |
+| セッションハブ：Codex | ✅ | `~/.codex/sessions`、同じ id の rollout を統合、guardian サブエージェントは親セッションに統合 |
 | 正確なトークン集計 | ✅ | API 呼び出し単位で重複排除し、入力 / キャッシュ書込 / キャッシュ読込 / 出力に分割 |
 | セッション別・ハーネス別のディスク使用量 | ✅ | ステータス画面に合計と内訳を表示 |
 | タイトル・パス・モデルで検索 | ✅ | |
@@ -60,21 +62,27 @@ Openplane は、各ツールがすでにディスクへ書き出しているデ�
 | 差分再スキャン | ✅ | 変更のないファイルはメモリキャッシュから返す |
 | ローカルモデルプロキシ（`127.0.0.1:8787`） | ⏳ | ルーティング設定と死活監視のみ。リクエスト転送は未実装 |
 | ターミナルで再開 | ⏳ | 現状はセッションフォルダを開くだけ |
-| DSH / MiMoCode アダプター | ⏳ | 予定 |
 
 <img src=".github/assets/screenshot-status.ja.png" alt="Openplane ステータス画面とストレージ内訳" width="100%" />
 
 ## トークンの数え方
 
-どちらのツールも API 呼び出しごとに使用量を記録しますが、そのまま足し合わせることはできません。
+どのツールも API 呼び出しごとに使用量を記録しますが、そのまま足し合わせられるものはありません。
 
-| | Claude Code | Kimi Code |
-|---|---|---|
-| 取得元 | assistant 行の `message.usage` | `agents/*/wire.jsonl` 内の `usage.record` イベント |
-| 落とし穴 | ストリーミング時にコンテンツブロックごとに行が分かれ、同じ使用量が重複する（あるセッションでは 4,034 行が実際には 1,558 回の呼び出し） | `usageScope: "session"` はコンテキスト圧縮の独立した呼び出しで、合計値ではない |
-| Openplane の処理 | `message.id` で重複排除し、最後の行を採用 | 各レコードを 1 回ずつ集計 |
+| | 取得元 | 落とし穴 | Openplane の処理 |
+|---|---|---|---|
+| **Claude Code** | assistant 行の `message.usage` | ストリーミング時にコンテンツブロックごとに行が分かれ、同じ使用量が重複する（あるセッションでは 4,034 行が実際には 1,558 回の呼び出し） | `message.id` で重複排除し、最後の行を採用 |
+| **Kimi Code** | `agents/*/wire.jsonl` 内の `usage.record` イベント | `usageScope: "session"` はコンテキスト圧縮の独立した呼び出しで、合計値ではない | 各レコードを 1 回ずつ集計 |
+| **DSH** | マルチフレーム zstd ログ内の `assistant/message` イベントの `data.usage` | アップグレードしたセッションには同じ履歴の v0 と v3 のログが両方残る | 両方ある場合は v3 のみ読む |
+| **Codex** | `token_count` イベント（新しい版では `token_usage_record` も） | `total_token_usage` はプロセス単位で再開時にリセット、`input_tokens` はキャッシュ分を含む、古い `token_count` はコンテキスト圧縮の呼び出しを記録しない | 呼び出し単位で重複排除して合算し、`token_usage_record` がある区間はそちらを優先、入力からキャッシュ分を差し引く |
 
-セッション合計は、メインエージェントとすべてのサブエージェントの和です。同じプロセス区間で Claude Code 自身の `cost-state` 記録と照合し、入力・キャッシュ読込・出力が完全に一致することを確認しました。
+セッション合計は、メインエージェントとすべてのサブエージェントの和です。検証方法：
+
+- **Claude Code**：同じプロセス区間で自身の `cost-state` 記録と照合し、入力・キャッシュ読込・出力が完全に一致。
+- **DSH**：DSH 自身の投影キャッシュと、キャッシュ作成時点までのイベントで完全に一致。
+- **Codex**：両方の記録を持つ 12 ファイル中 8 ファイルで完全一致。残り 4 ファイルの差はちょうどコンテキスト圧縮の呼び出し分。
+
+初期の Codex alpha 版のセッションは内訳のない合計値しか持たないため、推測せず「内訳なし」として表示します。
 
 既知の制限：公式記録は `--resume` でリセットされるため、Openplane は会話ログから合計を再構築しています。公式記録にはタイトル生成など会話ログに残らない副次的な呼び出しも含まれるため、Openplane の Claude Code 合計は 1〜5% ほど少なく出ることがあります。
 
@@ -131,12 +139,11 @@ openplane/
 ## ロードマップ
 
 - [x] Tauri 2 シェルとセッションハブ
-- [x] Claude Code・Kimi Code アダプター
+- [x] Claude Code・Kimi Code・DSH・Codex アダプター
 - [x] トークンとディスク使用量の集計
 - [ ] 永続インデックスによる高速起動
 - [ ] OpenAI 互換 / Anthropic 形式の本物のローカルプロキシ
 - [ ] 各 CLI でのセッション再開
-- [ ] DSH・MiMoCode アダプター
 - [ ] トレイ、グローバルショートカット、インストーラー
 
 設計ドキュメント（中国語）：[プロジェクト概要](docs/00-项目定位.md) · [アーキテクチャ](docs/01-架构与技术路线.md) · [ロードマップ](docs/02-MVP路线图.md)

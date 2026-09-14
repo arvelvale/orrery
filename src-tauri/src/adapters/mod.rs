@@ -1,11 +1,14 @@
 //! Harness adapters: discover local agent sessions.
 
 mod claude_code;
+mod codex;
+mod dsh;
 mod kimi_code;
 
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fs;
+use std::io::{BufRead, BufReader, Read};
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
@@ -34,19 +37,22 @@ pub struct SessionSummary {
 
 /// 会话累计 token（主 agent + 子 agent，按 API 调用去重后求和）
 ///
-/// 口径对照：
-/// | 字段        | Claude Code                    | Kimi Code          |
-/// |-------------|--------------------------------|--------------------|
-/// | input       | input_tokens                   | inputOther         |
-/// | cache_write | cache_creation_input_tokens    | inputCacheCreation |
-/// | cache_read  | cache_read_input_tokens        | inputCacheRead     |
-/// | output      | output_tokens                  | output             |
+/// 口径对照（所有字段互不重叠，`total()` 直接相加）：
+/// | 字段        | Claude Code                 | Kimi Code          | DSH（DeepSeek）       | Codex                                  |
+/// |-------------|-----------------------------|--------------------|-----------------------|----------------------------------------|
+/// | input       | input_tokens                | inputOther         | inputTokens（已不含缓存） | input_tokens − cached_input_tokens（原值含缓存） |
+/// | cache_write | cache_creation_input_tokens | inputCacheCreation | cacheWriteTokens      | cache_write_input_tokens               |
+/// | cache_read  | cache_read_input_tokens     | inputCacheRead     | cacheReadTokens       | cached_input_tokens                    |
+/// | output      | output_tokens               | output             | outputTokens（含推理）  | output_tokens（含 reasoning_output）     |
+/// | unsplit     | —                           | —                  | —                     | 旧版/导入会话只有 total_tokens、分项全 0     |
 #[derive(Debug, Clone, Copy, Default, Serialize)]
 pub struct TokenUsage {
     pub input: u64,
     pub cache_write: u64,
     pub cache_read: u64,
     pub output: u64,
+    /// 只有总数、没有分项的用量（不猜测拆分）
+    pub unsplit: u64,
     /// 计入的 API 调用次数
     pub calls: u64,
 }
@@ -57,11 +63,12 @@ impl TokenUsage {
         self.cache_write += other.cache_write;
         self.cache_read += other.cache_read;
         self.output += other.output;
+        self.unsplit += other.unsplit;
         self.calls += other.calls;
     }
 
     pub fn total(&self) -> u64 {
-        self.input + self.cache_write + self.cache_read + self.output
+        self.input + self.cache_write + self.cache_read + self.output + self.unsplit
     }
 }
 
@@ -80,43 +87,72 @@ pub struct HarnessStorage {
 }
 
 pub fn list_all_sessions() -> Result<Vec<SessionSummary>, String> {
-    let t0 = Instant::now();
-    let mut out = claude_code::list_sessions()?;
-    let t_cc = t0.elapsed();
-    let n_cc = out.len();
-
-    let t1 = Instant::now();
-    out.extend(kimi_code::list_sessions()?);
-    let t_kimi = t1.elapsed();
-
-    eprintln!(
-        "[openplane] list_sessions: cc {} in {:?} · kimi {} in {:?}",
-        n_cc,
-        t_cc,
-        out.len() - n_cc,
-        t_kimi
-    );
+    let adapters: [(&str, fn() -> Result<Vec<SessionSummary>, String>); 4] = [
+        ("cc", claude_code::list_sessions),
+        ("kimi", kimi_code::list_sessions),
+        ("dsh", dsh::list_sessions),
+        ("codex", codex::list_sessions),
+    ];
+    let mut out = Vec::new();
+    let mut timing = Vec::new();
+    for (name, list) in adapters {
+        let t = Instant::now();
+        // 单个适配器失败不拖垮其他 harness，错误进日志
+        match list() {
+            Ok(rows) => {
+                timing.push(format!("{name} {} in {:?}", rows.len(), t.elapsed()));
+                out.extend(rows);
+            }
+            Err(e) => timing.push(format!("{name} ERROR {e}")),
+        }
+    }
+    eprintln!("[openplane] list_sessions: {}", timing.join(" · "));
 
     out.sort_by(|a, b| b.updated_ms.cmp(&a.updated_ms));
-    out.truncate(300);
+    out.truncate(500);
     Ok(out)
 }
 
 pub fn storage_stats() -> Vec<HarnessStorage> {
-    let pending = |id: &str, root: &str| HarnessStorage {
-        harness: id.into(),
+    vec![
+        claude_code::storage(),
+        kimi_code::storage(),
+        dsh::storage(),
+        codex::storage(),
+    ]
+}
+
+/// harness 目录不存在时的统一返回
+pub(crate) fn storage_absent(harness: &str, root: &str) -> HarnessStorage {
+    HarnessStorage {
+        harness: harness.into(),
         connected: false,
         sessions: 0,
         session_bytes: 0,
         root_bytes: 0,
         root: root.into(),
-    };
-    vec![
-        claude_code::storage(),
-        kimi_code::storage(),
-        pending("dsh", "~/.dsh/sessions/"),
-        pending("mimo", "~/.local/share/mimocode/sessions/"),
-    ]
+    }
+}
+
+/// 逐行回调原始字节（不做 UTF-8 校验，按需再解析）；回调返回 false 提前结束
+pub(crate) fn for_each_line<R: Read>(reader: R, mut f: impl FnMut(&[u8]) -> bool) {
+    let mut reader = BufReader::with_capacity(1 << 16, reader);
+    let mut buf = Vec::with_capacity(1 << 12);
+    loop {
+        buf.clear();
+        match reader.read_until(b'\n', &mut buf) {
+            Ok(0) | Err(_) => break,
+            Ok(_) => {
+                if !f(&buf) {
+                    break;
+                }
+            }
+        }
+    }
+}
+
+pub(crate) fn contains(hay: &[u8], needle: &[u8]) -> bool {
+    memchr::memmem::find(hay, needle).is_some()
 }
 
 /* ── 解析缓存：文件没变就不重读 ── */

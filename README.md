@@ -6,7 +6,7 @@
 
 **A local-first cockpit for your AI coding agents.**
 
-Every Claude Code and Kimi Code session on your machine in one window: tokens, disk usage, projects, subagents. Nothing leaves your computer.
+Every Claude Code, Kimi Code, DSH (DeepSeek) and Codex session on your machine in one window: tokens, disk usage, projects, subagents. Nothing leaves your computer.
 
 <p>
   <a href="https://github.com/arvelvale/openplane/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/arvelvale/openplane?style=flat-square&color=0B6BCB" /></a>
@@ -24,8 +24,8 @@ Every Claude Code and Kimi Code session on your machine in one window: tokens, d
 <p>
   <img alt="Claude Code" src="https://img.shields.io/badge/Claude%20Code-connected-0F9D6E?style=flat-square" />
   <img alt="Kimi Code" src="https://img.shields.io/badge/Kimi%20Code-connected-0F9D6E?style=flat-square" />
-  <img alt="DSH" src="https://img.shields.io/badge/DSH-planned-9AA8B8?style=flat-square" />
-  <img alt="MiMoCode" src="https://img.shields.io/badge/MiMoCode-planned-9AA8B8?style=flat-square" />
+  <img alt="DSH" src="https://img.shields.io/badge/DSH%20(DeepSeek)-connected-0F9D6E?style=flat-square" />
+  <img alt="Codex" src="https://img.shields.io/badge/Codex-connected-0F9D6E?style=flat-square" />
 </p>
 
 **English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
@@ -53,6 +53,8 @@ Openplane reads what the harnesses already write to disk and puts it all on one 
 |---|:---:|---|
 | Session hub: Claude Code | ✅ | `~/.claude/projects`, subagents folded into their parent session |
 | Session hub: Kimi Code | ✅ | `~/.kimi-code/sessions`, both old and new `state.json` layouts |
+| Session hub: DSH (DeepSeek) | ✅ | `~/.dsh/sessions`, zstd-compressed event logs, v0 and v3 formats |
+| Session hub: Codex | ✅ | `~/.codex/sessions`, rollouts sharing an id are merged, guardian subagents folded in |
 | Accurate token accounting | ✅ | Deduplicated per API call, split into input / cache write / cache read / output |
 | Disk usage per session and per harness | ✅ | Status page shows totals and a per-harness breakdown |
 | Search by title, path and model | ✅ | |
@@ -60,21 +62,27 @@ Openplane reads what the harnesses already write to disk and puts it all on one 
 | Incremental rescans | ✅ | Unchanged files are served from an in-memory cache |
 | Local model proxy (`127.0.0.1:8787`) | ⏳ | Route config and health probe only; no requests are forwarded yet |
 | Resume in terminal | ⏳ | Currently opens the session folder |
-| DSH / MiMoCode adapters | ⏳ | Planned |
 
 <img src=".github/assets/screenshot-status.en.png" alt="Openplane status page with storage breakdown" width="100%" />
 
 ## How token counting works
 
-Both harnesses record usage per API call, but not in a way you can simply add up:
+Every harness records usage per API call, and none of them can simply be added up:
 
-| | Claude Code | Kimi Code |
-|---|---|---|
-| Source | `message.usage` on assistant lines | `usage.record` events in `agents/*/wire.jsonl` |
-| Pitfall | Streaming writes one line per content block, each repeating the same usage (4,034 lines → 1,558 real calls in one session) | `usageScope: "session"` records are separate context-compaction calls, not totals |
-| Openplane does | Deduplicates by `message.id`, keeping the last line | Counts every record once |
+| | Source | Pitfall | Openplane does |
+|---|---|---|---|
+| **Claude Code** | `message.usage` on assistant lines | Streaming writes one line per content block, each repeating the same usage (4,034 lines → 1,558 real calls in one session) | Deduplicates by `message.id`, keeping the last line |
+| **Kimi Code** | `usage.record` events in `agents/*/wire.jsonl` | `usageScope: "session"` records are separate context-compaction calls, not totals | Counts every record once |
+| **DSH** | `data.usage` on `assistant/message` events, inside multi-frame zstd logs | Upgraded sessions keep both a v0 and a v3 log of the same history | Reads only v3 when both exist |
+| **Codex** | `token_count` events, plus `token_usage_record` in newer versions | `total_token_usage` is per process and resets on resume; `input_tokens` already includes cached tokens; older `token_count` misses compaction calls | Sums deduplicated per-call usage, prefers `token_usage_record` where it exists, subtracts cached tokens from input |
 
-The session total adds up the main agent and every subagent. Checked against Claude Code's own `cost-state` ledger over the same process window, input, cache read and output match exactly.
+The session total adds up the main agent and every subagent. How it was checked:
+
+- **Claude Code**: matches its own `cost-state` ledger exactly (input, cache read, output) over the same process window.
+- **DSH**: matches DSH's own projection cache exactly up to the event the cache was built from.
+- **Codex**: `token_count` and `token_usage_record` agree exactly in 8 of 12 files that have both; in the other 4 the difference is exactly the context-compaction calls.
+
+Old Codex alpha sessions only stored a total without a breakdown. Openplane shows that part as *unsplit* instead of guessing.
 
 Known limits: the ledger resets on `--resume`, so Openplane rebuilds totals from the transcript instead. The ledger also counts side calls that never reach the transcript, such as title generation, so Openplane's Claude Code totals can read about 1–5% lower.
 
@@ -131,12 +139,11 @@ openplane/
 ## Roadmap
 
 - [x] Tauri 2 shell and session hub
-- [x] Claude Code and Kimi Code adapters
+- [x] Claude Code, Kimi Code, DSH and Codex adapters
 - [x] Token and disk accounting
 - [ ] Persistent index for instant cold start
 - [ ] Real OpenAI-compatible / Anthropic-shaped local proxy
 - [ ] Resume a session in its own CLI
-- [ ] DSH and MiMoCode adapters
 - [ ] Tray, global shortcut, installer
 
 Design docs, in Chinese: [positioning](docs/00-项目定位.md) · [architecture](docs/01-架构与技术路线.md) · [roadmap](docs/02-MVP路线图.md)
