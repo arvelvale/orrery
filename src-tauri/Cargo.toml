@@ -20,6 +20,10 @@ tauri-plugin-opener = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 dirs = "5"
+# 按字节子串预筛会话行（Codex 单行可达数 MB，且可能含非 UTF-8 片段）
+memchr = "2"
+# DSH 会话日志是逐次追加的多帧 zstd；解码器默认连续解多帧
+zstd = "0.13"
 
 # 扫盘解析在 debug 下慢一个数量级（594MB 会话冷解析实测 10.6s）；
 # 只给热路径依赖开优化，不拖慢其余依赖的增量编译

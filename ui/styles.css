@@ -433,7 +433,7 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 .badge.cc { color: #7C3AED; border-color: #D4C4F5; background: #F5F0FF; }
 .badge.kimi { color: #0369A1; border-color: #BAE6FD; background: #F0F9FF; }
 .badge.dsh { color: #C2410C; border-color: #FDBA74; background: #FFF7ED; }
-.badge.mimo { color: #047857; border-color: #A7F3D0; background: #ECFDF5; }
+.badge.codex { color: #374151; border-color: #D1D5DB; background: #F3F4F6; }
 
 .strip-title {
   flex: 1;

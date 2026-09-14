@@ -59,6 +59,7 @@ const MESSAGES = {
     "usage.cacheWrite": "cache write",
     "usage.cacheRead": "cache read",
     "usage.output": "out",
+    "usage.unsplit": "unsplit",
 
     "models.endpointTitle": "Proxy endpoint",
     "models.endpointDesc": "Every harness switches models through this entry point. API keys stay in local environment variables and never touch the repo.",
@@ -73,7 +74,7 @@ const MESSAGES = {
     "models.note.kimi": "Kimi native",
     "models.note.openai": "OpenAI",
     "models.note.value": "best value",
-    "models.note.mimo": "MiMo",
+    "models.note.codex": "Codex",
 
     "lamp.proxyOn": "Model proxy online",
     "lamp.proxyOff": "Model proxy offline",
@@ -157,6 +158,7 @@ const MESSAGES = {
     "usage.cacheWrite": "缓存写",
     "usage.cacheRead": "缓存读",
     "usage.output": "输出",
+    "usage.unsplit": "未拆分",
 
     "models.endpointTitle": "代理端点",
     "models.endpointDesc": "所有 harness 经此入口切换模型。密钥只在本机环境变量，不写入仓库。",
@@ -171,7 +173,7 @@ const MESSAGES = {
     "models.note.kimi": "Kimi 原生",
     "models.note.openai": "OpenAI",
     "models.note.value": "高性价比",
-    "models.note.mimo": "MiMo",
+    "models.note.codex": "Codex",
 
     "lamp.proxyOn": "模型代理在线",
     "lamp.proxyOff": "模型代理离线",
@@ -255,6 +257,7 @@ const MESSAGES = {
     "usage.cacheWrite": "キャッシュ書込",
     "usage.cacheRead": "キャッシュ読込",
     "usage.output": "出力",
+    "usage.unsplit": "内訳なし",
 
     "models.endpointTitle": "プロキシエンドポイント",
     "models.endpointDesc": "すべてのハーネスはこの入口を通じてモデルを切り替えます。API キーはローカルの環境変数にのみ置かれ、リポジトリには書き込まれません。",
@@ -269,7 +272,7 @@ const MESSAGES = {
     "models.note.kimi": "Kimi ネイティブ",
     "models.note.openai": "OpenAI",
     "models.note.value": "コスパ重視",
-    "models.note.mimo": "MiMo",
+    "models.note.codex": "Codex",
 
     "lamp.proxyOn": "モデルプロキシ稼働中",
     "lamp.proxyOff": "モデルプロキシ停止中",
