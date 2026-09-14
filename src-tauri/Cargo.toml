@@ -1,0 +1,40 @@
+[package]
+name = "openplane"
+version = "0.1.0"
+description = "Openplane — agent harness cockpit"
+authors = ["arvelvale"]
+edition = "2021"
+license = "MIT"
+rust-version = "1.77"
+
+[lib]
+name = "openplane_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+dirs = "5"
+
+# 扫盘解析在 debug 下慢一个数量级（594MB 会话冷解析实测 10.6s）；
+# 只给热路径依赖开优化，不拖慢其余依赖的增量编译
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package.serde_json]
+opt-level = 3
+
+[profile.dev.package.memchr]
+opt-level = 3
+
+[profile.release]
+panic = "abort"
+codegen-units = 1
+lto = true
+opt-level = "s"
+strip = true

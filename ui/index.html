@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Openplane</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <span class="brand-name">Openplane</span>
+        <span class="brand-sub">COCKPIT</span>
+      </div>
+      <div class="annunciator" id="annunciator" data-i18n-aria="header.annunciator"></div>
+      <div class="header-right">
+        <div class="lang-switch" id="lang-switch" role="group" data-i18n-aria="lang.label"></div>
+        <div class="proxy-chip" id="proxy-chip" data-i18n-title="header.proxyChip">
+          <span class="dot"></span>
+          <span id="proxy-chip-text">127.0.0.1:8787</span>
+        </div>
+        <button type="button" class="icon-btn" id="btn-refresh" data-i18n-title="header.refresh" data-i18n-aria="header.refresh">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6"/><path d="M20 4v5h-5"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="shell" id="shell">
+      <aside class="sidebar" data-i18n-aria="nav.aria">
+        <div class="nav-section" data-i18n="nav.section"></div>
+        <button type="button" class="nav-item active" data-view="sessions" data-i18n-title="nav.sessions">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10"/></svg>
+          <span class="label" data-i18n="nav.sessions"></span>
+          <span class="count" id="nav-count-sessions">0</span>
+        </button>
+        <button type="button" class="nav-item" data-view="models" data-i18n-title="nav.models">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M5 8l7-5 7 5M5 16l7 5 7-5"/></svg>
+          <span class="label" data-i18n="nav.models"></span>
+        </button>
+        <button type="button" class="nav-item" data-view="status" data-i18n-title="nav.status">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2"/></svg>
+          <span class="label" data-i18n="nav.status"></span>
+        </button>
+
+        <div class="nav-section" style="margin-top:12px">Harness</div>
+        <div id="nav-filters"></div>
+
+        <div class="sidebar-foot">
+          <span id="build-badge" data-i18n="foot.prototype"></span><br /><span data-i18n="foot.tagline"></span>
+        </div>
+      </aside>
+
+      <main class="main">
+        <section class="view active" id="view-sessions">
+          <div class="toolbar">
+            <h1 data-i18n="nav.sessions"></h1>
+            <span class="meta" id="session-count">—</span>
+            <div class="search-wrap">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+              <input class="search" id="search" type="search" data-i18n-placeholder="search.placeholder" autocomplete="off" />
+            </div>
+          </div>
+          <div class="filters" id="filters"></div>
+          <div class="list" id="session-list"></div>
+        </section>
+
+        <section class="view" id="view-models">
+          <div class="toolbar">
+            <h1 data-i18n="nav.models"></h1>
+            <span class="meta">PROXY ROUTES</span>
+          </div>
+          <div class="panel-scroll">
+            <div class="card">
+              <h2 data-i18n="models.endpointTitle"></h2>
+              <p data-i18n="models.endpointDesc"></p>
+              <div class="endpoint-row">
+                <span class="dot" id="proxy-dot"></span>
+                <code>http://127.0.0.1:8787/v1</code>
+                <span class="tag" id="proxy-tag">ONLINE</span>
+              </div>
+              <div class="btn-row">
+                <button type="button" class="btn" id="btn-ping" data-i18n="models.ping"></button>
+                <button type="button" class="btn primary" id="btn-copy-endpoint" data-i18n="models.copyEndpoint"></button>
+              </div>
+            </div>
+            <div class="card">
+              <h2 data-i18n="models.routesTitle"></h2>
+              <p data-i18n="models.routesDesc"></p>
+              <div id="routes"></div>
+            </div>
+            <div class="card">
+              <h2 data-i18n="models.poolTitle"></h2>
+              <div class="pool" id="model-pool"></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="view" id="view-status">
+          <div class="toolbar">
+            <h1 data-i18n="nav.status"></h1>
+            <span class="meta">HARNESS HEALTH</span>
+          </div>
+          <div class="panel-scroll">
+            <div class="status-grid" id="status-grid"></div>
+          </div>
+        </section>
+      </main>
+
+      <aside class="detail" id="detail" data-i18n-aria="detail.aria">
+        <div class="detail-head">
+          <div class="detail-head-text">
+            <span class="badge" id="detail-badge">—</span>
+            <h2 id="detail-title" data-i18n="detail.none"></h2>
+          </div>
+          <button type="button" class="icon-btn" id="btn-close-detail" data-i18n-title="detail.close" data-i18n-aria="detail.close">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+          </button>
+        </div>
+        <div class="detail-body" id="detail-body">
+          <p class="hint" data-i18n="detail.hint"></p>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
