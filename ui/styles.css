@@ -31,6 +31,8 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
+/* 组件自己设了 display 时 hidden 属性会失效 */
+[hidden] { display: none !important; }
 html, body { height: 100%; }
 body {
   margin: 0;
@@ -858,3 +860,132 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   box-shadow: 0 0 0 1px var(--line);
 }
 .lang-opt:focus-visible { outline: 2px solid var(--nav); outline-offset: 1px; }
+
+/* ── 选择与删除 ── */
+.strip {
+  grid-template-columns: 3px 34px 1fr auto;
+  cursor: pointer;
+}
+.strip:focus-visible { outline: 2px solid var(--nav); outline-offset: 1px; }
+.strip.checked { background: var(--nav-soft); }
+.strip-check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.strip-check input {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--nav);
+  cursor: pointer;
+}
+.strip-body { padding-left: 2px; }
+
+.sort-switch {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+  padding-left: 12px;
+}
+
+.selbar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+.selbar-count {
+  margin-right: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink);
+}
+
+/* 删除类按钮：描边用 fault 色提示风险，实心只用于不可恢复的最终确认 */
+.btn.danger { color: var(--fault); border-color: #F1C3C3; }
+.btn.danger:hover { background: var(--fault-soft); }
+.btn.danger.solid { color: #fff; background: var(--fault); border-color: var(--fault); font-weight: 600; }
+.btn.danger.solid:hover { background: #BF3A3A; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; pointer-events: none; }
+
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(21, 32, 43, 0.28);
+}
+.modal-box {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 20px 22px 18px;
+  box-shadow: 0 12px 40px rgba(21, 32, 43, 0.16);
+  outline: none;
+}
+.modal-box h2 { margin: 0 0 14px; font-size: 16px; font-weight: 650; letter-spacing: -0.01em; }
+.modal-box h3 { margin: 16px 0 6px; font-size: 12px; font-weight: 600; color: var(--ink-2); }
+.modal-actions { justify-content: flex-end; margin-top: 18px; }
+
+.seg {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+.seg-opt {
+  height: 28px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+.seg-opt.active { background: var(--surface); color: var(--ink); font-weight: 600; box-shadow: 0 0 0 1px var(--line); }
+
+.del-note { margin: 10px 0 0; font-size: 12.5px; color: var(--ink-2); line-height: 1.5; }
+.del-note.danger { color: var(--fault); }
+.del-summary { display: flex; align-items: baseline; gap: 10px; margin: 16px 0 8px; }
+.del-summary strong { font-family: var(--mono); font-size: 20px; font-weight: 600; letter-spacing: -0.02em; }
+.del-summary span { font-size: 12.5px; color: var(--ink-2); }
+.del-list { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 8px; }
+.del-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 13px;
+  border-top: 1px solid var(--line);
+}
+.del-row:first-child { border-top: 0; }
+.del-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.del-size { flex: none; font-family: var(--mono); font-size: 11px; color: var(--ink-2); max-width: 55%; text-align: right; }
+.del-more { padding: 6px 10px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--line); }
+.del-warn {
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  border-radius: 7px;
+  background: var(--warn-soft);
+  color: #8A5606;
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+.del-fine { margin: 10px 0 0; font-size: 12px; color: var(--ink-2); line-height: 1.5; }
+.del-ack { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13px; cursor: pointer; }
+.del-ack input { accent-color: var(--fault); width: 15px; height: 15px; margin: 0; }
+/* 跳过/失败原因是自然语言，不用等宽字体 */
+.del-size.reason { font-family: var(--font); font-size: 12px; }

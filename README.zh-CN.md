@@ -60,6 +60,7 @@ Openplane 只读取各工具本来就写在磁盘上的数据，汇总到一块�
 | 按标题、路径、模型搜索 | ✅ | |
 | 界面三语：English / 简体中文 / 日本語 | ✅ | 默认跟随系统语言，顶栏可切换 |
 | 增量刷新 | ✅ | 没变的文件直接走内存缓存 |
+| 删除会话，腾出磁盘空间 | ✅ | 单条或多选，可按占用排序；回收站或永久删除；同时清理各工具自己的索引 |
 | 本地模型代理（`127.0.0.1:8787`） | ⏳ | 目前只有路由配置和探活，还不转发请求 |
 | 在终端恢复会话 | ⏳ | 目前只打开会话目录 |
 
@@ -121,7 +122,10 @@ openplane/
 │     ├─ adapters/
 │     │  ├─ mod.rs          # SessionSummary、TokenUsage、缓存与共用工具
 │     │  ├─ claude_code.rs
-│     │  └─ kimi_code.rs
+│     │  ├─ kimi_code.rs
+│     │  ├─ dsh.rs
+│     │  ├─ codex.rs
+│     │  └─ cleanup.rs      # 删除会话与索引清理
 │     ├─ proxy.rs           # 8787 探活 + ~/.openplane/proxy.json
 │     └─ lib.rs             # Tauri 命令
 ├─ scripts/preview.mjs      # 零依赖静态预览
@@ -129,10 +133,32 @@ openplane/
 └─ DESIGN.md                # 视觉规格
 ```
 
+## 删除会话
+
+会话本质上就是磁盘上的文件，Openplane 可以帮你删掉不再需要的会话。删除前一定会弹出确认框，列出每条会话和能腾出的空间。
+
+<img src=".github/assets/screenshot-delete.zh-CN.png" alt="Openplane 删除确认框" width="100%" />
+
+- **默认移到回收站。** 永久删除是单独的模式，还需要额外勾选确认。
+- **正在用的会话受保护。** 10 分钟内有写入的，或正在被运行中的 Claude Code 使用的，会自动跳过。
+- **同时清理各工具自己的索引**，不留死条目。改动前会把索引文件备份到 `~/.openplane/backups/`。
+- **Codex 通过官方的 `codex delete` 删除**，会一并清理 Codex 的历史数据库。Openplane 从不直接写其他工具的数据库。
+- 路径由后端根据会话 id 解析，并且必须位于该工具的数据目录之内。
+
+| 工具 | 删除的文件 | 移除的索引条目 |
+|---|---|---|
+| Claude Code | `projects/<p>/<id>.jsonl`、`projects/<p>/<id>/`、`file-history/<id>/`、`session-env/<id>/`、`tasks/<id>/` | — |
+| Kimi Code | `sessions/<ws>/<id>/` | `session_index.jsonl`、`file-history/<ws>` |
+| DSH | `sessions/<ws>/<id>/` 及其投影缓存 | `storages/workspace.json` |
+| Codex | 该会话的 rollout 及其子 agent 的 rollout | Codex 数据库（经 `codex delete`）、`session_index.jsonl` |
+
+> [!TIP]
+> 删除某个工具的会话前，建议先关闭这个工具。运行中的 Kimi Code 或 Codex 可能会把删掉的条目重新写回索引。
+
 ## 隐私
 
-- 只读：从不写入任何 harness 的会话目录。
-- 唯一会写的文件是 `~/.openplane/proxy.json`，也就是你的路由配置。
+- 只有在你删除会话时，Openplane 才会写入各 harness 的目录，具体如上。
+- 它自己的文件都在 `~/.openplane/`：路由配置和索引备份。
 - 不联网、无遥测，代理只监听 `127.0.0.1`。
 - 可能含粘贴密钥的字段（如 Kimi 的 `lastPrompt`）不读取。
 

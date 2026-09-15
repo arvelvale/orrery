@@ -21,6 +21,7 @@
 6. README 截图用 mock 数据（无头 Edge 截 `npm run preview?lang=<locale>` 页面，三语各一套 `screenshot-*.{en,zh-CN,ja}.png`），不要用真实会话截图——会暴露会话标题与项目路径。
 7. 界面文案一律走 `ui/i18n.js` 的 `t()`，新增键三种语言同时写（控制台 `[i18n] missing keys` 会报缺失）；Rust 后端只返回原始数据（时间戳、空标题），不产出任何自然语言。
 8. `ui/app.js` 的 mock 会话必须是虚构项目（acme-web、weather-cli…），不得出现真实项目名或本机路径。
+9. **删除功能是破坏性操作**：改 `cleanup.rs` 前先读模块顶部的安全约束；验证只在沙盒做（调试构建设 `OPENPLANE_HOME` 指向沙盒主目录），不对真实会话调用 `delete_sessions`；前后对真实目录做快照比对。
 
 ## 常用命令
 

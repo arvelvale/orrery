@@ -24,7 +24,7 @@ pub struct ProxyConfig {
 }
 
 fn config_path() -> Option<PathBuf> {
-    dirs::home_dir().map(|h| h.join(".openplane").join("proxy.json"))
+    crate::adapters::home_dir().map(|h| h.join(".openplane").join("proxy.json"))
 }
 
 fn load_config() -> ProxyConfig {

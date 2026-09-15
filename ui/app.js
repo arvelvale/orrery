@@ -214,7 +214,14 @@ const state = {
   runtime: "browser", // browser | tauri
   source: "mock",
   storage: null, // Tauri: storage_stats 结果；浏览器预览按 mock 会话汇总
+  selected: new Set(), // 勾选待删除的会话，键为 sessionKey()
+  sort: "recent", // recent | size
 };
+
+/** 不同 harness 的会话 id 可能重名，选择集合用 harness:id */
+function sessionKey(s) {
+  return `${s.harness}:${s.id}`;
+}
 
 /* ── 本地化取值 ── */
 
@@ -225,7 +232,8 @@ function localized(v) {
 }
 
 function sessionTitle(s) {
-  return localized(s.title) || t("session.untitled", { id: String(s.id).slice(0, 8) });
+  // DSH / Kimi 的 id 带 `session-` / `session_` 前缀，截短前先去掉
+  return localized(s.title) || t("session.untitled", { id: String(s.id).replace(/^session[-_]/, "").slice(0, 8) });
 }
 
 function usageTotal(u) {
@@ -480,6 +488,26 @@ function renderFilters() {
     });
     wrap.appendChild(b);
   });
+
+  // 排序：找占空间大户时按占用排
+  const sort = document.createElement("div");
+  sort.className = "sort-switch";
+  sort.setAttribute("role", "group");
+  sort.setAttribute("aria-label", t("sessions.sortLabel"));
+  [["recent", "sessions.sortRecent"], ["size", "sessions.sortSize"]].forEach(([key, label]) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip" + (state.sort === key ? " active" : "");
+    b.textContent = t(label);
+    b.setAttribute("aria-pressed", String(state.sort === key));
+    b.addEventListener("click", () => {
+      state.sort = key;
+      renderFilters();
+      renderSessions();
+    });
+    sort.appendChild(b);
+  });
+  wrap.appendChild(sort);
 }
 
 function renderNavFilters() {
@@ -508,11 +536,13 @@ function renderNavFilters() {
 
 function filteredSessions() {
   const q = state.query.trim().toLowerCase();
-  return state.sessions.filter((s) => {
+  const items = state.sessions.filter((s) => {
     if (state.filter !== "all" && s.harness !== state.filter) return false;
     if (!q) return true;
     return [sessionTitle(s), s.project, s.model, localized(s.excerpt), s.id].join(" ").toLowerCase().includes(q);
   });
+  if (state.sort === "size") items.sort((a, b) => (b.sizeBytes || 0) - (a.sizeBytes || 0));
+  return items;
 }
 
 function statusLabel(st) {
@@ -554,13 +584,20 @@ function renderSessions() {
   list.innerHTML = "";
   items.forEach((s) => {
     const h = HARNESS[s.harness] || HARNESS.cc;
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "strip" + (state.selectedId === s.id ? " selected" : "");
+    const key = sessionKey(s);
+    const checked = state.selected.has(key);
+    // 情报条内含复选框，不能用 <button> 嵌套交互元素
+    const btn = document.createElement("div");
+    btn.setAttribute("role", "button");
+    btn.tabIndex = 0;
+    btn.className = "strip" + (state.selectedId === s.id ? " selected" : "") + (checked ? " checked" : "");
     btn.dataset.status = s.status;
     btn.dataset.id = s.id;
     btn.innerHTML = `
       <span class="strip-bar" aria-hidden="true"></span>
+      <label class="strip-check" title="${escapeHtml(t("select.toggle"))}">
+        <input type="checkbox" ${checked ? "checked" : ""} aria-label="${escapeHtml(t("select.toggle"))}" />
+      </label>
       <span class="strip-body">
         <span class="strip-top">
           <span class="badge ${h.badge}">${h.label}</span>
@@ -577,9 +614,255 @@ function renderSessions() {
       <span class="strip-side">
         <span class="strip-time">${escapeHtml(formatRelative(s.updatedMs))}</span>
       </span>`;
+    const check = btn.querySelector(".strip-check");
+    check.addEventListener("click", (e) => e.stopPropagation());
+    check.querySelector("input").addEventListener("change", (e) => {
+      if (e.target.checked) state.selected.add(key);
+      else state.selected.delete(key);
+      btn.classList.toggle("checked", e.target.checked);
+      renderSelectionBar();
+    });
     btn.addEventListener("click", () => openSession(s.id));
+    btn.addEventListener("keydown", (e) => {
+      if (e.target !== btn) return;
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        openSession(s.id);
+      }
+    });
     list.appendChild(btn);
   });
+  renderSelectionBar();
+}
+
+/* ── 选择与删除 ── */
+
+function selectedSessions() {
+  return state.sessions.filter((s) => state.selected.has(sessionKey(s)));
+}
+
+function renderSelectionBar() {
+  const bar = $("#selbar");
+  // 已不存在的会话（被删除或重新扫描后消失）从选择里移除
+  const alive = new Set(state.sessions.map(sessionKey));
+  for (const k of [...state.selected]) if (!alive.has(k)) state.selected.delete(k);
+
+  const picked = selectedSessions();
+  bar.hidden = picked.length === 0;
+  if (!picked.length) return;
+  const size = picked.reduce((n, s) => n + (s.sizeBytes || 0), 0);
+  bar.innerHTML = `
+    <span class="selbar-count">${escapeHtml(t("select.count", { n: picked.length, size: formatBytes(size) }))}</span>
+    <button type="button" class="btn" data-sel="all">${escapeHtml(t("select.all"))}</button>
+    <button type="button" class="btn" data-sel="clear">${escapeHtml(t("select.clear"))}</button>
+    <button type="button" class="btn danger" data-sel="delete">${escapeHtml(t("select.delete"))}</button>`;
+  bar.querySelector('[data-sel="all"]').addEventListener("click", () => {
+    filteredSessions().forEach((s) => state.selected.add(sessionKey(s)));
+    renderSessions();
+  });
+  bar.querySelector('[data-sel="clear"]').addEventListener("click", () => {
+    state.selected.clear();
+    renderSessions();
+  });
+  bar.querySelector('[data-sel="delete"]').addEventListener("click", () => openDeleteDialog(picked));
+}
+
+const dialog = { targets: [], plans: [], mode: "trash", ack: false, phase: "plan", results: [] };
+
+/** 浏览器预览：按 mock 会话模拟后端的计划（运行中的会话按"最近写入"拦下，便于演示保护逻辑） */
+function mockPlans(targets) {
+  return targets.map((s) => ({
+    harness: s.harness,
+    id: s.id,
+    files: [s.project],
+    bytes: s.sizeBytes || 0,
+    index_files: s.harness === "cc" ? [] : ["session_index.jsonl"],
+    codex_threads: s.harness === "codex" ? [s.id] : [],
+    blocked: s.status === "running" ? "active" : null,
+    warnings: [],
+  }));
+}
+
+async function openDeleteDialog(sessions) {
+  dialog.targets = sessions;
+  dialog.mode = "trash";
+  dialog.ack = false;
+  dialog.phase = "loading";
+  dialog.results = [];
+  showModal();
+  renderDeleteDialog();
+  const targets = sessions.map((s) => ({ harness: s.harness, id: s.id }));
+  try {
+    dialog.plans = state.runtime === "tauri" ? await invokeTauri("plan_delete", { targets }) : mockPlans(sessions);
+  } catch (e) {
+    console.warn("plan_delete failed", e);
+    dialog.plans = [];
+    dialog.error = String(e);
+  }
+  dialog.phase = "plan";
+  renderDeleteDialog();
+}
+
+function findTarget(p) {
+  return dialog.targets.find((s) => s.harness === p.harness && s.id === p.id);
+}
+
+function planRowHtml(p, extra = "") {
+  const s = findTarget(p);
+  const h = HARNESS[p.harness] || HARNESS.cc;
+  return `
+    <li class="del-row">
+      <span class="badge ${h.badge}">${h.label}</span>
+      <span class="del-title">${escapeHtml(s ? sessionTitle(s) : p.id)}</span>
+      <span class="del-size${extra ? " reason" : ""}">${extra || formatBytes(p.bytes)}</span>
+    </li>`;
+}
+
+function listHtml(rows, render) {
+  const shown = rows.slice(0, 6).map(render).join("");
+  const more = rows.length > 6 ? `<li class="del-more">${escapeHtml(t("del.more", { n: rows.length - 6 }))}</li>` : "";
+  return `<ul class="del-list">${shown}${more}</ul>`;
+}
+
+function renderDeleteDialog() {
+  const box = $("#modal-box");
+  if (dialog.phase === "loading") {
+    box.innerHTML = `<p class="hint">${escapeHtml(t("del.planning"))}</p>`;
+    return;
+  }
+  if (dialog.phase === "done") return renderDeleteResults();
+
+  const ok = dialog.plans.filter((p) => !p.blocked);
+  const blocked = dialog.plans.filter((p) => p.blocked);
+  const bytes = ok.reduce((n, p) => n + p.bytes, 0);
+  const files = ok.reduce((n, p) => n + p.files.length, 0);
+  const warnings = [...new Set(ok.flatMap((p) => p.warnings.map((w) => `${w}|${p.harness}`)))];
+  const hasIndex = ok.some((p) => p.index_files.length);
+  const hasCodex = ok.some((p) => p.harness === "codex");
+  const permanent = dialog.mode === "permanent";
+  const working = dialog.phase === "working";
+  const canConfirm = ok.length > 0 && (!permanent || dialog.ack) && !working;
+
+  box.innerHTML = `
+    <h2 id="modal-title">${escapeHtml(t("del.title", { n: dialog.targets.length }))}</h2>
+    <div class="seg" role="radiogroup" aria-label="${escapeHtml(t("del.modeLabel"))}">
+      ${[["trash", "del.modeTrash"], ["permanent", "del.modePermanent"]].map(([m, label]) => `
+        <button type="button" role="radio" class="seg-opt${dialog.mode === m ? " active" : ""}" aria-checked="${dialog.mode === m}" data-mode="${m}" ${working ? "disabled" : ""}>${escapeHtml(t(label))}</button>`).join("")}
+    </div>
+    <p class="del-note${permanent ? " danger" : ""}">${escapeHtml(t(permanent ? "del.permanentNote" : "del.trashNote"))}</p>
+    ${ok.length ? `
+      <div class="del-summary">
+        <strong>${formatBytes(bytes)}</strong>
+        <span>${escapeHtml(t("del.summary", { n: ok.length, files: t("del.files", { n: files }) }))}</span>
+      </div>
+      ${listHtml(ok, (p) => planRowHtml(p))}` : `<p class="hint">${escapeHtml(t("del.nothing"))}</p>`}
+    ${blocked.length ? `
+      <h3>${escapeHtml(t("del.blockedTitle", { n: blocked.length }))}</h3>
+      ${listHtml(blocked, (p) => planRowHtml(p, escapeHtml(t(`del.reason.${p.blocked}`))))}` : ""}
+    ${warnings.map((w) => {
+      const [code, hid] = w.split("|");
+      return `<p class="del-warn">${escapeHtml(t(`del.warn.${code}`, { name: (HARNESS[hid] || {}).name || hid }))}</p>`;
+    }).join("")}
+    ${hasIndex ? `<p class="del-fine">${escapeHtml(t("del.indexNote"))}</p>` : ""}
+    ${hasCodex ? `<p class="del-fine">${escapeHtml(t("del.codexNote"))}</p>` : ""}
+    ${state.runtime !== "tauri" ? `<p class="del-fine">${escapeHtml(t("del.previewNote"))}</p>` : ""}
+    ${permanent && ok.length ? `
+      <label class="del-ack"><input type="checkbox" id="del-ack" ${dialog.ack ? "checked" : ""} ${working ? "disabled" : ""} /> ${escapeHtml(t("del.ack"))}</label>` : ""}
+    <div class="btn-row modal-actions">
+      <button type="button" class="btn" data-act="cancel" ${working ? "disabled" : ""}>${escapeHtml(t("del.cancel"))}</button>
+      <button type="button" class="btn ${permanent ? "danger solid" : "danger"}" data-act="confirm" ${canConfirm ? "" : "disabled"}>
+        ${escapeHtml(t(working ? "del.working" : permanent ? "del.confirmPermanent" : "del.confirmTrash"))}
+      </button>
+    </div>`;
+
+  box.querySelectorAll("[data-mode]").forEach((b) => b.addEventListener("click", () => {
+    dialog.mode = b.dataset.mode;
+    dialog.ack = false;
+    renderDeleteDialog();
+  }));
+  const ack = box.querySelector("#del-ack");
+  if (ack) ack.addEventListener("change", (e) => {
+    dialog.ack = e.target.checked;
+    renderDeleteDialog();
+  });
+  box.querySelector('[data-act="cancel"]').addEventListener("click", hideModal);
+  box.querySelector('[data-act="confirm"]').addEventListener("click", () => runDelete(ok));
+}
+
+async function runDelete(plans) {
+  dialog.phase = "working";
+  renderDeleteDialog();
+  const targets = plans.map((p) => ({ harness: p.harness, id: p.id }));
+  const before = storageRows().filter((r) => r.connected).reduce((n, r) => n + r.sessionBytes, 0);
+
+  if (state.runtime === "tauri") {
+    try {
+      dialog.results = await invokeTauri("delete_sessions", { targets, mode: dialog.mode });
+    } catch (e) {
+      dialog.results = plans.map((p) => ({ ...p, ok: false, error: String(e) }));
+    }
+  } else {
+    // 预览模式只从列表移除，不碰任何文件
+    dialog.results = plans.map((p) => ({ harness: p.harness, id: p.id, ok: true, bytes: p.bytes, mode: dialog.mode }));
+    const gone = new Set(plans.map((p) => `${p.harness}:${p.id}`));
+    state.sessions = state.sessions.filter((s) => !gone.has(sessionKey(s)));
+  }
+
+  // 一次删除完成即结束这轮选择；被保护而跳过的会话不留在勾选里，避免混进下一次删除
+  state.selected.clear();
+  if (state.runtime === "tauri") await refreshAll();
+  else rerenderAll();
+
+  // 核对：列表统计的占用下降量应与后端报告的删除量一致
+  const after = storageRows().filter((r) => r.connected).reduce((n, r) => n + r.sessionBytes, 0);
+  dialog.verified = { reported: dialog.results.filter((r) => r.ok).reduce((n, r) => n + (r.bytes || 0), 0), dropped: before - after };
+  dialog.phase = "done";
+  renderDeleteDialog();
+}
+
+function errorLabel(err) {
+  if (!err) return "";
+  const code = String(err).split(":")[0];
+  if (code === "blocked") return t(`del.reason.${String(err).split(":")[1]}`);
+  return t(`del.error.${code}`, {}) === `del.error.${code}` ? String(err) : t(`del.error.${code}`);
+}
+
+function renderDeleteResults() {
+  const box = $("#modal-box");
+  const ok = dialog.results.filter((r) => r.ok);
+  const failed = dialog.results.filter((r) => !r.ok);
+  const bytes = ok.reduce((n, r) => n + (r.bytes || 0), 0);
+  const v = dialog.verified || { reported: 0, dropped: 0 };
+  const backups = [...new Set(ok.map((r) => r.backup_dir).filter(Boolean))];
+  const codexFallback = ok.some((r) => r.codex_cli === "fallback" || r.codex_cli === "missing");
+  box.innerHTML = `
+    <h2 id="modal-title">${escapeHtml(t("del.doneTitle"))}</h2>
+    <div class="del-summary">
+      <strong>${formatBytes(bytes)}</strong>
+      <span>${escapeHtml(t(dialog.mode === "permanent" ? "del.doneFreed" : "del.doneTrashed", { n: ok.length }))}</span>
+    </div>
+    ${ok.length ? `<p class="del-fine">${escapeHtml(t("del.verify", { reported: formatBytes(v.reported), dropped: formatBytes(Math.max(0, v.dropped)) }))}</p>` : ""}
+    ${failed.length ? `
+      <h3>${escapeHtml(t("del.failedTitle", { n: failed.length }))}</h3>
+      ${listHtml(failed, (r) => planRowHtml(r, escapeHtml(errorLabel(r.error))))}` : ""}
+    ${codexFallback ? `<p class="del-warn">${escapeHtml(t("del.codexFallback"))}</p>` : ""}
+    ${backups.length ? `<p class="del-fine">${escapeHtml(t("del.backups", { path: backups[0].replace(/[\\/][^\\/]+$/, "") }))}</p>` : ""}
+    <div class="btn-row modal-actions">
+      <button type="button" class="btn primary" data-act="close">${escapeHtml(t("del.close"))}</button>
+    </div>`;
+  box.querySelector('[data-act="close"]').addEventListener("click", hideModal);
+}
+
+let lastFocus = null;
+function showModal() {
+  lastFocus = document.activeElement;
+  $("#modal").hidden = false;
+  requestAnimationFrame(() => $("#modal-box").focus());
+}
+function hideModal() {
+  if (dialog.phase === "working") return;
+  $("#modal").hidden = true;
+  if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
 }
 
 function escapeHtml(str) {
@@ -640,6 +923,7 @@ function sessionDetailHtml(s) {
     <div class="btn-row">
       <button type="button" class="btn primary" data-act="resume">${escapeHtml(t("detail.resume"))}</button>
       <button type="button" class="btn" data-act="copy-path">${escapeHtml(t("detail.copyPath"))}</button>
+      <button type="button" class="btn danger" data-act="delete">${escapeHtml(t("detail.delete"))}</button>
     </div>`;
 }
 
@@ -680,6 +964,8 @@ function wireDetailActions(root, s) {
       } else if (act === "copy-path") {
         await copyText(s.project);
         toast(t("toast.pathCopied"));
+      } else if (act === "delete") {
+        openDeleteDialog([s]);
       }
     });
   });
@@ -919,8 +1205,13 @@ async function init() {
     toast(t(state.source.startsWith("native") ? "toast.refreshedNative" : "toast.refreshedMock"));
   });
 
+  $("#modal").addEventListener("click", (e) => {
+    if (e.target.id === "modal") hideModal();
+  });
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeDetail();
+    if (e.key !== "Escape") return;
+    if (!$("#modal").hidden) hideModal();
+    else closeDetail();
   });
 }
 
