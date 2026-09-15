@@ -1,6 +1,7 @@
 //! Harness adapters: discover local agent sessions.
 
 mod claude_code;
+pub mod cleanup;
 mod codex;
 mod dsh;
 mod kimi_code;
@@ -197,6 +198,51 @@ pub(crate) fn file_sig(paths: &[PathBuf]) -> u64 {
         }
     }
     h.finish()
+}
+
+/// 删除后清掉已不存在路径的解析缓存
+pub(crate) fn forget_memo(removed: &[PathBuf]) {
+    if let Ok(mut map) = memo_store().lock() {
+        map.retain(|k, _| !removed.iter().any(|r| k.starts_with(r)));
+    }
+}
+
+/* ── 数据目录 ── */
+
+/// 用户主目录。调试构建可用 `OPENPLANE_HOME` 指向沙盒（端到端测试删除时不碰真实数据），
+/// 发布构建忽略该变量
+pub(crate) fn home_dir() -> Option<PathBuf> {
+    if cfg!(debug_assertions) {
+        if let Some(h) = std::env::var_os("OPENPLANE_HOME").filter(|v| !v.is_empty()) {
+            return Some(PathBuf::from(h));
+        }
+    }
+    dirs::home_dir()
+}
+
+/// harness 的数据根目录：优先该工具自己的环境变量（与工具本身读同一处），否则 `~/<default>`。
+/// 沙盒模式下忽略工具环境变量，避免指回真实目录
+pub(crate) fn tool_home(env: &str, default: &str) -> Option<PathBuf> {
+    let sandboxed = cfg!(debug_assertions) && std::env::var_os("OPENPLANE_HOME").is_some();
+    if !sandboxed {
+        if let Some(v) = std::env::var_os(env).filter(|v| !v.is_empty()) {
+            return Some(PathBuf::from(v));
+        }
+    }
+    Some(home_dir()?.join(default))
+}
+
+pub(crate) fn claude_home() -> Option<PathBuf> {
+    tool_home("CLAUDE_CONFIG_DIR", ".claude")
+}
+pub(crate) fn kimi_home() -> Option<PathBuf> {
+    tool_home("KIMI_CODE_HOME", ".kimi-code")
+}
+pub(crate) fn dsh_home() -> Option<PathBuf> {
+    tool_home("DSH_HOME", ".dsh")
+}
+pub(crate) fn codex_home() -> Option<PathBuf> {
+    tool_home("CODEX_HOME", ".codex")
 }
 
 /* ── 共用工具 ── */

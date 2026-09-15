@@ -31,7 +31,7 @@ const LOG_V3: &str = "session.v3.jsonl.zstd";
 const LOG_V0: &str = "session.jsonl.zstd";
 
 fn dsh_home() -> Option<PathBuf> {
-    let home = dirs::home_dir()?.join(".dsh");
+    let home = super::dsh_home()?;
     home.join("sessions").is_dir().then_some(home)
 }
 
@@ -49,7 +49,7 @@ pub fn list_sessions() -> Result<Vec<SessionSummary>, String> {
         if archived.contains(&s.id) {
             s.status = "done".into();
         }
-        s.size_bytes = dir_size(&dir);
+        s.size_bytes = session_bytes(&home, &dir);
         out.push(s);
     }
     Ok(out)
@@ -65,10 +65,21 @@ pub fn storage() -> HarnessStorage {
         harness: "dsh".into(),
         connected: true,
         sessions: sessions.len() as u32,
-        session_bytes: sessions.iter().map(|(dir, _)| dir_size(dir)).sum(),
+        session_bytes: sessions.iter().map(|(dir, _)| session_bytes(&home, dir)).sum(),
         root_bytes: dir_size(&root),
         root: "~/.dsh/sessions/".into(),
     }
+}
+
+/// 会话目录 + `storages/session_projcache/sessions/<id>.json`，与删除时移除的范围一致
+fn session_bytes(home: &Path, dir: &Path) -> u64 {
+    let cache = dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(|id| home.join("storages").join("session_projcache").join("sessions").join(format!("{id}.json")))
+        .and_then(|p| fs::metadata(p).ok())
+        .map_or(0, |m| m.len());
+    dir_size(dir) + cache
 }
 
 /// (会话目录, 要读的日志)；v3 优先

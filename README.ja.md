@@ -60,6 +60,7 @@ Openplane は、各ツールがすでにディスクへ書き出しているデ�
 | タイトル・パス・モデルで検索 | ✅ | |
 | UI 三言語対応：English / 简体中文 / 日本語 | ✅ | システム言語に追従、トップバーで切り替え |
 | 差分再スキャン | ✅ | 変更のないファイルはメモリキャッシュから返す |
+| セッションを削除してディスクを空ける | ✅ | 1 件または複数選択、容量順に並べ替え可；ごみ箱または完全削除；各ツールのインデックスも整理 |
 | ローカルモデルプロキシ（`127.0.0.1:8787`） | ⏳ | ルーティング設定と死活監視のみ。リクエスト転送は未実装 |
 | ターミナルで再開 | ⏳ | 現状はセッションフォルダを開くだけ |
 
@@ -121,7 +122,10 @@ openplane/
 │     ├─ adapters/
 │     │  ├─ mod.rs          # SessionSummary、TokenUsage、キャッシュ、共通処理
 │     │  ├─ claude_code.rs
-│     │  └─ kimi_code.rs
+│     │  ├─ kimi_code.rs
+│     │  ├─ dsh.rs
+│     │  ├─ codex.rs
+│     │  └─ cleanup.rs      # セッション削除とインデックス整理
 │     ├─ proxy.rs           # 8787 死活監視 + ~/.openplane/proxy.json
 │     └─ lib.rs             # Tauri コマンド
 ├─ scripts/preview.mjs      # 依存ゼロの静的プレビュー
@@ -129,10 +133,32 @@ openplane/
 └─ DESIGN.md                # ビジュアル仕様
 ```
 
+## セッションの削除
+
+セッションはディスク上のファイルにすぎないので、不要になったものを Openplane から削除できます。削除前には必ず確認ダイアログが表示され、各セッションと解放される容量が一覧されます。
+
+<img src=".github/assets/screenshot-delete.ja.png" alt="Openplane 削除ダイアログ" width="100%" />
+
+- **既定はごみ箱へ移動。** 完全削除は別モードで、追加のチェックが必要です。
+- **使用中のセッションは保護されます。** 10 分以内に書き込みがあるもの、実行中の Claude Code で開かれているものはスキップします。
+- **各ツール自身のインデックスも整理し**、無効な項目を残しません。変更前にインデックスファイルを `~/.openplane/backups/` にバックアップします。
+- **Codex は公式の `codex delete` で削除し**、Codex の履歴データベースも整理します。Openplane が他のツールのデータベースに直接書き込むことはありません。
+- パスはバックエンドがセッション id から解決し、そのツールのデータフォルダ内に限定されます。
+
+| ツール | 削除するファイル | 削除するインデックス項目 |
+|---|---|---|
+| Claude Code | `projects/<p>/<id>.jsonl`、`projects/<p>/<id>/`、`file-history/<id>/`、`session-env/<id>/`、`tasks/<id>/` | — |
+| Kimi Code | `sessions/<ws>/<id>/` | `session_index.jsonl`、`file-history/<ws>` |
+| DSH | `sessions/<ws>/<id>/` とその投影キャッシュ | `storages/workspace.json` |
+| Codex | セッションの rollout とそのサブエージェントの rollout | Codex データベース（`codex delete` 経由）、`session_index.jsonl` |
+
+> [!TIP]
+> セッションを削除する前に、そのツールを終了してください。実行中の Kimi Code や Codex が削除した項目をインデックスに書き戻す可能性があります。
+
 ## プライバシー
 
-- 読み取り専用：各ハーネスのセッションフォルダには一切書き込みません。
-- 書き込むのはルーティング設定の `~/.openplane/proxy.json` だけです。
+- Openplane が各ハーネスのフォルダに書き込むのは、上記のとおりセッションを削除するときだけです。
+- Openplane 自身のファイルは `~/.openplane/` にあります：ルーティング設定とインデックスのバックアップ。
 - 通信なし、テレメトリなし。プロキシは `127.0.0.1` のみで待ち受けます。
 - 貼り付けた秘密情報を含む可能性のあるフィールド（Kimi の `lastPrompt` など）は読み取りません。
 

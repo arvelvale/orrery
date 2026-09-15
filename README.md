@@ -60,6 +60,7 @@ Openplane reads what the harnesses already write to disk and puts it all on one 
 | Search by title, path and model | ✅ | |
 | UI in English / 简体中文 / 日本語 | ✅ | Follows the system language; switch from the top bar |
 | Incremental rescans | ✅ | Unchanged files are served from an in-memory cache |
+| Delete sessions to free disk space | ✅ | Pick one or many, sort by size; Recycle Bin or permanent; each tool's own index is cleaned too |
 | Local model proxy (`127.0.0.1:8787`) | ⏳ | Route config and health probe only; no requests are forwarded yet |
 | Resume in terminal | ⏳ | Currently opens the session folder |
 
@@ -121,7 +122,10 @@ openplane/
 │     ├─ adapters/
 │     │  ├─ mod.rs          # SessionSummary, TokenUsage, cache, shared helpers
 │     │  ├─ claude_code.rs
-│     │  └─ kimi_code.rs
+│     │  ├─ kimi_code.rs
+│     │  ├─ dsh.rs
+│     │  ├─ codex.rs
+│     │  └─ cleanup.rs      # session deletion and index cleanup
 │     ├─ proxy.rs           # 8787 health probe + ~/.openplane/proxy.json
 │     └─ lib.rs             # Tauri commands
 ├─ scripts/preview.mjs      # zero-dependency static preview
@@ -129,10 +133,32 @@ openplane/
 └─ DESIGN.md                # visual spec
 ```
 
+## Deleting sessions
+
+Every session is just files on disk, so Openplane can remove the ones you no longer need. Nothing is deleted without a confirmation dialog that lists each session and the space it frees.
+
+<img src=".github/assets/screenshot-delete.en.png" alt="Openplane delete dialog" width="100%" />
+
+- **Recycle Bin by default.** Permanent deletion is a separate mode that needs an extra checkbox.
+- **Sessions in use are protected.** Anything written in the last 10 minutes, or open in a running Claude Code, is skipped.
+- **Each tool's own index is cleaned too**, so no dead entries are left behind. Index files are backed up to `~/.openplane/backups/` before they change.
+- **Codex goes through the official `codex delete`**, which also clears Codex's history database. Openplane never writes to another tool's database.
+- Paths are resolved by the backend from the session id and must stay inside that tool's data folder.
+
+| Tool | Files removed | Index entries removed |
+|---|---|---|
+| Claude Code | `projects/<p>/<id>.jsonl`, `projects/<p>/<id>/`, `file-history/<id>/`, `session-env/<id>/`, `tasks/<id>/` | — |
+| Kimi Code | `sessions/<ws>/<id>/` | `session_index.jsonl`, `file-history/<ws>` |
+| DSH | `sessions/<ws>/<id>/`, its projection cache | `storages/workspace.json` |
+| Codex | the session's rollouts plus its subagent rollouts | Codex database (via `codex delete`), `session_index.jsonl` |
+
+> [!TIP]
+> Close the tool before deleting its sessions. A running Kimi Code or Codex may write the removed entries back into its index.
+
 ## Privacy
 
-- Read-only: Openplane never writes to harness session folders.
-- The only file it writes is `~/.openplane/proxy.json`, your route config.
+- Openplane only writes to harness folders when you delete sessions, as described above.
+- Its own files live in `~/.openplane/`: your route config and index backups.
 - No network calls and no telemetry. The proxy listens on `127.0.0.1` only.
 - Fields that may contain pasted secrets (for example Kimi's `lastPrompt`) are never read.
 

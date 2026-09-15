@@ -20,7 +20,7 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
 fn projects_root() -> Option<PathBuf> {
-    let root = dirs::home_dir()?.join(".claude").join("projects");
+    let root = super::claude_home()?.join("projects");
     root.is_dir().then_some(root)
 }
 
@@ -97,11 +97,24 @@ fn subagent_files(path: &Path) -> Vec<PathBuf> {
     files
 }
 
-/// 主文件 + 同名附属目录
+/// 主文件 + 同名附属目录 + `~/.claude` 下按会话 id 命名的目录（file-history / session-env / tasks）。
+/// 与删除时实际移除的范围一致，否则删除后"释放量"会大于列表显示的占用
 fn session_bytes(path: &Path) -> u64 {
     let main = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     let companion = path.with_extension("");
-    main + if companion.is_dir() { dir_size(&companion) } else { 0 }
+    let mut total = main + if companion.is_dir() { dir_size(&companion) } else { 0 };
+    let id = path.file_stem().and_then(|s| s.to_str());
+    // path = <claude>/projects/<project>/<id>.jsonl
+    let claude = path.parent().and_then(Path::parent).and_then(Path::parent);
+    if let (Some(id), Some(claude)) = (id, claude) {
+        for extra in ["file-history", "session-env", "tasks"] {
+            let p = claude.join(extra).join(id);
+            if p.is_dir() {
+                total += dir_size(&p);
+            }
+        }
+    }
+    total
 }
 
 fn parse_session(path: &Path, subagent_files: &[PathBuf]) -> Option<SessionSummary> {

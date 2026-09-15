@@ -1,7 +1,7 @@
 mod adapters;
 mod proxy;
 
-use adapters::{HarnessStorage, SessionSummary};
+use adapters::{cleanup, HarnessStorage, SessionSummary};
 use proxy::ProxyStatus;
 use std::path::Path;
 
@@ -14,6 +14,18 @@ fn list_sessions() -> Result<Vec<SessionSummary>, String> {
 #[tauri::command(async)]
 fn storage_stats() -> Vec<HarnessStorage> {
     adapters::storage_stats()
+}
+
+/// 删除前预览：每条会话会删哪些文件、多大、是否被保护
+#[tauri::command(async)]
+fn plan_delete(targets: Vec<cleanup::Target>) -> Vec<cleanup::Plan> {
+    cleanup::plan_all(&targets)
+}
+
+/// 执行删除；后端会重新规划，不采信前端传来的路径
+#[tauri::command(async)]
+fn delete_sessions(targets: Vec<cleanup::Target>, mode: cleanup::Mode) -> Vec<cleanup::Outcome> {
+    cleanup::delete_all(&targets, mode)
 }
 
 #[tauri::command]
@@ -65,7 +77,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|_app| {
-            if let Some(home) = dirs::home_dir() {
+            if let Some(home) = adapters::home_dir() {
                 let _ = std::fs::create_dir_all(home.join(".openplane"));
             }
             Ok(())
@@ -73,6 +85,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             list_sessions,
             storage_stats,
+            plan_delete,
+            delete_sessions,
             get_proxy_status,
             ping_proxy,
             save_route,

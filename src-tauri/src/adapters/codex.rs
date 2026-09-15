@@ -30,7 +30,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 
 fn codex_home() -> Option<PathBuf> {
-    let home = dirs::home_dir()?.join(".codex");
+    let home = super::codex_home()?;
     home.join("sessions").is_dir().then_some(home)
 }
 
@@ -192,7 +192,7 @@ pub fn storage() -> HarnessStorage {
     }
 }
 
-fn collect_rollouts(root: &Path) -> Vec<PathBuf> {
+pub(crate) fn collect_rollouts(root: &Path) -> Vec<PathBuf> {
     fn walk(dir: &Path, acc: &mut Vec<PathBuf>) {
         let Ok(entries) = fs::read_dir(dir) else { return };
         for e in entries.flatten() {
@@ -235,7 +235,7 @@ fn thread_names(home: &Path) -> HashMap<String, String> {
 }
 
 /// (id, 是否子 agent, 父会话 id)
-fn read_head(path: &Path) -> Option<(String, bool, Option<String>)> {
+pub(crate) fn read_head(path: &Path) -> Option<(String, bool, Option<String>)> {
     let file = fs::File::open(path).ok()?;
     let mut line = String::new();
     BufReader::new(file).read_line(&mut line).ok()?;
