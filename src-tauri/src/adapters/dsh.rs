@@ -221,5 +221,6 @@ fn parse_session(dir: &Path, log: &Path) -> Option<SessionSummary> {
         log: vec![],
         size_bytes: 0,
         subagents: 0,
+        kind: String::new(),
     })
 }

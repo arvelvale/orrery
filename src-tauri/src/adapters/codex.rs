@@ -53,6 +53,8 @@ pub fn list_sessions() -> Result<Vec<SessionSummary>, String> {
     let titles = thread_names(&home);
 
     struct Group {
+        /// 父会话不在本机的子 agent（guardian 自动审查），单独列出并在界面标注
+        orphan_subagent: bool,
         usage: TokenUsage,
         bytes: u64,
         mtime_ms: u64,
@@ -75,6 +77,7 @@ pub fn list_sessions() -> Result<Vec<SessionSummary>, String> {
             continue;
         }
         let g = groups.entry(r.id.clone()).or_insert_with(|| Group {
+            orphan_subagent: false,
             usage: TokenUsage::default(),
             bytes: 0,
             mtime_ms: 0,
@@ -114,6 +117,7 @@ pub fn list_sessions() -> Result<Vec<SessionSummary>, String> {
             groups.insert(
                 id,
                 Group {
+                    orphan_subagent: true,
                     usage: r.usage,
                     bytes,
                     mtime_ms,
@@ -149,6 +153,7 @@ pub fn list_sessions() -> Result<Vec<SessionSummary>, String> {
                 log: vec![],
                 size_bytes: g.bytes,
                 subagents: g.subagents,
+                kind: if g.orphan_subagent { "subagent".into() } else { String::new() },
                 id,
             }
         })
@@ -269,10 +274,25 @@ fn parse_cached(path: &Path) -> Option<Rollout> {
     Some(r)
 }
 
-/// 真正由用户输入的文本；跳过 Codex 注入的上下文（`<environment_context>`、`# AGENTS.md instructions` 等）
+/// 真正由用户输入的文本。Codex 会往用户消息里塞上下文，实测三种形态：
+/// - 整条都是注入：`<environment_context>…`、`# AGENTS.md instructions…`
+/// - 附带图片/时间戳时，真正的输入包在 `<user_query>…</user_query>` 里（前面是图片清单）
+/// - guardian 子 agent 的首条"用户消息"是审查指令，不是用户写的
 fn user_text(payload: &serde_json::Value) -> Option<String> {
-    let is_injected = |t: &str| t.starts_with('<') || t.starts_with("# AGENTS.md");
-    let pick = |t: &str| Some(t.trim()).filter(|t| !t.is_empty() && !is_injected(t)).map(String::from);
+    fn unwrap_query(t: &str) -> &str {
+        let Some(start) = t.find("<user_query>") else { return t };
+        let rest = &t[start + "<user_query>".len()..];
+        rest.split("</user_query>").next().unwrap_or(rest)
+    }
+    let is_injected = |t: &str| {
+        t.starts_with('<')
+            || t.starts_with("# AGENTS.md")
+            || t.starts_with("The following is the Codex agent history")
+    };
+    let pick = |t: &str| {
+        let t = unwrap_query(t).trim();
+        Some(t).filter(|t| !t.is_empty() && !is_injected(t)).map(String::from)
+    };
     match payload.get("type").and_then(|t| t.as_str()) {
         Some("user_message") => payload.get("message").and_then(|m| m.as_str()).and_then(pick),
         Some("message") if payload.get("role").and_then(|r| r.as_str()) == Some("user") => payload
@@ -387,6 +407,10 @@ fn parse_rollout(path: &Path) -> Option<Rollout> {
 
     if r.id.is_empty() {
         return None;
+    }
+    // 子 agent 的首条"用户消息"是系统塞的审查指令（">>> TRANSCRIPT START…"），不是标题素材
+    if r.is_subagent {
+        r.first_user = None;
     }
 
     // 账本 1 覆盖的时间段以它为准，之前的时间段用账本 2

@@ -1,5 +1,6 @@
 mod adapters;
-mod proxy;
+// 集成测试要直接调代理的启停与状态
+pub mod proxy;
 
 use adapters::{cleanup, HarnessStorage, SessionSummary};
 use proxy::ProxyStatus;
@@ -43,6 +44,21 @@ fn save_route(harness: String, model: String) -> Result<(), String> {
     proxy::save_route(&harness, &model)
 }
 
+#[tauri::command(async)]
+fn start_proxy() -> Result<ProxyStatus, String> {
+    proxy::start()
+}
+
+#[tauri::command(async)]
+fn stop_proxy() -> Result<ProxyStatus, String> {
+    proxy::stop()
+}
+
+#[tauri::command(async)]
+fn set_proxy_auto_start(enabled: bool) -> Result<(), String> {
+    proxy::set_auto_start(enabled)
+}
+
 #[tauri::command]
 fn open_path(path: String) -> Result<bool, String> {
     let p = Path::new(&path);
@@ -80,6 +96,7 @@ pub fn run() {
             if let Some(home) = adapters::home_dir() {
                 let _ = std::fs::create_dir_all(home.join(".openplane"));
             }
+            proxy::init();
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -88,6 +105,9 @@ pub fn run() {
             plan_delete,
             delete_sessions,
             get_proxy_status,
+            start_proxy,
+            stop_proxy,
+            set_proxy_auto_start,
             ping_proxy,
             save_route,
             open_path

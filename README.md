@@ -6,7 +6,7 @@
 
 **A local-first cockpit for your AI coding agents.**
 
-Every Claude Code, Kimi Code, DSH (DeepSeek) and Codex session on your machine in one window: tokens, disk usage, projects, subagents. Nothing leaves your computer.
+Every Claude Code, Kimi Code, DSH (DeepSeek) and Codex session on your machine in one window: tokens, disk usage, projects, subagents. Delete what you no longer need, and route every harness through one local model proxy. Nothing leaves your computer.
 
 <p>
   <a href="https://github.com/arvelvale/openplane/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/arvelvale/openplane?style=flat-square&color=0B6BCB" /></a>
@@ -61,7 +61,7 @@ Openplane reads what the harnesses already write to disk and puts it all on one 
 | UI in English / 简体中文 / 日本語 | ✅ | Follows the system language; switch from the top bar |
 | Incremental rescans | ✅ | Unchanged files are served from an in-memory cache |
 | Delete sessions to free disk space | ✅ | Pick one or many, sort by size; Recycle Bin or permanent; each tool's own index is cleaned too |
-| Local model proxy (`127.0.0.1:8787`) | ⏳ | Route config and health probe only; no requests are forwarded yet |
+| Local model proxy (`127.0.0.1:8787`) | ✅ | Real forwarding, OpenAI and Anthropic shapes, streaming passthrough, start/stop from the app |
 | Resume in terminal | ⏳ | Currently opens the session folder |
 
 <img src=".github/assets/screenshot-status.en.png" alt="Openplane status page with storage breakdown" width="100%" />
@@ -126,11 +126,56 @@ openplane/
 │     │  ├─ dsh.rs
 │     │  ├─ codex.rs
 │     │  └─ cleanup.rs      # session deletion and index cleanup
-│     ├─ proxy.rs           # 8787 health probe + ~/.openplane/proxy.json
+│     ├─ proxy/             # local model proxy
+│     │  ├─ mod.rs         # start / stop / status
+│     │  ├─ config.rs      # providers and routes (~/.openplane/proxy.json)
+│     │  ├─ server.rs      # HTTP surface and upstream forwarding
+│     │  └─ state.rs       # counters, last request, last error
 │     └─ lib.rs             # Tauri commands
 ├─ scripts/preview.mjs      # zero-dependency static preview
 ├─ docs/                    # design docs (Chinese)
 └─ DESIGN.md                # visual spec
+```
+
+## Local model proxy
+
+Point a harness at `http://127.0.0.1:8787/v1` and Openplane forwards its requests upstream, so you can swap the model from the app instead of editing each tool's config.
+
+<img src=".github/assets/screenshot-proxy.en.png" alt="Openplane proxy panel" width="100%" />
+
+| | |
+|---|---|
+| Endpoints | `POST /v1/chat/completions` (OpenAI shape) · `POST /v1/messages` (Anthropic shape) · `GET /v1/models` · `GET /health` |
+| Model routing | Send `x-openplane-harness: <id>` and the proxy rewrites `model` to whatever that harness is set to on the Models page. Without the header your requested model is kept. |
+| Provider choice | By model prefix (`claude*` → anthropic, `kimi*` → moonshot …). No match is an explicit error, never a silent fallback to some other provider. |
+| Streaming | SSE is passed through chunk by chunk, not buffered. |
+| Keys | Read from environment variables at request time. Openplane never stores, logs or displays them; the config only holds variable **names**. |
+| Binding | Loopback only. A non-loopback `listen` value is refused. |
+
+```bash
+# 1. put the key in the environment the app can see
+setx ANTHROPIC_API_KEY sk-...        # Windows, then restart Openplane
+
+# 2. start the proxy from the Models page, then point a harness at it
+set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
+```
+
+Providers, routes and the listen address live in `~/.openplane/proxy.json`:
+
+```json
+{
+  "listen": "127.0.0.1:8787",
+  "auto_start": false,
+  "routes": { "cc": "claude-opus-5" },
+  "providers": {
+    "anthropic": {
+      "base_url": "https://api.anthropic.com/v1",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "wire": "anthropic",
+      "model_prefixes": ["claude"]
+    }
+  }
+}
 ```
 
 ## Deleting sessions
@@ -167,8 +212,8 @@ Every session is just files on disk, so Openplane can remove the ones you no lon
 - [x] Tauri 2 shell and session hub
 - [x] Claude Code, Kimi Code, DSH and Codex adapters
 - [x] Token and disk accounting
+- [x] Local model proxy with real forwarding
 - [ ] Persistent index for instant cold start
-- [ ] Real OpenAI-compatible / Anthropic-shaped local proxy
 - [ ] Resume a session in its own CLI
 - [ ] Tray, global shortcut, installer
 
