@@ -4,9 +4,10 @@ mod claude_code;
 pub mod cleanup;
 mod codex;
 mod dsh;
+mod index;
 mod kimi_code;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader, Read};
@@ -14,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SessionSummary {
     pub id: String,
     pub harness: String,
@@ -48,7 +49,7 @@ pub struct SessionSummary {
 /// | cache_read  | cache_read_input_tokens     | inputCacheRead     | cacheReadTokens       | cached_input_tokens                    |
 /// | output      | output_tokens               | output             | outputTokens（含推理）  | output_tokens（含 reasoning_output）     |
 /// | unsplit     | —                           | —                  | —                     | 旧版/导入会话只有 total_tokens、分项全 0     |
-#[derive(Debug, Clone, Copy, Default, Serialize)]
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct TokenUsage {
     pub input: u64,
     pub cache_write: u64,
@@ -109,7 +110,13 @@ pub fn list_all_sessions() -> Result<Vec<SessionSummary>, String> {
             Err(e) => timing.push(format!("{name} ERROR {e}")),
         }
     }
-    eprintln!("[openplane] list_sessions: {}", timing.join(" · "));
+    eprintln!(
+        "[openplane] list_sessions: {} · reparsed {} files",
+        timing.join(" · "),
+        store().parsed()
+    );
+    // 本轮有文件被重新解析才写盘
+    index::save_if_dirty(store());
 
     out.sort_by(|a, b| b.updated_ms.cmp(&a.updated_ms));
     out.truncate(500);
@@ -160,11 +167,48 @@ pub(crate) fn contains(hay: &[u8], needle: &[u8]) -> bool {
 
 /* ── 解析缓存：文件没变就不重读 ── */
 
-type Memo = HashMap<PathBuf, (u64, SessionSummary)>;
+/// 一张「路径 → (sig, 解析结果)」表。进程内共享，退出前由 `index` 落盘
+pub(crate) struct MemoTable<T> {
+    map: Mutex<HashMap<PathBuf, (u64, T)>>,
+}
 
-fn memo_store() -> &'static Mutex<Memo> {
-    static MEMO: OnceLock<Mutex<Memo>> = OnceLock::new();
-    MEMO.get_or_init(|| Mutex::new(HashMap::new()))
+impl<T: Clone> MemoTable<T> {
+    pub(crate) fn new(map: HashMap<PathBuf, (u64, T)>) -> Self {
+        Self { map: Mutex::new(map) }
+    }
+
+    pub(crate) fn get(&self, key: &Path, sig: u64) -> Option<T> {
+        let map = self.map.lock().ok()?;
+        let (old, v) = map.get(key)?;
+        (*old == sig).then(|| v.clone())
+    }
+
+    pub(crate) fn put(&self, key: &Path, sig: u64, value: &T) {
+        if let Ok(mut map) = self.map.lock() {
+            map.insert(key.to_path_buf(), (sig, value.clone()));
+        }
+    }
+
+    /// 落盘用的快照，`keep` 为假的条目直接丢掉（文件已被删除）
+    pub(crate) fn entries(&self, keep: impl Fn(&Path) -> bool) -> Vec<(PathBuf, u64, T)> {
+        let Ok(map) = self.map.lock() else { return vec![] };
+        map.iter()
+            .filter(|(k, _)| keep(k))
+            .map(|(k, (sig, v))| (k.clone(), *sig, v.clone()))
+            .collect()
+    }
+
+    fn forget(&self, removed: &[PathBuf]) -> bool {
+        let Ok(mut map) = self.map.lock() else { return false };
+        let before = map.len();
+        map.retain(|k, _| !removed.iter().any(|r| k.starts_with(r)));
+        map.len() != before
+    }
+}
+
+pub(crate) fn store() -> &'static index::Store {
+    static STORE: OnceLock<index::Store> = OnceLock::new();
+    STORE.get_or_init(index::load)
 }
 
 /// `sig` 由参与解析的文件的 (长度, mtime) 折叠而成，变了才重新 `build`
@@ -173,17 +217,13 @@ pub(crate) fn memoized(
     sig: u64,
     build: impl FnOnce() -> Option<SessionSummary>,
 ) -> Option<SessionSummary> {
-    if let Ok(map) = memo_store().lock() {
-        if let Some((old, s)) = map.get(key) {
-            if *old == sig {
-                return Some(s.clone());
-            }
-        }
+    let table = &store().sessions;
+    if let Some(s) = table.get(key, sig) {
+        return Some(s);
     }
     let s = build()?;
-    if let Ok(mut map) = memo_store().lock() {
-        map.insert(key.to_path_buf(), (sig, s.clone()));
-    }
+    table.put(key, sig, &s);
+    store().mark_parsed();
     Some(s)
 }
 
@@ -202,10 +242,13 @@ pub(crate) fn file_sig(paths: &[PathBuf]) -> u64 {
     h.finish()
 }
 
-/// 删除后清掉已不存在路径的解析缓存
+/// 删除后清掉已不存在路径的解析缓存（内存和索引都要清，否则重启后死条目会回来）
 pub(crate) fn forget_memo(removed: &[PathBuf]) {
-    if let Ok(mut map) = memo_store().lock() {
-        map.retain(|k, _| !removed.iter().any(|r| k.starts_with(r)));
+    let store = store();
+    let changed = store.sessions.forget(removed) | store.rollouts.forget(removed);
+    if changed {
+        store.mark_dirty();
+        index::save_if_dirty(store);
     }
 }
 

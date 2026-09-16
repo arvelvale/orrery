@@ -27,16 +27,15 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
 
 fn codex_home() -> Option<PathBuf> {
     let home = super::codex_home()?;
     home.join("sessions").is_dir().then_some(home)
 }
 
-/// 单个 rollout 文件的解析结果（按文件缓存）
-#[derive(Clone, Default)]
-struct Rollout {
+/// 单个 rollout 文件的解析结果（按文件缓存，随索引落盘）
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
+pub(crate) struct Rollout {
     id: String,
     parent: Option<String>,
     is_subagent: bool,
@@ -254,23 +253,16 @@ pub(crate) fn read_head(path: &Path) -> Option<(String, bool, Option<String>)> {
 
 /* ── 按文件缓存：签名不变不重读 ── */
 
-type RolloutMemo = HashMap<PathBuf, (u64, Rollout)>;
 
 fn parse_cached(path: &Path) -> Option<Rollout> {
-    static MEMO: OnceLock<Mutex<RolloutMemo>> = OnceLock::new();
-    let memo = MEMO.get_or_init(|| Mutex::new(HashMap::new()));
+    let table = &super::store().rollouts;
     let sig = file_sig(&[path.to_path_buf()]);
-    if let Ok(map) = memo.lock() {
-        if let Some((old, r)) = map.get(path) {
-            if *old == sig {
-                return Some(r.clone());
-            }
-        }
+    if let Some(r) = table.get(path, sig) {
+        return Some(r);
     }
     let r = parse_rollout(path)?;
-    if let Ok(mut map) = memo.lock() {
-        map.insert(path.to_path_buf(), (sig, r.clone()));
-    }
+    table.put(path, sig, &r);
+    super::store().mark_parsed();
     Some(r)
 }
 
