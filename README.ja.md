@@ -11,6 +11,7 @@
 手元の Claude Code・Kimi Code・DSH（DeepSeek）・Codex のセッションをひとつのウィンドウに集約します。トークン、ディスク使用量、プロジェクト、サブエージェントまで一目で把握でき、不要なセッションは削除でき、各ハーネスをひとつのローカルモデルプロキシ経由にまとめられます。データは PC の外に出ません。
 
 <p>
+  <a href="https://github.com/arvelvale/orrery/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/arvelvale/orrery?style=flat-square&label=download&color=0F9D6E" /></a>
   <a href="https://github.com/arvelvale/orrery/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/arvelvale/orrery?style=flat-square&color=0B6BCB" /></a>
   <a href="https://github.com/arvelvale/orrery/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/arvelvale/orrery?style=flat-square&logo=github&color=15202B" /></a>
   <a href="https://github.com/arvelvale/orrery/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/arvelvale/orrery?style=flat-square&color=5B6B7C" /></a>
@@ -90,6 +91,8 @@ Orrery は、各ツールがすでにディスクへ書き出しているデー�
 既知の制限：公式記録は `--resume` でリセットされるため、Orrery は会話ログから合計を再構築しています。公式記録にはタイトル生成など会話ログに残らない副次的な呼び出しも含まれるため、Orrery の Claude Code 合計は 1〜5% ほど少なく出ることがあります。
 
 ## はじめに
+
+**すぐ使いたい場合**は[最新リリース](https://github.com/arvelvale/orrery/releases/latest)から `Orrery_x.y.z_x64-setup.exe` をダウンロードしてください（Windows 10/11 x64、管理者権限不要）。コード署名をしていないため SmartScreen の確認が出ます。「詳細情報 → 実行」で進めるか、リリースノートの SHA-256 で検証してください。
 
 **必要なもの（Windows）**
 

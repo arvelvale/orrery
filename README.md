@@ -11,6 +11,7 @@
 Every Claude Code, Kimi Code, DSH (DeepSeek) and Codex session on your machine in one window: tokens, disk usage, projects, subagents. Delete what you no longer need, and route every harness through one local model proxy. Nothing leaves your computer.
 
 <p>
+  <a href="https://github.com/arvelvale/orrery/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/arvelvale/orrery?style=flat-square&label=download&color=0F9D6E" /></a>
   <a href="https://github.com/arvelvale/orrery/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/arvelvale/orrery?style=flat-square&color=0B6BCB" /></a>
   <a href="https://github.com/arvelvale/orrery/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/arvelvale/orrery?style=flat-square&logo=github&color=15202B" /></a>
   <a href="https://github.com/arvelvale/orrery/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/arvelvale/orrery?style=flat-square&color=5B6B7C" /></a>
@@ -91,7 +92,9 @@ Known limits: the ledger resets on `--resume`, so Orrery rebuilds totals from th
 
 ## Getting started
 
-**Requirements (Windows)**
+**Just want to run it?** Download `Orrery_x.y.z_x64-setup.exe` from the [latest release](https://github.com/arvelvale/orrery/releases/latest) — Windows 10/11 x64, no admin needed. The build is not code-signed, so SmartScreen will ask you to confirm; the release notes list SHA-256 checksums.
+
+**Building from source — requirements (Windows)**
 
 - [Rust](https://rustup.rs) (MSVC toolchain)
 - [Visual Studio Build Tools](https://aka.ms/vs/17/release/vs_BuildTools.exe) with MSVC and a Windows SDK
