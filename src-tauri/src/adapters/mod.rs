@@ -90,8 +90,11 @@ pub struct HarnessStorage {
     pub root: String,
 }
 
+/// 一个 harness 适配器：名字 + 列会话的函数
+type Adapter = (&'static str, fn() -> Result<Vec<SessionSummary>, String>);
+
 pub fn list_all_sessions() -> Result<Vec<SessionSummary>, String> {
-    let adapters: [(&str, fn() -> Result<Vec<SessionSummary>, String>); 4] = [
+    let adapters: [Adapter; 4] = [
         ("cc", claude_code::list_sessions),
         ("kimi", kimi_code::list_sessions),
         ("dsh", dsh::list_sessions),
@@ -118,7 +121,7 @@ pub fn list_all_sessions() -> Result<Vec<SessionSummary>, String> {
     // 本轮有文件被重新解析才写盘
     index::save_if_dirty(store());
 
-    out.sort_by(|a, b| b.updated_ms.cmp(&a.updated_ms));
+    out.sort_by_key(|s| std::cmp::Reverse(s.updated_ms));
     out.truncate(500);
     Ok(out)
 }
