@@ -65,27 +65,20 @@ fn open_path(path: String) -> Result<bool, String> {
     if !p.exists() {
         return Err(format!("path not found: {path}"));
     }
-    #[cfg(target_os = "windows")]
-    {
-        let target = if p.is_file() {
-            p.parent().map(|d| d.to_path_buf()).unwrap_or_else(|| p.to_path_buf())
-        } else {
-            p.to_path_buf()
-        };
-        let ok = std::process::Command::new("explorer")
-            .arg(target)
-            .spawn()
-            .is_ok();
-        return Ok(ok);
-    }
-    #[cfg(not(target_os = "windows"))]
-    {
-        let ok = std::process::Command::new("xdg-open")
-            .arg(p)
-            .spawn()
-            .is_ok();
-        Ok(ok)
-    }
+    // 传文件路径时打开它所在的目录（三个平台的文件管理器都能接受目录）
+    let target = if p.is_file() {
+        p.parent().map(|d| d.to_path_buf()).unwrap_or_else(|| p.to_path_buf())
+    } else {
+        p.to_path_buf()
+    };
+    let opener = if cfg!(target_os = "windows") {
+        "explorer"
+    } else if cfg!(target_os = "macos") {
+        "open"
+    } else {
+        "xdg-open"
+    };
+    Ok(std::process::Command::new(opener).arg(target).spawn().is_ok())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]

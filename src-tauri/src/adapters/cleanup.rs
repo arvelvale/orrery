@@ -83,9 +83,12 @@ pub fn plan_all(targets: &[Target]) -> Vec<Plan> {
 }
 
 /// 一批删除共享的只读上下文：进程列表只查一次，Codex rollout 首行只扫一次
+/// 一个 codex rollout 的头部信息：文件路径、会话 id、是否子 agent、父会话 id
+type CodexHead = (PathBuf, String, bool, Option<String>);
+
 struct Ctx {
     running: HashSet<String>,
-    codex_heads: std::cell::OnceCell<Vec<(PathBuf, String, bool, Option<String>)>>,
+    codex_heads: std::cell::OnceCell<Vec<CodexHead>>,
 }
 
 impl Ctx {
@@ -97,7 +100,7 @@ impl Ctx {
         Self { running, codex_heads: std::cell::OnceCell::new() }
     }
 
-    fn codex_heads(&self, root: &Path) -> &[(PathBuf, String, bool, Option<String>)] {
+    fn codex_heads(&self, root: &Path) -> &[CodexHead] {
         self.codex_heads.get_or_init(|| {
             codex::collect_rollouts(&root.join("sessions"))
                 .into_iter()
@@ -178,9 +181,10 @@ fn plan(t: &Target, ctx: &Ctx) -> Plan {
         p.blocked = Some("running".into());
     }
 
+    // 进程名已在 running_processes 里去掉了 .exe 后缀，三个平台比同一个名字
     let proc = match t.harness.as_str() {
-        "kimi" => Some("kimi.exe"),
-        "codex" => Some("codex.exe"),
+        "kimi" => Some("kimi"),
+        "codex" => Some("codex"),
         _ => None,
     };
     if proc.is_some_and(|name| ctx.running.contains(name)) {
@@ -510,18 +514,22 @@ fn is_uuid(s: &str) -> bool {
         && s.chars().enumerate().all(|(i, c)| if [8, 13, 18, 23].contains(&i) { c == '-' } else { c.is_ascii_hexdigit() })
 }
 
-/// 找 codex 原生可执行文件：`ORRERY_CODEX_BIN` → PATH 里的 codex.exe → npm 全局安装包里的 vendor 二进制
+/// 找 codex 原生可执行文件：`ORRERY_CODEX_BIN` → PATH 里的 codex → npm 全局包里的 vendor 二进制
+///
+/// npm 装的 codex 在 Windows 上是 `codex.cmd` 批处理壳，直接调它会弹窗且拿不到退出码，
+/// 所以要顺着 npm 的目录结构找到真正的二进制
 fn codex_bin() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("ORRERY_CODEX_BIN").map(PathBuf::from).filter(|p| p.is_file()) {
         return Some(p);
     }
+    let exe_name = if cfg!(windows) { "codex.exe" } else { "codex" };
     let path = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&path) {
-        let exe = dir.join("codex.exe");
+        let exe = dir.join(exe_name);
         if exe.is_file() {
             return Some(exe);
         }
-        if dir.join("codex.cmd").is_file() {
+        if cfg!(windows) && dir.join("codex.cmd").is_file() {
             let vendor = dir
                 .join("node_modules/@openai/codex/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe");
             if vendor.is_file() {
@@ -534,16 +542,31 @@ fn codex_bin() -> Option<PathBuf> {
 
 /* ── 运行态检测 ── */
 
-/// 当前运行的进程名（小写）
+/// 当前运行的进程名（小写，去掉 `.exe` 后缀和目录部分）
+///
+/// Windows 走 `tasklist`，macOS / Linux 走 `ps`。取不到就返回空集合——
+/// 结果只用来提示"该工具正在运行"，宁可不提示，也不要因为拿不到进程表就拦住删除
 fn running_processes() -> HashSet<String> {
-    let mut cmd = std::process::Command::new("tasklist");
-    cmd.args(["/FO", "CSV", "/NH"]);
+    let mut cmd = if cfg!(windows) {
+        let mut c = std::process::Command::new("tasklist");
+        c.args(["/FO", "CSV", "/NH"]);
+        c
+    } else {
+        let mut c = std::process::Command::new("ps");
+        // -A 全部进程，comm= 只要命令名、不要表头（macOS 与 Linux 都支持）
+        c.args(["-A", "-o", "comm="]);
+        c
+    };
     no_window(&mut cmd);
     let Ok(out) = cmd.output() else { return HashSet::new() };
     String::from_utf8_lossy(&out.stdout)
         .lines()
         .filter_map(|l| l.split(',').next())
-        .map(|n| n.trim_matches('"').to_ascii_lowercase())
+        .map(|n| n.trim().trim_matches('"'))
+        // macOS 的 comm 是完整路径，取最后一段
+        .map(|n| n.rsplit(['/', std::path::MAIN_SEPARATOR]).next().unwrap_or(n))
+        .map(|n| n.trim_end_matches(".exe").to_ascii_lowercase())
+        .filter(|n| !n.is_empty())
         .collect()
 }
 
@@ -559,11 +582,20 @@ fn cc_is_running(root: &Path, id: &str) -> bool {
 }
 
 fn pid_alive(pid: u64) -> bool {
-    let mut cmd = std::process::Command::new("tasklist");
-    cmd.args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"]);
-    no_window(&mut cmd);
-    cmd.output()
-        .map(|o| String::from_utf8_lossy(&o.stdout).contains(&format!(",\"{pid}\",")))
+    if cfg!(windows) {
+        let mut cmd = std::process::Command::new("tasklist");
+        cmd.args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"]);
+        no_window(&mut cmd);
+        return cmd
+            .output()
+            .map(|o| String::from_utf8_lossy(&o.stdout).contains(&format!(",\"{pid}\",")))
+            .unwrap_or(false);
+    }
+    // Unix：进程不存在时 ps 退出码非 0
+    std::process::Command::new("ps")
+        .args(["-p", &pid.to_string(), "-o", "pid="])
+        .output()
+        .map(|o| o.status.success() && !o.stdout.iter().all(u8::is_ascii_whitespace))
         .unwrap_or(false)
 }
 
