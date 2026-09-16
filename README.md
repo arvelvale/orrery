@@ -1,17 +1,17 @@
 <div align="center">
 
-<img src=".github/assets/logo.svg" width="112" alt="Openplane logo" />
+<img src=".github/assets/logo.svg" width="112" alt="Orrery logo" />
 
-# Openplane
+# Orrery
 
 **A local-first cockpit for your AI coding agents.**
 
 Every Claude Code, Kimi Code, DSH (DeepSeek) and Codex session on your machine in one window: tokens, disk usage, projects, subagents. Delete what you no longer need, and route every harness through one local model proxy. Nothing leaves your computer.
 
 <p>
-  <a href="https://github.com/arvelvale/openplane/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/arvelvale/openplane?style=flat-square&color=0B6BCB" /></a>
-  <a href="https://github.com/arvelvale/openplane/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/arvelvale/openplane?style=flat-square&logo=github&color=15202B" /></a>
-  <a href="https://github.com/arvelvale/openplane/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/arvelvale/openplane?style=flat-square&color=5B6B7C" /></a>
+  <a href="https://github.com/arvelvale/orrery/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/arvelvale/orrery?style=flat-square&color=0B6BCB" /></a>
+  <a href="https://github.com/arvelvale/orrery/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/arvelvale/orrery?style=flat-square&logo=github&color=15202B" /></a>
+  <a href="https://github.com/arvelvale/orrery/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/arvelvale/orrery?style=flat-square&color=5B6B7C" /></a>
 </p>
 <p>
   <img alt="Status" src="https://img.shields.io/badge/status-early%20prototype-C47B0A?style=flat-square" />
@@ -30,7 +30,7 @@ Every Claude Code, Kimi Code, DSH (DeepSeek) and Codex session on your machine i
 
 **English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
 
-<img src=".github/assets/screenshot-sessions.en.png" alt="Openplane session hub" width="100%" />
+<img src=".github/assets/screenshot-sessions.en.png" alt="Orrery session hub" width="100%" />
 
 </div>
 
@@ -45,7 +45,7 @@ If you run several agent harnesses side by side, you hit the same friction every
 2. **Usage is invisible.** How many tokens did that session really burn? How much disk are hundreds of transcripts eating?
 3. **Model switching is manual.** Every harness has its own env vars and config files.
 
-Openplane reads what the harnesses already write to disk and puts it all on one board. It doesn't wrap, fork or re-implement any agent.
+Orrery reads what the harnesses already write to disk and puts it all on one board. It doesn't wrap, fork or re-implement any agent.
 
 ## What works today
 
@@ -64,13 +64,13 @@ Openplane reads what the harnesses already write to disk and puts it all on one 
 | Local model proxy (`127.0.0.1:8787`) | ✅ | Real forwarding, OpenAI and Anthropic shapes, streaming passthrough, start/stop from the app |
 | Resume in terminal | ⏳ | Currently opens the session folder |
 
-<img src=".github/assets/screenshot-status.en.png" alt="Openplane status page with storage breakdown" width="100%" />
+<img src=".github/assets/screenshot-status.en.png" alt="Orrery status page with storage breakdown" width="100%" />
 
 ## How token counting works
 
 Every harness records usage per API call, and none of them can simply be added up:
 
-| | Source | Pitfall | Openplane does |
+| | Source | Pitfall | Orrery does |
 |---|---|---|---|
 | **Claude Code** | `message.usage` on assistant lines | Streaming writes one line per content block, each repeating the same usage (4,034 lines → 1,558 real calls in one session) | Deduplicates by `message.id`, keeping the last line |
 | **Kimi Code** | `usage.record` events in `agents/*/wire.jsonl` | `usageScope: "session"` records are separate context-compaction calls, not totals | Counts every record once |
@@ -83,9 +83,9 @@ The session total adds up the main agent and every subagent. How it was checked:
 - **DSH**: matches DSH's own projection cache exactly up to the event the cache was built from.
 - **Codex**: `token_count` and `token_usage_record` agree exactly in 8 of 12 files that have both; in the other 4 the difference is exactly the context-compaction calls.
 
-Old Codex alpha sessions only stored a total without a breakdown. Openplane shows that part as *unsplit* instead of guessing.
+Old Codex alpha sessions only stored a total without a breakdown. Orrery shows that part as *unsplit* instead of guessing.
 
-Known limits: the ledger resets on `--resume`, so Openplane rebuilds totals from the transcript instead. The ledger also counts side calls that never reach the transcript, such as title generation, so Openplane's Claude Code totals can read about 1–5% lower.
+Known limits: the ledger resets on `--resume`, so Orrery rebuilds totals from the transcript instead. The ledger also counts side calls that never reach the transcript, such as title generation, so Orrery's Claude Code totals can read about 1–5% lower.
 
 ## Getting started
 
@@ -97,8 +97,8 @@ Known limits: the ledger resets on `--resume`, so Openplane rebuilds totals from
 - WebView2 (preinstalled on Windows 10/11)
 
 ```powershell
-git clone https://github.com/arvelvale/openplane.git
-cd openplane
+git clone https://github.com/arvelvale/orrery.git
+cd orrery
 npm install
 npm run dev        # desktop app, reads your real sessions
 ```
@@ -115,7 +115,7 @@ npm run preview    # http://127.0.0.1:1420 with mock data
 ## Project layout
 
 ```text
-openplane/
+orrery/
 ├─ ui/                      # index.html · styles.css · app.js · i18n.js (shared by WebView and browser)
 ├─ src-tauri/
 │  └─ src/
@@ -128,7 +128,7 @@ openplane/
 │     │  └─ cleanup.rs      # session deletion and index cleanup
 │     ├─ proxy/             # local model proxy
 │     │  ├─ mod.rs         # start / stop / status
-│     │  ├─ config.rs      # providers and routes (~/.openplane/proxy.json)
+│     │  ├─ config.rs      # providers and routes (~/.orrery/proxy.json)
 │     │  ├─ server.rs      # HTTP surface and upstream forwarding
 │     │  └─ state.rs       # counters, last request, last error
 │     └─ lib.rs             # Tauri commands
@@ -139,28 +139,28 @@ openplane/
 
 ## Local model proxy
 
-Point a harness at `http://127.0.0.1:8787/v1` and Openplane forwards its requests upstream, so you can swap the model from the app instead of editing each tool's config.
+Point a harness at `http://127.0.0.1:8787/v1` and Orrery forwards its requests upstream, so you can swap the model from the app instead of editing each tool's config.
 
-<img src=".github/assets/screenshot-proxy.en.png" alt="Openplane proxy panel" width="100%" />
+<img src=".github/assets/screenshot-proxy.en.png" alt="Orrery proxy panel" width="100%" />
 
 | | |
 |---|---|
 | Endpoints | `POST /v1/chat/completions` (OpenAI shape) · `POST /v1/messages` (Anthropic shape) · `GET /v1/models` · `GET /health` |
-| Model routing | Send `x-openplane-harness: <id>` and the proxy rewrites `model` to whatever that harness is set to on the Models page. Without the header your requested model is kept. |
+| Model routing | Send `x-orrery-harness: <id>` and the proxy rewrites `model` to whatever that harness is set to on the Models page. Without the header your requested model is kept. |
 | Provider choice | By model prefix (`claude*` → anthropic, `kimi*` → moonshot …). No match is an explicit error, never a silent fallback to some other provider. |
 | Streaming | SSE is passed through chunk by chunk, not buffered. |
-| Keys | Read from environment variables at request time. Openplane never stores, logs or displays them; the config only holds variable **names**. |
+| Keys | Read from environment variables at request time. Orrery never stores, logs or displays them; the config only holds variable **names**. |
 | Binding | Loopback only. A non-loopback `listen` value is refused. |
 
 ```bash
 # 1. put the key in the environment the app can see
-setx ANTHROPIC_API_KEY sk-...        # Windows, then restart Openplane
+setx ANTHROPIC_API_KEY sk-...        # Windows, then restart Orrery
 
 # 2. start the proxy from the Models page, then point a harness at it
 set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 ```
 
-Providers, routes and the listen address live in `~/.openplane/proxy.json`:
+Providers, routes and the listen address live in `~/.orrery/proxy.json`:
 
 ```json
 {
@@ -180,14 +180,14 @@ Providers, routes and the listen address live in `~/.openplane/proxy.json`:
 
 ## Deleting sessions
 
-Every session is just files on disk, so Openplane can remove the ones you no longer need. Nothing is deleted without a confirmation dialog that lists each session and the space it frees.
+Every session is just files on disk, so Orrery can remove the ones you no longer need. Nothing is deleted without a confirmation dialog that lists each session and the space it frees.
 
-<img src=".github/assets/screenshot-delete.en.png" alt="Openplane delete dialog" width="100%" />
+<img src=".github/assets/screenshot-delete.en.png" alt="Orrery delete dialog" width="100%" />
 
 - **Recycle Bin by default.** Permanent deletion is a separate mode that needs an extra checkbox.
 - **Sessions in use are protected.** Anything written in the last 10 minutes, or open in a running Claude Code, is skipped.
-- **Each tool's own index is cleaned too**, so no dead entries are left behind. Index files are backed up to `~/.openplane/backups/` before they change.
-- **Codex goes through the official `codex delete`**, which also clears Codex's history database. Openplane never writes to another tool's database.
+- **Each tool's own index is cleaned too**, so no dead entries are left behind. Index files are backed up to `~/.orrery/backups/` before they change.
+- **Codex goes through the official `codex delete`**, which also clears Codex's history database. Orrery never writes to another tool's database.
 - Paths are resolved by the backend from the session id and must stay inside that tool's data folder.
 
 | Tool | Files removed | Index entries removed |
@@ -202,8 +202,8 @@ Every session is just files on disk, so Openplane can remove the ones you no lon
 
 ## Privacy
 
-- Openplane only writes to harness folders when you delete sessions, as described above.
-- Its own files live in `~/.openplane/`: your route config, index backups, and `index.json` — the parsed session list (titles, paths, token counts) that makes restarts instant. Delete it anytime; it is rebuilt on the next scan.
+- Orrery only writes to harness folders when you delete sessions, as described above.
+- Its own files live in `~/.orrery/`: your route config, index backups, and `index.json` — the parsed session list (titles, paths, token counts) that makes restarts instant. Delete it anytime; it is rebuilt on the next scan.
 - No network calls and no telemetry. The proxy listens on `127.0.0.1` only.
 - Fields that may contain pasted secrets (for example Kimi's `lastPrompt`) are never read.
 

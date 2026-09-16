@@ -1,17 +1,17 @@
 <div align="center">
 
-<img src=".github/assets/logo.svg" width="112" alt="Openplane logo" />
+<img src=".github/assets/logo.svg" width="112" alt="Orrery logo" />
 
-# Openplane
+# Orrery
 
 **本地优先的 AI 编程 Agent 驾驶舱。**
 
 把本机所有 Claude Code、Kimi Code、DSH（DeepSeek）、Codex 会话收进一个窗口：token、磁盘占用、项目、子 agent 一眼看清。不要的会话可以直接删掉，各个 harness 还能统一走一个本地模型代理。数据不出本机。
 
 <p>
-  <a href="https://github.com/arvelvale/openplane/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/arvelvale/openplane?style=flat-square&color=0B6BCB" /></a>
-  <a href="https://github.com/arvelvale/openplane/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/arvelvale/openplane?style=flat-square&logo=github&color=15202B" /></a>
-  <a href="https://github.com/arvelvale/openplane/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/arvelvale/openplane?style=flat-square&color=5B6B7C" /></a>
+  <a href="https://github.com/arvelvale/orrery/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/arvelvale/orrery?style=flat-square&color=0B6BCB" /></a>
+  <a href="https://github.com/arvelvale/orrery/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/arvelvale/orrery?style=flat-square&logo=github&color=15202B" /></a>
+  <a href="https://github.com/arvelvale/orrery/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/arvelvale/orrery?style=flat-square&color=5B6B7C" /></a>
 </p>
 <p>
   <img alt="Status" src="https://img.shields.io/badge/状态-早期原型-C47B0A?style=flat-square" />
@@ -30,7 +30,7 @@
 
 [English](README.md) · **简体中文** · [日本語](README.ja.md)
 
-<img src=".github/assets/screenshot-sessions.zh-CN.png" alt="Openplane 会话中枢" width="100%" />
+<img src=".github/assets/screenshot-sessions.zh-CN.png" alt="Orrery 会话中枢" width="100%" />
 
 </div>
 
@@ -45,7 +45,7 @@
 2. **用量看不见**：一个会话到底烧了多少 token？几百份对话记录吃掉多少磁盘？
 3. **切换模型全靠手改**：每个工具各有各的环境变量和配置文件。
 
-Openplane 只读取各工具本来就写在磁盘上的数据，汇总到一块面板上。不包装、不 fork、不重新实现任何 agent。
+Orrery 只读取各工具本来就写在磁盘上的数据，汇总到一块面板上。不包装、不 fork、不重新实现任何 agent。
 
 ## 目前能用的
 
@@ -64,13 +64,13 @@ Openplane 只读取各工具本来就写在磁盘上的数据，汇总到一块�
 | 本地模型代理（`127.0.0.1:8787`） | ✅ | 真实转发，OpenAI 与 Anthropic 两种形状，流式透传，可在应用里启停 |
 | 在终端恢复会话 | ⏳ | 目前只打开会话目录 |
 
-<img src=".github/assets/screenshot-status.zh-CN.png" alt="Openplane 状态页与存储统计" width="100%" />
+<img src=".github/assets/screenshot-status.zh-CN.png" alt="Orrery 状态页与存储统计" width="100%" />
 
 ## token 是怎么算的
 
 每个工具都按 API 调用记录用量，但没有一个能直接相加：
 
-| | 数据来源 | 坑 | Openplane 的处理 |
+| | 数据来源 | 坑 | Orrery 的处理 |
 |---|---|---|---|
 | **Claude Code** | assistant 行的 `message.usage` | 流式输出按内容块拆成多行，每行重复同一份用量（某会话 4,034 行实为 1,558 次调用） | 按 `message.id` 去重，保留最后一行 |
 | **Kimi Code** | `agents/*/wire.jsonl` 里的 `usage.record` 事件 | `usageScope: "session"` 是上下文压缩的独立调用，不是汇总 | 每条记录计一次 |
@@ -83,9 +83,9 @@ Openplane 只读取各工具本来就写在磁盘上的数据，汇总到一块�
 - **DSH**：和 DSH 自己的投影缓存对比，截至缓存生成时的事件完全一致。
 - **Codex**：同时有两本账的 12 个文件里 8 个完全一致，另外 4 个的差额正好是上下文压缩调用。
 
-早期 Codex alpha 版本的会话只记了总数、没有分项，Openplane 把这部分单独显示为"未拆分"，不做猜测。
+早期 Codex alpha 版本的会话只记了总数、没有分项，Orrery 把这部分单独显示为"未拆分"，不做猜测。
 
-已知限制：官方记账在 `--resume` 后会清零，所以 Openplane 改为从对话记录重新累加。官方记账还包含生成标题这类不写进对话记录的后台调用，所以 Openplane 算出的 Claude Code 总量可能少 1–5%。
+已知限制：官方记账在 `--resume` 后会清零，所以 Orrery 改为从对话记录重新累加。官方记账还包含生成标题这类不写进对话记录的后台调用，所以 Orrery 算出的 Claude Code 总量可能少 1–5%。
 
 ## 快速开始
 
@@ -97,8 +97,8 @@ Openplane 只读取各工具本来就写在磁盘上的数据，汇总到一块�
 - WebView2（Windows 10/11 自带）
 
 ```powershell
-git clone https://github.com/arvelvale/openplane.git
-cd openplane
+git clone https://github.com/arvelvale/orrery.git
+cd orrery
 npm install
 npm run dev        # 桌面应用，读取本机真实会话
 ```
@@ -115,7 +115,7 @@ npm run preview    # http://127.0.0.1:1420，mock 数据
 ## 目录结构
 
 ```text
-openplane/
+orrery/
 ├─ ui/                      # index.html · styles.css · app.js · i18n.js（WebView 与浏览器共用）
 ├─ src-tauri/
 │  └─ src/
@@ -128,7 +128,7 @@ openplane/
 │     │  └─ cleanup.rs      # 删除会话与索引清理
 │     ├─ proxy/             # 本地模型代理
 │     │  ├─ mod.rs         # 启停与状态
-│     │  ├─ config.rs      # 供应商与路由（~/.openplane/proxy.json）
+│     │  ├─ config.rs      # 供应商与路由（~/.orrery/proxy.json）
 │     │  ├─ server.rs      # HTTP 面与上游转发
 │     │  └─ state.rs       # 计数、最近请求、最近错误
 │     └─ lib.rs             # Tauri 命令
@@ -139,28 +139,28 @@ openplane/
 
 ## 本地模型代理
 
-把 harness 的接口地址指到 `http://127.0.0.1:8787/v1`，Openplane 就会把请求转发到真实供应商。这样换模型只需在应用里点一下，不用改各个工具自己的配置。
+把 harness 的接口地址指到 `http://127.0.0.1:8787/v1`，Orrery 就会把请求转发到真实供应商。这样换模型只需在应用里点一下，不用改各个工具自己的配置。
 
-<img src=".github/assets/screenshot-proxy.zh-CN.png" alt="Openplane 代理面板" width="100%" />
+<img src=".github/assets/screenshot-proxy.zh-CN.png" alt="Orrery 代理面板" width="100%" />
 
 | | |
 |---|---|
 | 接口 | `POST /v1/chat/completions`（OpenAI 形状）· `POST /v1/messages`（Anthropic 形状）· `GET /v1/models` · `GET /health` |
-| 模型路由 | 请求带 `x-openplane-harness: <id>` 时，代理把 `model` 改写成「模型」页里给该 harness 选的模型；不带这个头就保留请求原本的模型 |
+| 模型路由 | 请求带 `x-orrery-harness: <id>` 时，代理把 `model` 改写成「模型」页里给该 harness 选的模型；不带这个头就保留请求原本的模型 |
 | 供应商选择 | 按模型名前缀匹配（`claude*` → anthropic，`kimi*` → moonshot…）。匹配不到就直接报错，绝不悄悄换一家顶上 |
 | 流式 | SSE 逐块透传，不缓冲 |
-| 密钥 | 转发时才从环境变量读取。Openplane 不保存、不打印、不显示密钥，配置里只存变量**名** |
+| 密钥 | 转发时才从环境变量读取。Orrery 不保存、不打印、不显示密钥，配置里只存变量**名** |
 | 监听 | 只允许回环地址，配置成非回环地址会被拒绝启动 |
 
 ```bash
 # 1. 把密钥放进应用能读到的环境变量
-setx ANTHROPIC_API_KEY sk-...        # Windows，设置后需重启 Openplane
+setx ANTHROPIC_API_KEY sk-...        # Windows，设置后需重启 Orrery
 
 # 2. 在「模型」页启动代理，然后把 harness 指过来
 set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 ```
 
-供应商、路由和监听地址都在 `~/.openplane/proxy.json`：
+供应商、路由和监听地址都在 `~/.orrery/proxy.json`：
 
 ```json
 {
@@ -180,14 +180,14 @@ set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 
 ## 删除会话
 
-会话本质上就是磁盘上的文件，Openplane 可以帮你删掉不再需要的会话。删除前一定会弹出确认框，列出每条会话和能腾出的空间。
+会话本质上就是磁盘上的文件，Orrery 可以帮你删掉不再需要的会话。删除前一定会弹出确认框，列出每条会话和能腾出的空间。
 
-<img src=".github/assets/screenshot-delete.zh-CN.png" alt="Openplane 删除确认框" width="100%" />
+<img src=".github/assets/screenshot-delete.zh-CN.png" alt="Orrery 删除确认框" width="100%" />
 
 - **默认移到回收站。** 永久删除是单独的模式，还需要额外勾选确认。
 - **正在用的会话受保护。** 10 分钟内有写入的，或正在被运行中的 Claude Code 使用的，会自动跳过。
-- **同时清理各工具自己的索引**，不留死条目。改动前会把索引文件备份到 `~/.openplane/backups/`。
-- **Codex 通过官方的 `codex delete` 删除**，会一并清理 Codex 的历史数据库。Openplane 从不直接写其他工具的数据库。
+- **同时清理各工具自己的索引**，不留死条目。改动前会把索引文件备份到 `~/.orrery/backups/`。
+- **Codex 通过官方的 `codex delete` 删除**，会一并清理 Codex 的历史数据库。Orrery 从不直接写其他工具的数据库。
 - 路径由后端根据会话 id 解析，并且必须位于该工具的数据目录之内。
 
 | 工具 | 删除的文件 | 移除的索引条目 |
@@ -202,8 +202,8 @@ set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 
 ## 隐私
 
-- 只有在你删除会话时，Openplane 才会写入各 harness 的目录，具体如上。
-- 它自己的文件都在 `~/.openplane/`：路由配置、索引备份，以及 `index.json`——会话解析结果（标题、路径、token 数）的缓存，用来让重启后秒开。随时可以删，下次扫描会重建。
+- 只有在你删除会话时，Orrery 才会写入各 harness 的目录，具体如上。
+- 它自己的文件都在 `~/.orrery/`：路由配置、索引备份，以及 `index.json`——会话解析结果（标题、路径、token 数）的缓存，用来让重启后秒开。随时可以删，下次扫描会重建。
 - 不联网、无遥测，代理只监听 `127.0.0.1`。
 - 可能含粘贴密钥的字段（如 Kimi 的 `lastPrompt`）不读取。
 

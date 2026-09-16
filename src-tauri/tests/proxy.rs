@@ -75,9 +75,9 @@ async fn start_upstream(seen: Recorder) -> String {
     format!("http://{addr}")
 }
 
-/// 用沙盒 HOME 起代理：配置写在临时目录，绝不碰真实 ~/.openplane
+/// 用沙盒 HOME 起代理：配置写在临时目录，绝不碰真实 ~/.orrery
 fn sandbox_home(dir: &std::path::Path, upstream: &str) {
-    std::env::set_var("OPENPLANE_HOME", dir);
+    std::env::set_var("ORRERY_HOME", dir);
     let cfg = json!({
         "listen": "127.0.0.1:0",
         "auto_start": false,
@@ -85,20 +85,20 @@ fn sandbox_home(dir: &std::path::Path, upstream: &str) {
         "providers": {
             "fake-openai": {
                 "base_url": upstream,
-                "api_key_env": "OPENPLANE_TEST_OPENAI_KEY",
+                "api_key_env": "ORRERY_TEST_OPENAI_KEY",
                 "wire": "openai",
                 "model_prefixes": ["gpt", "kimi", "boom"]
             },
             "fake-anthropic": {
                 "base_url": upstream,
-                "api_key_env": "OPENPLANE_TEST_ANTHROPIC_KEY",
+                "api_key_env": "ORRERY_TEST_ANTHROPIC_KEY",
                 "wire": "anthropic",
                 "model_prefixes": ["claude"]
             }
         }
     });
-    std::fs::create_dir_all(dir.join(".openplane")).unwrap();
-    std::fs::write(dir.join(".openplane").join("proxy.json"), serde_json::to_string_pretty(&cfg).unwrap()).unwrap();
+    std::fs::create_dir_all(dir.join(".orrery")).unwrap();
+    std::fs::write(dir.join(".orrery").join("proxy.json"), serde_json::to_string_pretty(&cfg).unwrap()).unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -106,13 +106,13 @@ async fn forwards_streams_and_reports_errors() {
     let seen: Recorder = Arc::default();
     let upstream = start_upstream(seen.clone()).await;
 
-    let tmp = std::env::temp_dir().join(format!("openplane-proxy-test-{}", std::process::id()));
+    let tmp = std::env::temp_dir().join(format!("orrery-proxy-test-{}", std::process::id()));
     sandbox_home(&tmp, &upstream);
-    std::env::set_var("OPENPLANE_TEST_OPENAI_KEY", "test-openai-key");
-    std::env::set_var("OPENPLANE_TEST_ANTHROPIC_KEY", "test-anthropic-key");
+    std::env::set_var("ORRERY_TEST_OPENAI_KEY", "test-openai-key");
+    std::env::set_var("ORRERY_TEST_ANTHROPIC_KEY", "test-anthropic-key");
 
     // listen 端口写 0 会让系统分配，status() 里能拿到实际端口
-    let status = tokio::task::spawn_blocking(openplane_lib::proxy::start).await.unwrap().unwrap();
+    let status = tokio::task::spawn_blocking(orrery_lib::proxy::start).await.unwrap().unwrap();
     let base = format!("http://{}", status.listen);
     assert!(status.running, "proxy should be running: {}", status.message);
 
@@ -121,7 +121,7 @@ async fn forwards_streams_and_reports_errors() {
     // 1. OpenAI 形状：带 harness 头 → 模型被路由覆盖，鉴权头由代理按供应商重建
     let r = client
         .post(format!("{base}/v1/chat/completions"))
-        .header("x-openplane-harness", "kimi")
+        .header("x-orrery-harness", "kimi")
         .json(&json!({ "model": "whatever-client-said", "messages": [] }))
         .send()
         .await
@@ -196,7 +196,7 @@ async fn forwards_streams_and_reports_errors() {
     assert_eq!(r.status(), 429);
 
     // 6. 缺环境变量 → 503，错误信息里说清楚缺哪个变量，且不含密钥
-    std::env::remove_var("OPENPLANE_TEST_ANTHROPIC_KEY");
+    std::env::remove_var("ORRERY_TEST_ANTHROPIC_KEY");
     let r = client
         .post(format!("{base}/v1/messages"))
         .json(&json!({ "model": "claude-test", "messages": [] }))
@@ -206,13 +206,13 @@ async fn forwards_streams_and_reports_errors() {
     assert_eq!(r.status(), 503);
     let body: Value = r.json().await.unwrap();
     let msg = body["error"]["message"].as_str().unwrap();
-    assert!(msg.contains("OPENPLANE_TEST_ANTHROPIC_KEY"), "{msg}");
+    assert!(msg.contains("ORRERY_TEST_ANTHROPIC_KEY"), "{msg}");
     assert!(!msg.contains("test-anthropic-key"), "error must not leak the key: {msg}");
 
     // 7. /health 与状态计数
     let health: Value = client.get(format!("{base}/health")).send().await.unwrap().json().await.unwrap();
     assert_eq!(health["status"], "ok");
-    let status = tokio::task::spawn_blocking(openplane_lib::proxy::status).await.unwrap();
+    let status = tokio::task::spawn_blocking(orrery_lib::proxy::status).await.unwrap();
     assert!(status.requests >= 6, "requests={}", status.requests);
     assert!(status.failures >= 2, "failures={}", status.failures);
     assert_eq!(status.last_request.as_ref().unwrap().provider, "fake-openai");
@@ -220,7 +220,7 @@ async fn forwards_streams_and_reports_errors() {
     assert!(status.providers.iter().any(|p| p.name == "fake-anthropic" && !p.key_present));
 
     // 8. 停止后端口不再接受新连接
-    tokio::task::spawn_blocking(openplane_lib::proxy::stop).await.unwrap().unwrap();
+    tokio::task::spawn_blocking(orrery_lib::proxy::stop).await.unwrap().unwrap();
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert!(client.get(format!("{base}/health")).timeout(Duration::from_secs(2)).send().await.is_err());
 

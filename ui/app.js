@@ -1,5 +1,5 @@
 /**
- * Openplane UI — WebView 前身
+ * Orrery UI — WebView 前身
  * 在浏览器中用 mock；在 Tauri 里通过 invoke 调 Rust。
  * 所有面向用户的文案走 i18n.js 的 t()，这里不写死任何自然语言。
  */
@@ -372,7 +372,7 @@ function mockProxy() {
     running: false, online: false, endpoint: "http://127.0.0.1:8787/v1", listen: "127.0.0.1:8787",
     auto_start: false, uptime_ms: 0, requests: 0, failures: 0, latency_ms: null,
     last_request: null, last_error: null, routes: { ...state.routes },
-    config_path: "~/.openplane/proxy.json", message: "stopped",
+    config_path: "~/.orrery/proxy.json", message: "stopped",
     providers: [
       { name: "anthropic", base_url: "https://api.anthropic.com/v1", wire: "anthropic", key_env: "ANTHROPIC_API_KEY", key_present: false },
       { name: "openai", base_url: "https://api.openai.com/v1", wire: "openai", key_env: "OPENAI_API_KEY", key_present: false },
@@ -391,7 +391,7 @@ function proxyState() {
 }
 
 /* ── Persistence ── */
-const LS_KEY = "openplane.v1";
+const LS_KEY = "orrery.v1";
 function loadLocal() {
   try {
     const raw = localStorage.getItem(LS_KEY);

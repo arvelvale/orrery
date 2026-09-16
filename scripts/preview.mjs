@@ -30,5 +30,5 @@ createServer(async (req, res) => {
     res.writeHead(404).end("not found");
   }
 }).listen(port, "127.0.0.1", () => {
-  console.log(`Openplane preview → http://127.0.0.1:${port}/`);
+  console.log(`Orrery preview → http://127.0.0.1:${port}/`);
 });

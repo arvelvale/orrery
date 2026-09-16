@@ -1,7 +1,7 @@
-# Openplane — Design Pass
+# Orrery — Design Pass
 
 ## Subject
-Openplane：个人日常用的 **桌面** Agent 驾驶舱。一眼看清：哪些 harness 在跑、会话在哪、模型走哪条路。  
+Orrery：个人日常用的 **桌面** Agent 驾驶舱。一眼看清：哪些 harness 在跑、会话在哪、模型走哪条路。  
 Audience: 多 harness 并行、长期坐在电脑前的独立开发者（首先是作者自己）。  
 Job of the UI: 3 秒态势感知 + 一次点击切模型 / 进会话。
 

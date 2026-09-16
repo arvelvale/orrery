@@ -1,4 +1,4 @@
-//! 代理配置：`~/.openplane/proxy.json`
+//! 代理配置：`~/.orrery/proxy.json`
 //!
 //! 密钥只存**环境变量名**，永远不写进配置、不回传界面。
 
@@ -36,7 +36,7 @@ pub struct ProxyConfig {
     /// 应用启动时自动拉起代理
     #[serde(default)]
     pub auto_start: bool,
-    /// harness id → 模型名；请求带 `x-openplane-harness` 头时覆盖模型。
+    /// harness id → 模型名；请求带 `x-orrery-harness` 头时覆盖模型。
     /// `default` 是兜底（请求没带头时不覆盖，只有显式写了 `default` 才覆盖）
     #[serde(default)]
     pub routes: BTreeMap<String, String>,
@@ -119,7 +119,7 @@ impl ProxyConfig {
 }
 
 pub fn config_path() -> Option<PathBuf> {
-    crate::adapters::home_dir().map(|h| h.join(".openplane").join("proxy.json"))
+    crate::adapters::data_dir().map(|h| h.join("proxy.json"))
 }
 
 /// 读配置；文件不存在或损坏时返回默认配置（不覆盖用户文件）
@@ -135,7 +135,7 @@ pub fn load() -> ProxyConfig {
 }
 
 pub fn save(cfg: &ProxyConfig) -> Result<(), String> {
-    let path = config_path().ok_or("cannot resolve ~/.openplane")?;
+    let path = config_path().ok_or("cannot resolve ~/.orrery")?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }

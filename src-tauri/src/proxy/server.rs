@@ -4,8 +4,8 @@
 //! - `POST /v1/chat/completions` → OpenAI 形状（`Authorization: Bearer`）
 //! - `POST /v1/messages`         → Anthropic 形状（`x-api-key` + `anthropic-version`）
 //!
-//! 请求带 `x-openplane-harness: <id>` 时按路由表覆盖 `model` 字段，这样各 harness 只要把
-//! base_url 指到这里，就能在 Openplane 里改模型。响应原样透传（含 SSE 流式），不缓冲、不改写。
+//! 请求带 `x-orrery-harness: <id>` 时按路由表覆盖 `model` 字段，这样各 harness 只要把
+//! base_url 指到这里，就能在 Orrery 里改模型。响应原样透传（含 SSE 流式），不缓冲、不改写。
 //!
 //! 密钥只在转发瞬间从环境变量读，不落盘、不进日志、不回传界面。
 
@@ -21,7 +21,7 @@ use futures_util::StreamExt;
 use serde_json::{json, Value};
 use std::sync::{Arc, RwLock};
 
-pub const HARNESS_HEADER: &str = "x-openplane-harness";
+pub const HARNESS_HEADER: &str = "x-orrery-harness";
 const ANTHROPIC_VERSION: &str = "2023-06-01";
 
 pub struct AppState {
@@ -42,7 +42,7 @@ pub fn router(state: Arc<AppState>) -> Router {
 async fn health(State(state): State<Arc<AppState>>) -> Json<Value> {
     Json(json!({
         "status": "ok",
-        "service": "openplane-proxy",
+        "service": "orrery-proxy",
         "requests": state.metrics.requests(),
         "uptime_ms": state.metrics.uptime_ms(),
     }))
@@ -57,7 +57,7 @@ async fn models(State(state): State<Arc<AppState>>) -> Json<Value> {
         .collect::<std::collections::BTreeSet<_>>()
         .into_iter()
         .map(|m| {
-            let owner = cfg.owner_of(m).unwrap_or("openplane").to_string();
+            let owner = cfg.owner_of(m).unwrap_or("orrery").to_string();
             json!({ "id": m, "object": "model", "owned_by": owner })
         })
         .collect();
@@ -74,7 +74,7 @@ async fn messages(state: State<Arc<AppState>>, headers: HeaderMap, body: Json<Va
 
 fn error_response(status: StatusCode, message: impl Into<String>) -> Response {
     let message = message.into();
-    (status, Json(json!({ "error": { "type": "openplane_proxy", "message": message } }))).into_response()
+    (status, Json(json!({ "error": { "type": "orrery_proxy", "message": message } }))).into_response()
 }
 
 async fn forward(
