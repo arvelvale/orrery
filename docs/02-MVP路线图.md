@@ -12,10 +12,10 @@
 - [x] 前端拆分 `ui/index.html` + `styles.css` + `app.js`（WebView / 浏览器共用）
 - [x] `withGlobalTauri` + invoke 桥：`list_sessions` / `get_proxy_status` / `ping_proxy` / `save_route` / `open_path`
 - [x] Claude Code adapter：扫 `~/.claude/projects/<project>/*.jsonl`，解析标题/模型/用量
-- [x] 路由配置落盘 `~/.openplane/proxy.json`
+- [x] 路由配置落盘 `~/.orrery/proxy.json`
 - [x] **本机 Rust 1.95.0 可用**（`%USERPROFILE%\.rustup\toolchains\stable-x86_64-pc-windows-msvc\bin`）
 - [x] `cargo check` 已解析并锁定 485 个依赖，开始编译
-- [x] VS Build Tools 已装，`cargo build` 链接出 `target/debug/openplane.exe`（2026-09-13）
+- [x] VS Build Tools 已装，`cargo build` 链接出 `target/debug/orrery.exe`（2026-09-13）
 - [x] 前端移入 `ui/`，`frontendDist` 改为 `../ui`（原 `../` 会把 `target/` 当前端资源嵌入，因 `.cargo-lock` 被锁报 os error 33）
 - [x] `npm i` + `npm run dev` 打开桌面窗口，会话来源「本机扫描」（2026-09-14）
 - [x] 会话磁盘占用：单条 = 主 jsonl + 同名附属目录（subagents / tool-results）；`storage_stats` 按 harness 汇总 + 总计（状态页卡片）
@@ -46,7 +46,7 @@
 | ~~DSH adapter~~ ✅ 2026-09-14 | 5 个会话，token 与 DSH 投影缓存、独立脚本逐项一致 |
 | ~~Codex adapter~~ ✅ 2026-09-14 | 79 个 rollout 合并为 63 个会话，token/占用/子 agent 与独立脚本逐项一致 |
 | ~~删除会话~~ ✅ 2026-09-15 | 单条/多选、按占用排序、回收站/永久；沙盒端到端 18 项检查通过，真实数据前后快照不变 |
-| ~~持久化解析缓存~~ ✅ 2026-09-16 | 落盘 `~/.openplane/index.json`；188 个会话冷启动 5.5s → 0.12s，改一个文件只重解析 1 个 |
+| ~~持久化解析缓存~~ ✅ 2026-09-16 | 落盘 `~/.orrery/index.json`；188 个会话冷启动 5.5s → 0.12s，改一个文件只重解析 1 个 |
 | 本地索引 + 搜索 | 标题/路径/模型可检索，增量 < 1s |
 | 「在终端恢复」 | 调起对应 CLI（目前仅打开目录） |
 
@@ -54,9 +54,9 @@
 
 | 任务 | 验收 | 状态 |
 |---|---|---|
-| 本地 HTTP 服务 | `curl /health` 通 | ✅ `{"status":"ok","service":"openplane-proxy",…}` |
+| 本地 HTTP 服务 | `curl /health` 通 | ✅ `{"status":"ok","service":"orrery-proxy",…}` |
 | OpenAI-compatible 入口 | harness 可指向 8787 | ✅ `/v1/chat/completions` + `/v1/messages` + `/v1/models` |
-| 路由表读写生效 | UI 改模型 → 下一请求走新路由 | ✅ `x-openplane-harness` 命中路由表改写 `model`（集成测试断言上游收到的模型名） |
+| 路由表读写生效 | UI 改模型 → 下一请求走新路由 | ✅ `x-orrery-harness` 命中路由表改写 `model`（集成测试断言上游收到的模型名） |
 | 密钥读环境变量 | 仓库无明文 key | ✅ 配置只存变量名；缺变量返回 503 且响应体不含 key |
 | 只听回环 | 外部地址访问不通 | ✅ 非回环 `listen` 拒绝启动；局域网 IP 访问失败 |
 | 流式不缓冲 | SSE 逐块到达 | ✅ 集成测试按块到达时间断言 |

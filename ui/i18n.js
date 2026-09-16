@@ -1,5 +1,5 @@
 /**
- * Openplane i18n — en / zh-CN / ja
+ * Orrery i18n — en / zh-CN / ja
  *
  * 规则：
  * - 新增文案三种语言同时写，缺哪个 `missingKeys()` 会在控制台报出来
@@ -15,7 +15,7 @@ export const LOCALES = [
 
 const MESSAGES = {
   en: {
-    "doc.title": "Openplane · Agent Cockpit",
+    "doc.title": "Orrery · Agent Cockpit",
     "lang.label": "Language",
 
     "header.annunciator": "System status annunciator",
@@ -26,7 +26,7 @@ const MESSAGES = {
     "proxy.busyChip": "Port in use",
     "proxy.start": "Start proxy",
     "proxy.stop": "Stop proxy",
-    "proxy.autoStart": "Start the proxy when Openplane opens",
+    "proxy.autoStart": "Start the proxy when Orrery opens",
     "proxy.uptime": "Uptime",
     "proxy.requests": "Requests",
     "proxy.failures": { one: "{n} failed", other: "{n} failed" },
@@ -34,7 +34,7 @@ const MESSAGES = {
     "proxy.lastError": "Last error",
     "proxy.config": "Config",
     "proxy.providersTitle": "Providers",
-    "proxy.providersDesc": "Each provider reads its API key from an environment variable at request time. Openplane never stores or shows the key itself.",
+    "proxy.providersDesc": "Each provider reads its API key from an environment variable at request time. Orrery never stores or shows the key itself.",
     "proxy.keyReady": "key set",
     "proxy.keyMissing": "key missing",
     "toast.proxyStarted": "Proxy running on {listen}",
@@ -86,7 +86,7 @@ const MESSAGES = {
     "models.ping": "Test connection",
     "models.copyEndpoint": "Copy endpoint",
     "models.routesTitle": "Route map",
-    "models.routesDesc": "Pick a default model for each harness. Saved to ~/.openplane/proxy.json (browser preview: localStorage).",
+    "models.routesDesc": "Pick a default model for each harness. Saved to ~/.orrery/proxy.json (browser preview: localStorage).",
     "models.poolTitle": "Model pool",
     "models.defaultFor": "{name} default model",
     "models.note.flagship": "flagship",
@@ -159,7 +159,7 @@ const MESSAGES = {
     "del.reason.invalid": "outside the tool's data folder",
     "del.warn.harness_running": "{name} is running. Close it first, or it may write the removed entries back into its index.",
     "del.warn.codex_cli_missing": "Codex CLI not found. Files and session_index are cleaned, but Codex's history database keeps its records.",
-    "del.indexNote": "Their entries in each tool's own index are removed too. The original index files are backed up to ~/.openplane/backups.",
+    "del.indexNote": "Their entries in each tool's own index are removed too. The original index files are backed up to ~/.orrery/backups.",
     "del.codexNote": "Codex sessions go through the official `codex delete`, which also clears Codex's history database. Subagent reviews are removed with their parent.",
     "del.previewNote": "Browser preview: nothing on disk is touched.",
     "del.ack": "I understand this can't be undone",
@@ -175,13 +175,13 @@ const MESSAGES = {
     "del.failedTitle": { one: "Failed ({n})", other: "Failed ({n})" },
     "del.error.files": "couldn't remove files",
     "del.error.index": "files removed, index update failed",
-    "del.codexFallback": "Codex CLI couldn't clear some records, so Openplane removed the files and session_index entries itself. Codex's history database may still list them.",
+    "del.codexFallback": "Codex CLI couldn't clear some records, so Orrery removed the files and session_index entries itself. Codex's history database may still list them.",
     "del.backups": "Index backups: {path}",
     "del.close": "Close",
   },
 
   "zh-CN": {
-    "doc.title": "Openplane · Agent 驾驶舱",
+    "doc.title": "Orrery · Agent 驾驶舱",
     "lang.label": "语言",
 
     "header.annunciator": "系统状态告示牌",
@@ -192,7 +192,7 @@ const MESSAGES = {
     "proxy.busyChip": "端口被占用",
     "proxy.start": "启动代理",
     "proxy.stop": "停止代理",
-    "proxy.autoStart": "打开 Openplane 时自动启动代理",
+    "proxy.autoStart": "打开 Orrery 时自动启动代理",
     "proxy.uptime": "运行时长",
     "proxy.requests": "请求数",
     "proxy.failures": "{n} 次失败",
@@ -200,7 +200,7 @@ const MESSAGES = {
     "proxy.lastError": "最近错误",
     "proxy.config": "配置",
     "proxy.providersTitle": "供应商",
-    "proxy.providersDesc": "每个供应商的密钥在转发时从环境变量读取。Openplane 不保存、也不显示密钥本身。",
+    "proxy.providersDesc": "每个供应商的密钥在转发时从环境变量读取。Orrery 不保存、也不显示密钥本身。",
     "proxy.keyReady": "密钥已设置",
     "proxy.keyMissing": "缺少密钥",
     "toast.proxyStarted": "代理已在 {listen} 运行",
@@ -252,7 +252,7 @@ const MESSAGES = {
     "models.ping": "检测连通",
     "models.copyEndpoint": "复制端点",
     "models.routesTitle": "路由映射",
-    "models.routesDesc": "为每个 harness 指定默认模型。写入 ~/.openplane/proxy.json（浏览器预览写 localStorage）。",
+    "models.routesDesc": "为每个 harness 指定默认模型。写入 ~/.orrery/proxy.json（浏览器预览写 localStorage）。",
     "models.poolTitle": "可用模型池",
     "models.defaultFor": "{name} 默认模型",
     "models.note.flagship": "旗舰",
@@ -325,7 +325,7 @@ const MESSAGES = {
     "del.reason.invalid": "不在该工具的数据目录内",
     "del.warn.harness_running": "{name} 正在运行。建议先关闭它，否则它可能把删掉的索引条目重新写回去。",
     "del.warn.codex_cli_missing": "没找到 Codex CLI。文件和 session_index 会清理，但 Codex 的历史数据库里仍会保留记录。",
-    "del.indexNote": "同时移除它们在各工具自身索引里的条目，原索引文件会备份到 ~/.openplane/backups。",
+    "del.indexNote": "同时移除它们在各工具自身索引里的条目，原索引文件会备份到 ~/.orrery/backups。",
     "del.codexNote": "Codex 会话通过官方的 `codex delete` 删除，会一并清理 Codex 的历史数据库；自动审查子 agent 随父会话一起删除。",
     "del.previewNote": "浏览器预览：不会动磁盘上的任何文件。",
     "del.ack": "我知道删除后无法恢复",
@@ -341,13 +341,13 @@ const MESSAGES = {
     "del.failedTitle": "失败（{n}）",
     "del.error.files": "文件删除失败",
     "del.error.index": "文件已删除，但索引更新失败",
-    "del.codexFallback": "部分记录 Codex CLI 没能清理，Openplane 已自行删除文件和 session_index 条目，Codex 的历史数据库里可能仍有记录。",
+    "del.codexFallback": "部分记录 Codex CLI 没能清理，Orrery 已自行删除文件和 session_index 条目，Codex 的历史数据库里可能仍有记录。",
     "del.backups": "索引备份：{path}",
     "del.close": "关闭",
   },
 
   ja: {
-    "doc.title": "Openplane · エージェントコックピット",
+    "doc.title": "Orrery · エージェントコックピット",
     "lang.label": "言語",
 
     "header.annunciator": "システム状態アナンシエーター",
@@ -358,7 +358,7 @@ const MESSAGES = {
     "proxy.busyChip": "ポート使用中",
     "proxy.start": "プロキシを起動",
     "proxy.stop": "プロキシを停止",
-    "proxy.autoStart": "Openplane の起動時にプロキシも起動する",
+    "proxy.autoStart": "Orrery の起動時にプロキシも起動する",
     "proxy.uptime": "稼働時間",
     "proxy.requests": "リクエスト数",
     "proxy.failures": "{n} 件失敗",
@@ -366,7 +366,7 @@ const MESSAGES = {
     "proxy.lastError": "直近のエラー",
     "proxy.config": "設定",
     "proxy.providersTitle": "プロバイダー",
-    "proxy.providersDesc": "各プロバイダーの API キーは転送時に環境変数から読み取ります。Openplane はキー自体を保存も表示もしません。",
+    "proxy.providersDesc": "各プロバイダーの API キーは転送時に環境変数から読み取ります。Orrery はキー自体を保存も表示もしません。",
     "proxy.keyReady": "キー設定済み",
     "proxy.keyMissing": "キー未設定",
     "toast.proxyStarted": "プロキシが {listen} で稼働中",
@@ -418,7 +418,7 @@ const MESSAGES = {
     "models.ping": "接続テスト",
     "models.copyEndpoint": "エンドポイントをコピー",
     "models.routesTitle": "ルートマップ",
-    "models.routesDesc": "ハーネスごとにデフォルトモデルを選びます。~/.openplane/proxy.json に保存されます（ブラウザプレビューでは localStorage）。",
+    "models.routesDesc": "ハーネスごとにデフォルトモデルを選びます。~/.orrery/proxy.json に保存されます（ブラウザプレビューでは localStorage）。",
     "models.poolTitle": "モデルプール",
     "models.defaultFor": "{name} のデフォルトモデル",
     "models.note.flagship": "フラッグシップ",
@@ -491,7 +491,7 @@ const MESSAGES = {
     "del.reason.invalid": "ツールのデータフォルダ外です",
     "del.warn.harness_running": "{name} が実行中です。先に終了してください。削除したインデックスの項目が書き戻される可能性があります。",
     "del.warn.codex_cli_missing": "Codex CLI が見つかりません。ファイルと session_index は削除しますが、Codex の履歴データベースには記録が残ります。",
-    "del.indexNote": "各ツール自身のインデックスからも項目を削除します。元のインデックスファイルは ~/.openplane/backups にバックアップされます。",
+    "del.indexNote": "各ツール自身のインデックスからも項目を削除します。元のインデックスファイルは ~/.orrery/backups にバックアップされます。",
     "del.codexNote": "Codex のセッションは公式の `codex delete` で削除し、Codex の履歴データベースも整理します。自動レビューのサブエージェントは親セッションと一緒に削除されます。",
     "del.previewNote": "ブラウザプレビュー：ディスク上のファイルには一切触れません。",
     "del.ack": "元に戻せないことを理解しました",
@@ -507,13 +507,13 @@ const MESSAGES = {
     "del.failedTitle": "失敗（{n}）",
     "del.error.files": "ファイルを削除できませんでした",
     "del.error.index": "ファイルは削除済み、インデックス更新に失敗",
-    "del.codexFallback": "Codex CLI で一部の記録を整理できなかったため、Openplane がファイルと session_index の項目を直接削除しました。Codex の履歴データベースには残っている可能性があります。",
+    "del.codexFallback": "Codex CLI で一部の記録を整理できなかったため、Orrery がファイルと session_index の項目を直接削除しました。Codex の履歴データベースには残っている可能性があります。",
     "del.backups": "インデックスのバックアップ：{path}",
     "del.close": "閉じる",
   },
 };
 
-const LS_KEY = "openplane.locale";
+const LS_KEY = "orrery.locale";
 let current = "en";
 
 function normalize(tag) {

@@ -111,7 +111,7 @@ pub fn list_all_sessions() -> Result<Vec<SessionSummary>, String> {
         }
     }
     eprintln!(
-        "[openplane] list_sessions: {} · reparsed {} files",
+        "[orrery] list_sessions: {} · reparsed {} files",
         timing.join(" · "),
         store().parsed()
     );
@@ -254,21 +254,40 @@ pub(crate) fn forget_memo(removed: &[PathBuf]) {
 
 /* ── 数据目录 ── */
 
-/// 用户主目录。调试构建可用 `OPENPLANE_HOME` 指向沙盒（端到端测试删除时不碰真实数据），
+/// 用户主目录。调试构建可用 `ORRERY_HOME` 指向沙盒（端到端测试删除时不碰真实数据），
 /// 发布构建忽略该变量
 pub(crate) fn home_dir() -> Option<PathBuf> {
     if cfg!(debug_assertions) {
-        if let Some(h) = std::env::var_os("OPENPLANE_HOME").filter(|v| !v.is_empty()) {
+        if let Some(h) = std::env::var_os("ORRERY_HOME").filter(|v| !v.is_empty()) {
             return Some(PathBuf::from(h));
         }
     }
     dirs::home_dir()
 }
 
+/// Orrery 自己的数据目录 `~/.orrery`：路由配置、解析索引、删除前的索引备份
+///
+/// 项目改名前叫 `~/.openplane`。新目录还不存在、旧目录还在时整体改名迁过来，
+/// 用户不用重配代理也不用重建索引；迁不动就当没有旧数据，重新建一个空的
+pub(crate) fn data_dir() -> Option<PathBuf> {
+    let home = home_dir()?;
+    let dir = home.join(".orrery");
+    if !dir.exists() {
+        let legacy = home.join(".openplane");
+        if legacy.is_dir() {
+            match fs::rename(&legacy, &dir) {
+                Ok(()) => eprintln!("[orrery] data: migrated ~/.openplane → ~/.orrery"),
+                Err(e) => eprintln!("[orrery] data: migration skipped ({e})"),
+            }
+        }
+    }
+    Some(dir)
+}
+
 /// harness 的数据根目录：优先该工具自己的环境变量（与工具本身读同一处），否则 `~/<default>`。
 /// 沙盒模式下忽略工具环境变量，避免指回真实目录
 pub(crate) fn tool_home(env: &str, default: &str) -> Option<PathBuf> {
-    let sandboxed = cfg!(debug_assertions) && std::env::var_os("OPENPLANE_HOME").is_some();
+    let sandboxed = cfg!(debug_assertions) && std::env::var_os("ORRERY_HOME").is_some();
     if !sandboxed {
         if let Some(v) = std::env::var_os(env).filter(|v| !v.is_empty()) {
             return Some(PathBuf::from(v));

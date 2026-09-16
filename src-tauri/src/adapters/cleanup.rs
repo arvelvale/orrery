@@ -4,10 +4,10 @@
 //! 1. 路径只由后端按 (harness, id) 解析，从不采信前端传来的路径；每个目标都必须位于该 harness
 //!    数据根目录之内（按真实路径比较，防 `..` 与链接逃逸）
 //! 2. 最近 [`ACTIVE_WINDOW_MS`] 内有写入、或 Claude Code 登记为运行中的会话拒绝删除
-//! 3. 先删文件，全部成功后才改索引；改索引前把原文件备份到 `~/.openplane/backups/<时间>/`，
+//! 3. 先删文件，全部成功后才改索引；改索引前把原文件备份到 `~/.orrery/backups/<时间>/`，
 //!    写入走"同目录临时文件 + 原子替换"，且写前重读，只移除属于这些会话的条目
 //! 4. Codex 的 sqlite（`state_5` 的 threads、`thread_history_1` 里的会话内容副本）只通过官方
-//!    `codex delete --force <uuid>` 清理，Openplane 不直接写 Codex 数据库。沙盒实测：
+//!    `codex delete --force <uuid>` 清理，Orrery 不直接写 Codex 数据库。沙盒实测：
 //!    - 删除父会话会一并删 rollout、threads 行、thread_history 条目、session_index 行
 //!    - 不会删 guardian 子 agent → 逐个子 agent 再调用
 //!    - rollout 已先移到回收站时仍能清掉数据库记录 → 回收站模式可行
@@ -21,7 +21,7 @@
 //! | dsh   | `sessions/<ws>/<id>/`、`storages/session_projcache/sessions/<id>.json` | `storages/workspace.json` 的 `sessionIds` / `archivedSessionIds` |
 //! | codex | 该 id 的所有 rollout + 以它为父的子 agent rollout | sqlite（经 `codex delete`）、`session_index.jsonl` 行（兜底） |
 
-use super::{claude_home, codex, codex_home, dir_size, dsh_home, forget_memo, home_dir, kimi_home, system_time_ms};
+use super::{claude_home, codex, codex_home, data_dir, dir_size, dsh_home, forget_memo, kimi_home, system_time_ms};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
@@ -353,7 +353,7 @@ fn execute(p: &Plan, mode: Mode, stamp: &str) -> Outcome {
     }
 
     // 2. 索引（Codex 的 session_index 若 CLI 已处理，这里重读后无需改动）
-    let backup_root = home_dir().map(|h| h.join(".openplane").join("backups").join(stamp).join(&p.harness));
+    let backup_root = data_dir().map(|h| h.join("backups").join(stamp).join(&p.harness));
     let ids: Vec<&str> = std::iter::once(p.id.as_str()).chain(p.codex_threads.iter().map(|s| s.as_str())).collect();
     for rel in &p.index_files {
         let path = root.join(rel);
@@ -410,7 +410,7 @@ fn rewrite_index(path: &Path, ids: &[&str], backup_root: Option<&Path>, rel: &st
         fs::copy(path, &dst).map_err(|e| format!("backup: {e}"))?;
     }
     let tmp = path.with_file_name(format!(
-        ".{}.openplane-tmp",
+        ".{}.orrery-tmp",
         path.file_name().and_then(|n| n.to_str()).unwrap_or("index")
     ));
     fs::write(&tmp, updated).map_err(|e| e.to_string())?;
@@ -510,9 +510,9 @@ fn is_uuid(s: &str) -> bool {
         && s.chars().enumerate().all(|(i, c)| if [8, 13, 18, 23].contains(&i) { c == '-' } else { c.is_ascii_hexdigit() })
 }
 
-/// 找 codex 原生可执行文件：`OPENPLANE_CODEX_BIN` → PATH 里的 codex.exe → npm 全局安装包里的 vendor 二进制
+/// 找 codex 原生可执行文件：`ORRERY_CODEX_BIN` → PATH 里的 codex.exe → npm 全局安装包里的 vendor 二进制
 fn codex_bin() -> Option<PathBuf> {
-    if let Some(p) = std::env::var_os("OPENPLANE_CODEX_BIN").map(PathBuf::from).filter(|p| p.is_file()) {
+    if let Some(p) = std::env::var_os("ORRERY_CODEX_BIN").map(PathBuf::from).filter(|p| p.is_file()) {
         return Some(p);
     }
     let path = std::env::var_os("PATH")?;

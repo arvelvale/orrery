@@ -1,14 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Openplane">
-  <!-- 姿态仪：外圈 = 仪表，倾斜地平线 = 实时态势，中心机翼 = 你所在的位置 -->
-  <defs>
-    <clipPath id="dial"><circle cx="60" cy="60" r="31"/></clipPath>
-  </defs>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" width="120" height="120" role="img" aria-label="Orrery">
+  <!-- 太阳系仪：同一台仪器里，几颗天体各走各的轨道 —— 多个 harness 的会话收进一个窗口 -->
   <rect x="4" y="4" width="112" height="112" rx="30" fill="#0B6BCB"/>
-  <g clip-path="url(#dial)">
-    <rect x="20" y="20" width="80" height="80" fill="#0B6BCB"/>
-    <path d="M18 66 L102 50 L102 104 L18 104 Z" fill="#FFFFFF" fill-opacity="0.22"/>
-  </g>
-  <circle cx="60" cy="60" r="31" fill="none" stroke="#FFFFFF" stroke-width="5"/>
-  <path d="M40 60 H52 L60 67 L68 60 H80" fill="none" stroke="#FFFFFF" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
-  <circle cx="60" cy="29" r="3" fill="#FFFFFF"/>
+  <circle cx="60" cy="60" r="33" fill="none" stroke="#FFFFFF" stroke-width="4.5" stroke-opacity="0.55"/>
+  <circle cx="60" cy="60" r="20" fill="none" stroke="#FFFFFF" stroke-width="4.5"/>
+  <circle cx="60" cy="27" r="4" fill="#FFFFFF"/>
+  <circle cx="87" cy="79" r="6" fill="#FFFFFF" stroke="#0B6BCB" stroke-width="3"/>
+  <circle cx="43" cy="49" r="5" fill="#FFFFFF" stroke="#0B6BCB" stroke-width="3"/>
+  <circle cx="60" cy="60" r="7.5" fill="#FFFFFF"/>
 </svg>

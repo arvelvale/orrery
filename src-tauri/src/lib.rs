@@ -93,8 +93,8 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|_app| {
-            if let Some(home) = adapters::home_dir() {
-                let _ = std::fs::create_dir_all(home.join(".openplane"));
+            if let Some(dir) = adapters::data_dir() {
+                let _ = std::fs::create_dir_all(dir);
             }
             proxy::init();
             Ok(())
@@ -113,5 +113,5 @@ pub fn run() {
             open_path
         ])
         .run(tauri::generate_context!())
-        .expect("error while running Openplane");
+        .expect("error while running Orrery");
 }

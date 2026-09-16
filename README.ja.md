@@ -1,17 +1,17 @@
 <div align="center">
 
-<img src=".github/assets/logo.svg" width="112" alt="Openplane logo" />
+<img src=".github/assets/logo.svg" width="112" alt="Orrery logo" />
 
-# Openplane
+# Orrery
 
 **AI コーディングエージェントのための、ローカルファーストなコックピット。**
 
 手元の Claude Code・Kimi Code・DSH（DeepSeek）・Codex のセッションをひとつのウィンドウに集約します。トークン、ディスク使用量、プロジェクト、サブエージェントまで一目で把握でき、不要なセッションは削除でき、各ハーネスをひとつのローカルモデルプロキシ経由にまとめられます。データは PC の外に出ません。
 
 <p>
-  <a href="https://github.com/arvelvale/openplane/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/arvelvale/openplane?style=flat-square&color=0B6BCB" /></a>
-  <a href="https://github.com/arvelvale/openplane/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/arvelvale/openplane?style=flat-square&logo=github&color=15202B" /></a>
-  <a href="https://github.com/arvelvale/openplane/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/arvelvale/openplane?style=flat-square&color=5B6B7C" /></a>
+  <a href="https://github.com/arvelvale/orrery/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/arvelvale/orrery?style=flat-square&color=0B6BCB" /></a>
+  <a href="https://github.com/arvelvale/orrery/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/arvelvale/orrery?style=flat-square&logo=github&color=15202B" /></a>
+  <a href="https://github.com/arvelvale/orrery/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/arvelvale/orrery?style=flat-square&color=5B6B7C" /></a>
 </p>
 <p>
   <img alt="Status" src="https://img.shields.io/badge/status-early%20prototype-C47B0A?style=flat-square" />
@@ -30,7 +30,7 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md) · **日本語**
 
-<img src=".github/assets/screenshot-sessions.ja.png" alt="Openplane セッションハブ" width="100%" />
+<img src=".github/assets/screenshot-sessions.ja.png" alt="Orrery セッションハブ" width="100%" />
 
 </div>
 
@@ -45,7 +45,7 @@
 2. **使用量が見えない**：そのセッションで実際に何トークン使ったのか。何百もの会話ログがディスクをどれだけ占めているのか。
 3. **モデル切り替えが手作業**：ツールごとに環境変数と設定ファイルが別々です。
 
-Openplane は、各ツールがすでにディスクへ書き出しているデータを読み取り、ひとつのボードにまとめます。エージェントのラップ、フォーク、再実装は一切しません。
+Orrery は、各ツールがすでにディスクへ書き出しているデータを読み取り、ひとつのボードにまとめます。エージェントのラップ、フォーク、再実装は一切しません。
 
 ## 現在できること
 
@@ -64,13 +64,13 @@ Openplane は、各ツールがすでにディスクへ書き出しているデ�
 | ローカルモデルプロキシ（`127.0.0.1:8787`） | ✅ | 実際に転送します。OpenAI / Anthropic 両形式、ストリーミング透過、アプリから起動・停止 |
 | ターミナルで再開 | ⏳ | 現状はセッションフォルダを開くだけ |
 
-<img src=".github/assets/screenshot-status.ja.png" alt="Openplane ステータス画面とストレージ内訳" width="100%" />
+<img src=".github/assets/screenshot-status.ja.png" alt="Orrery ステータス画面とストレージ内訳" width="100%" />
 
 ## トークンの数え方
 
 どのツールも API 呼び出しごとに使用量を記録しますが、そのまま足し合わせられるものはありません。
 
-| | 取得元 | 落とし穴 | Openplane の処理 |
+| | 取得元 | 落とし穴 | Orrery の処理 |
 |---|---|---|---|
 | **Claude Code** | assistant 行の `message.usage` | ストリーミング時にコンテンツブロックごとに行が分かれ、同じ使用量が重複する（あるセッションでは 4,034 行が実際には 1,558 回の呼び出し） | `message.id` で重複排除し、最後の行を採用 |
 | **Kimi Code** | `agents/*/wire.jsonl` 内の `usage.record` イベント | `usageScope: "session"` はコンテキスト圧縮の独立した呼び出しで、合計値ではない | 各レコードを 1 回ずつ集計 |
@@ -85,7 +85,7 @@ Openplane は、各ツールがすでにディスクへ書き出しているデ�
 
 初期の Codex alpha 版のセッションは内訳のない合計値しか持たないため、推測せず「内訳なし」として表示します。
 
-既知の制限：公式記録は `--resume` でリセットされるため、Openplane は会話ログから合計を再構築しています。公式記録にはタイトル生成など会話ログに残らない副次的な呼び出しも含まれるため、Openplane の Claude Code 合計は 1〜5% ほど少なく出ることがあります。
+既知の制限：公式記録は `--resume` でリセットされるため、Orrery は会話ログから合計を再構築しています。公式記録にはタイトル生成など会話ログに残らない副次的な呼び出しも含まれるため、Orrery の Claude Code 合計は 1〜5% ほど少なく出ることがあります。
 
 ## はじめに
 
@@ -97,8 +97,8 @@ Openplane は、各ツールがすでにディスクへ書き出しているデ�
 - WebView2（Windows 10/11 に標準搭載）
 
 ```powershell
-git clone https://github.com/arvelvale/openplane.git
-cd openplane
+git clone https://github.com/arvelvale/orrery.git
+cd orrery
 npm install
 npm run dev        # デスクトップアプリ。実際のセッションを読み込む
 ```
@@ -115,7 +115,7 @@ npm run preview    # http://127.0.0.1:1420（モックデータ）
 ## ディレクトリ構成
 
 ```text
-openplane/
+orrery/
 ├─ ui/                      # index.html · styles.css · app.js · i18n.js（WebView とブラウザで共用）
 ├─ src-tauri/
 │  └─ src/
@@ -128,7 +128,7 @@ openplane/
 │     │  └─ cleanup.rs      # セッション削除とインデックス整理
 │     ├─ proxy/             # ローカルモデルプロキシ
 │     │  ├─ mod.rs         # 起動・停止・状態
-│     │  ├─ config.rs      # プロバイダーとルート（~/.openplane/proxy.json）
+│     │  ├─ config.rs      # プロバイダーとルート（~/.orrery/proxy.json）
 │     │  ├─ server.rs      # HTTP 面と上流への転送
 │     │  └─ state.rs       # カウンター、直近のリクエストとエラー
 │     └─ lib.rs             # Tauri コマンド
@@ -139,28 +139,28 @@ openplane/
 
 ## ローカルモデルプロキシ
 
-ハーネスの接続先を `http://127.0.0.1:8787/v1` にすると、Openplane がリクエストを上流へ転送します。モデルの切り替えは各ツールの設定を編集せず、アプリ上で行えます。
+ハーネスの接続先を `http://127.0.0.1:8787/v1` にすると、Orrery がリクエストを上流へ転送します。モデルの切り替えは各ツールの設定を編集せず、アプリ上で行えます。
 
-<img src=".github/assets/screenshot-proxy.ja.png" alt="Openplane プロキシ画面" width="100%" />
+<img src=".github/assets/screenshot-proxy.ja.png" alt="Orrery プロキシ画面" width="100%" />
 
 | | |
 |---|---|
 | エンドポイント | `POST /v1/chat/completions`（OpenAI 形式）· `POST /v1/messages`（Anthropic 形式）· `GET /v1/models` · `GET /health` |
-| モデルのルーティング | `x-openplane-harness: <id>` を付けると、「モデル」画面でそのハーネスに設定したモデルに `model` を書き換えます。ヘッダーがなければリクエストのモデルをそのまま使います |
+| モデルのルーティング | `x-orrery-harness: <id>` を付けると、「モデル」画面でそのハーネスに設定したモデルに `model` を書き換えます。ヘッダーがなければリクエストのモデルをそのまま使います |
 | プロバイダーの選択 | モデル名の接頭辞で判定（`claude*` → anthropic、`kimi*` → moonshot など）。一致しない場合は明示的にエラーにし、別のプロバイダーで代替はしません |
 | ストリーミング | SSE はチャンク単位でそのまま透過し、バッファリングしません |
-| キー | 転送時に環境変数から読み取ります。Openplane は保存・記録・表示のいずれもせず、設定には変数**名**のみを保持します |
+| キー | 転送時に環境変数から読み取ります。Orrery は保存・記録・表示のいずれもせず、設定には変数**名**のみを保持します |
 | バインド | ループバックのみ。ループバック以外の `listen` は起動を拒否します |
 
 ```bash
 # 1. アプリから見える環境変数にキーを設定
-setx ANTHROPIC_API_KEY sk-...        # Windows。設定後に Openplane を再起動
+setx ANTHROPIC_API_KEY sk-...        # Windows。設定後に Orrery を再起動
 
 # 2. 「モデル」画面でプロキシを起動し、ハーネスの接続先を変更
 set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 ```
 
-プロバイダー・ルート・待ち受けアドレスは `~/.openplane/proxy.json` にあります：
+プロバイダー・ルート・待ち受けアドレスは `~/.orrery/proxy.json` にあります：
 
 ```json
 {
@@ -180,14 +180,14 @@ set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 
 ## セッションの削除
 
-セッションはディスク上のファイルにすぎないので、不要になったものを Openplane から削除できます。削除前には必ず確認ダイアログが表示され、各セッションと解放される容量が一覧されます。
+セッションはディスク上のファイルにすぎないので、不要になったものを Orrery から削除できます。削除前には必ず確認ダイアログが表示され、各セッションと解放される容量が一覧されます。
 
-<img src=".github/assets/screenshot-delete.ja.png" alt="Openplane 削除ダイアログ" width="100%" />
+<img src=".github/assets/screenshot-delete.ja.png" alt="Orrery 削除ダイアログ" width="100%" />
 
 - **既定はごみ箱へ移動。** 完全削除は別モードで、追加のチェックが必要です。
 - **使用中のセッションは保護されます。** 10 分以内に書き込みがあるもの、実行中の Claude Code で開かれているものはスキップします。
-- **各ツール自身のインデックスも整理し**、無効な項目を残しません。変更前にインデックスファイルを `~/.openplane/backups/` にバックアップします。
-- **Codex は公式の `codex delete` で削除し**、Codex の履歴データベースも整理します。Openplane が他のツールのデータベースに直接書き込むことはありません。
+- **各ツール自身のインデックスも整理し**、無効な項目を残しません。変更前にインデックスファイルを `~/.orrery/backups/` にバックアップします。
+- **Codex は公式の `codex delete` で削除し**、Codex の履歴データベースも整理します。Orrery が他のツールのデータベースに直接書き込むことはありません。
 - パスはバックエンドがセッション id から解決し、そのツールのデータフォルダ内に限定されます。
 
 | ツール | 削除するファイル | 削除するインデックス項目 |
@@ -202,8 +202,8 @@ set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 
 ## プライバシー
 
-- Openplane が各ハーネスのフォルダに書き込むのは、上記のとおりセッションを削除するときだけです。
-- Openplane 自身のファイルは `~/.openplane/` にあります：ルーティング設定、インデックスのバックアップ、そして `index.json`（セッションの解析結果＝タイトル・パス・トークン数のキャッシュ。再起動を速くするためのもので、削除しても次回スキャンで作り直されます）。
+- Orrery が各ハーネスのフォルダに書き込むのは、上記のとおりセッションを削除するときだけです。
+- Orrery 自身のファイルは `~/.orrery/` にあります：ルーティング設定、インデックスのバックアップ、そして `index.json`（セッションの解析結果＝タイトル・パス・トークン数のキャッシュ。再起動を速くするためのもので、削除しても次回スキャンで作り直されます）。
 - 通信なし、テレメトリなし。プロキシは `127.0.0.1` のみで待ち受けます。
 - 貼り付けた秘密情報を含む可能性のあるフィールド（Kimi の `lastPrompt` など）は読み取りません。
 

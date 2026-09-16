@@ -8,7 +8,7 @@ src-tauri/gen/schemas/
 src-tauri/*.log
 
 # Local config & secrets
-.openplane/
+.orrery/
 *.local.json
 
 # OS / editor

@@ -1,4 +1,4 @@
-//! 持久化解析索引：`~/.openplane/index.json`
+//! 持久化解析索引：`~/.orrery/index.json`
 //!
 //! 解析缓存原本只活在进程内存里，每次开应用都要把四个 harness 的日志重新读一遍
 //! （本机 188 个会话实测冷启动 6–7s，其中大头是磁盘 IO）。这里把同一张表落盘：
@@ -11,7 +11,7 @@
 //! - 只存本机已有的路径：保存前剔除文件已消失的条目（会话被删掉后不留垃圾）
 
 use super::codex::Rollout;
-use super::{home_dir, MemoTable, SessionSummary};
+use super::{data_dir, MemoTable, SessionSummary};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -57,7 +57,7 @@ impl Store {
 }
 
 pub(crate) fn path() -> Option<PathBuf> {
-    Some(home_dir()?.join(".openplane").join("index.json"))
+    Some(data_dir()?.join("index.json"))
 }
 
 /// 读索引建缓存。任何异常（没有文件、版本不符、解析失败）都退化成空表
@@ -86,7 +86,7 @@ fn load_from(file: Option<&Path>) -> Store {
         .unwrap_or(Snapshot { version: VERSION, sessions: vec![], rollouts: vec![] });
     if !snap.sessions.is_empty() || !snap.rollouts.is_empty() {
         eprintln!(
-            "[openplane] index: {} sessions + {} rollouts loaded",
+            "[orrery] index: {} sessions + {} rollouts loaded",
             snap.sessions.len(),
             snap.rollouts.len()
         );
@@ -98,7 +98,7 @@ fn load_from(file: Option<&Path>) -> Store {
         parsed: AtomicUsize::new(0),
     };
     if dropped > 0 {
-        eprintln!("[openplane] index: {dropped} stale entries dropped");
+        eprintln!("[orrery] index: {dropped} stale entries dropped");
         store.mark_dirty();
     }
     store
@@ -117,13 +117,13 @@ pub(crate) fn save_if_dirty(store: &Store) {
     };
     if let Err(e) = write_to(path().as_deref(), &snap) {
         // 索引只是缓存，写不进去不该影响功能，记一笔就算了
-        eprintln!("[openplane] index: save failed: {e}");
+        eprintln!("[orrery] index: save failed: {e}");
         store.mark_dirty();
     }
 }
 
 fn write_to(file: Option<&Path>, snap: &Snapshot) -> Result<(), String> {
-    let path = file.ok_or("cannot resolve ~/.openplane")?;
+    let path = file.ok_or("cannot resolve ~/.orrery")?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
@@ -133,7 +133,7 @@ fn write_to(file: Option<&Path>, snap: &Snapshot) -> Result<(), String> {
     std::fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())?;
     eprintln!(
-        "[openplane] index: saved {} sessions + {} rollouts ({} KB)",
+        "[orrery] index: saved {} sessions + {} rollouts ({} KB)",
         snap.sessions.len(),
         snap.rollouts.len(),
         bytes.len() / 1024
@@ -154,7 +154,7 @@ mod tests {
 
     #[test]
     fn broken_json_loads_as_empty() {
-        let dir = std::env::temp_dir().join(format!("openplane-index-broken-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("orrery-index-broken-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let file = dir.join("index.json");
         std::fs::write(&file, b"{not json").unwrap();
@@ -166,7 +166,7 @@ mod tests {
     /// 存 → 读回来要一模一样；文件已消失的条目不该写进索引
     #[test]
     fn round_trip_keeps_live_entries_and_drops_dead_ones() {
-        let dir = std::env::temp_dir().join(format!("openplane-index-rt-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("orrery-index-rt-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let live = dir.join("live.jsonl");
         let dead = dir.join("deleted.jsonl");

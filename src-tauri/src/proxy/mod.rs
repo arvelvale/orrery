@@ -106,7 +106,7 @@ pub fn start() -> Result<ProxyStatus, String> {
     let thread_metrics = metrics.clone();
 
     std::thread::Builder::new()
-        .name("openplane-proxy".into())
+        .name("orrery-proxy".into())
         .spawn(move || {
             let rt = match tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build() {
                 Ok(rt) => rt,
@@ -146,14 +146,14 @@ pub fn start() -> Result<ProxyStatus, String> {
     };
 
     *slot().lock().unwrap() = Some(Running { listen: bound.to_string(), shutdown, state: app_state, metrics });
-    eprintln!("[openplane] proxy listening on {bound}");
+    eprintln!("[orrery] proxy listening on {bound}");
     Ok(status())
 }
 
 pub fn stop() -> Result<ProxyStatus, String> {
     if let Some(running) = slot().lock().unwrap().take() {
         let _ = running.shutdown.send(true);
-        eprintln!("[openplane] proxy stopping on {}", running.listen);
+        eprintln!("[orrery] proxy stopping on {}", running.listen);
     }
     // 优雅关闭要等在途请求结束（流式响应可能还在传），端口不会立刻释放
     Ok(status())
@@ -254,7 +254,7 @@ pub fn init() {
     config::ensure_exists();
     if config::load().auto_start {
         if let Err(e) = start() {
-            eprintln!("[openplane] proxy auto-start failed: {e}");
+            eprintln!("[orrery] proxy auto-start failed: {e}");
         }
     }
 }
