@@ -59,7 +59,7 @@ Openplane reads what the harnesses already write to disk and puts it all on one 
 | Disk usage per session and per harness | ✅ | Status page shows totals and a per-harness breakdown |
 | Search by title, path and model | ✅ | |
 | UI in English / 简体中文 / 日本語 | ✅ | Follows the system language; switch from the top bar |
-| Incremental rescans | ✅ | Unchanged files are served from an in-memory cache |
+| Instant cold start | ✅ | The parsed index is kept on disk, so a restart only re-reads files that changed (188 sessions: 5.5s → 0.12s) |
 | Delete sessions to free disk space | ✅ | Pick one or many, sort by size; Recycle Bin or permanent; each tool's own index is cleaned too |
 | Local model proxy (`127.0.0.1:8787`) | ✅ | Real forwarding, OpenAI and Anthropic shapes, streaming passthrough, start/stop from the app |
 | Resume in terminal | ⏳ | Currently opens the session folder |
@@ -203,7 +203,7 @@ Every session is just files on disk, so Openplane can remove the ones you no lon
 ## Privacy
 
 - Openplane only writes to harness folders when you delete sessions, as described above.
-- Its own files live in `~/.openplane/`: your route config and index backups.
+- Its own files live in `~/.openplane/`: your route config, index backups, and `index.json` — the parsed session list (titles, paths, token counts) that makes restarts instant. Delete it anytime; it is rebuilt on the next scan.
 - No network calls and no telemetry. The proxy listens on `127.0.0.1` only.
 - Fields that may contain pasted secrets (for example Kimi's `lastPrompt`) are never read.
 
@@ -213,7 +213,7 @@ Every session is just files on disk, so Openplane can remove the ones you no lon
 - [x] Claude Code, Kimi Code, DSH and Codex adapters
 - [x] Token and disk accounting
 - [x] Local model proxy with real forwarding
-- [ ] Persistent index for instant cold start
+- [x] Persistent index for instant cold start
 - [ ] Resume a session in its own CLI
 - [ ] Tray, global shortcut, installer
 
