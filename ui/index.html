@@ -78,13 +78,21 @@
               <p data-i18n="models.endpointDesc"></p>
               <div class="endpoint-row">
                 <span class="dot" id="proxy-dot"></span>
-                <code>http://127.0.0.1:8787/v1</code>
-                <span class="tag" id="proxy-tag">ONLINE</span>
+                <code id="proxy-endpoint">http://127.0.0.1:8787/v1</code>
+                <span class="tag" id="proxy-tag">STOPPED</span>
               </div>
+              <div id="proxy-info"></div>
               <div class="btn-row">
+                <button type="button" class="btn primary" id="btn-proxy-toggle" data-i18n="proxy.start"></button>
                 <button type="button" class="btn" id="btn-ping" data-i18n="models.ping"></button>
-                <button type="button" class="btn primary" id="btn-copy-endpoint" data-i18n="models.copyEndpoint"></button>
+                <button type="button" class="btn" id="btn-copy-endpoint" data-i18n="models.copyEndpoint"></button>
               </div>
+              <label class="autostart"><input type="checkbox" id="proxy-autostart" /> <span data-i18n="proxy.autoStart"></span></label>
+            </div>
+            <div class="card">
+              <h2 data-i18n="proxy.providersTitle"></h2>
+              <p data-i18n="proxy.providersDesc"></p>
+              <div class="pool" id="proxy-providers"></div>
             </div>
             <div class="card">
               <h2 data-i18n="models.routesTitle"></h2>

@@ -34,6 +34,8 @@ pub struct SessionSummary {
     pub size_bytes: u64,
     /// 子 agent 会话数
     pub subagents: u32,
+    /// 会话类型：空 = 普通会话；`subagent` = 子 agent 会话（父会话不在本机，单独列出）
+    pub kind: String,
 }
 
 /// 会话累计 token（主 agent + 子 agent，按 API 调用去重后求和）

@@ -6,7 +6,7 @@
 
 **本地优先的 AI 编程 Agent 驾驶舱。**
 
-把本机所有 Claude Code、Kimi Code、DSH（DeepSeek）、Codex 会话收进一个窗口：token、磁盘占用、项目、子 agent 一眼看清。数据不出本机。
+把本机所有 Claude Code、Kimi Code、DSH（DeepSeek）、Codex 会话收进一个窗口：token、磁盘占用、项目、子 agent 一眼看清。不要的会话可以直接删掉，各个 harness 还能统一走一个本地模型代理。数据不出本机。
 
 <p>
   <a href="https://github.com/arvelvale/openplane/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/arvelvale/openplane?style=flat-square&color=0B6BCB" /></a>
@@ -61,7 +61,7 @@ Openplane 只读取各工具本来就写在磁盘上的数据，汇总到一块�
 | 界面三语：English / 简体中文 / 日本語 | ✅ | 默认跟随系统语言，顶栏可切换 |
 | 增量刷新 | ✅ | 没变的文件直接走内存缓存 |
 | 删除会话，腾出磁盘空间 | ✅ | 单条或多选，可按占用排序；回收站或永久删除；同时清理各工具自己的索引 |
-| 本地模型代理（`127.0.0.1:8787`） | ⏳ | 目前只有路由配置和探活，还不转发请求 |
+| 本地模型代理（`127.0.0.1:8787`） | ✅ | 真实转发，OpenAI 与 Anthropic 两种形状，流式透传，可在应用里启停 |
 | 在终端恢复会话 | ⏳ | 目前只打开会话目录 |
 
 <img src=".github/assets/screenshot-status.zh-CN.png" alt="Openplane 状态页与存储统计" width="100%" />
@@ -126,11 +126,56 @@ openplane/
 │     │  ├─ dsh.rs
 │     │  ├─ codex.rs
 │     │  └─ cleanup.rs      # 删除会话与索引清理
-│     ├─ proxy.rs           # 8787 探活 + ~/.openplane/proxy.json
+│     ├─ proxy/             # 本地模型代理
+│     │  ├─ mod.rs         # 启停与状态
+│     │  ├─ config.rs      # 供应商与路由（~/.openplane/proxy.json）
+│     │  ├─ server.rs      # HTTP 面与上游转发
+│     │  └─ state.rs       # 计数、最近请求、最近错误
 │     └─ lib.rs             # Tauri 命令
 ├─ scripts/preview.mjs      # 零依赖静态预览
 ├─ docs/                    # 设计文档
 └─ DESIGN.md                # 视觉规格
+```
+
+## 本地模型代理
+
+把 harness 的接口地址指到 `http://127.0.0.1:8787/v1`，Openplane 就会把请求转发到真实供应商。这样换模型只需在应用里点一下，不用改各个工具自己的配置。
+
+<img src=".github/assets/screenshot-proxy.zh-CN.png" alt="Openplane 代理面板" width="100%" />
+
+| | |
+|---|---|
+| 接口 | `POST /v1/chat/completions`（OpenAI 形状）· `POST /v1/messages`（Anthropic 形状）· `GET /v1/models` · `GET /health` |
+| 模型路由 | 请求带 `x-openplane-harness: <id>` 时，代理把 `model` 改写成「模型」页里给该 harness 选的模型；不带这个头就保留请求原本的模型 |
+| 供应商选择 | 按模型名前缀匹配（`claude*` → anthropic，`kimi*` → moonshot…）。匹配不到就直接报错，绝不悄悄换一家顶上 |
+| 流式 | SSE 逐块透传，不缓冲 |
+| 密钥 | 转发时才从环境变量读取。Openplane 不保存、不打印、不显示密钥，配置里只存变量**名** |
+| 监听 | 只允许回环地址，配置成非回环地址会被拒绝启动 |
+
+```bash
+# 1. 把密钥放进应用能读到的环境变量
+setx ANTHROPIC_API_KEY sk-...        # Windows，设置后需重启 Openplane
+
+# 2. 在「模型」页启动代理，然后把 harness 指过来
+set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
+```
+
+供应商、路由和监听地址都在 `~/.openplane/proxy.json`：
+
+```json
+{
+  "listen": "127.0.0.1:8787",
+  "auto_start": false,
+  "routes": { "cc": "claude-opus-5" },
+  "providers": {
+    "anthropic": {
+      "base_url": "https://api.anthropic.com/v1",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "wire": "anthropic",
+      "model_prefixes": ["claude"]
+    }
+  }
+}
 ```
 
 ## 删除会话
@@ -167,8 +212,8 @@ openplane/
 - [x] Tauri 2 桌面壳与会话中枢
 - [x] Claude Code、Kimi Code、DSH、Codex 适配器
 - [x] token 与磁盘占用统计
+- [x] 本地模型代理（真实转发）
 - [ ] 持久化索引，冷启动秒开
-- [ ] 真正的 OpenAI 兼容 / Anthropic 形状本地代理
 - [ ] 在对应 CLI 里恢复会话
 - [ ] 托盘、全局快捷键、安装包
 

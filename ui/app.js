@@ -210,7 +210,7 @@ const state = {
   routes: { ...DEFAULT_ROUTES },
   selectedId: null,
   view: "sessions",
-  proxyOnline: true,
+  proxy: null, // get_proxy_status 结果；浏览器预览用 mockProxy()
   runtime: "browser", // browser | tauri
   source: "mock",
   storage: null, // Tauri: storage_stats 结果；浏览器预览按 mock 会话汇总
@@ -232,8 +232,12 @@ function localized(v) {
 }
 
 function sessionTitle(s) {
+  const title = localized(s.title);
+  if (title) return title;
   // DSH / Kimi 的 id 带 `session-` / `session_` 前缀，截短前先去掉
-  return localized(s.title) || t("session.untitled", { id: String(s.id).replace(/^session[-_]/, "").slice(0, 8) });
+  const short = String(s.id).replace(/^session[-_]/, "").slice(0, 8);
+  // 父会话不在本机的子 agent（Codex guardian 自动审查）：标题是发给它的系统指令，不展示
+  return t(s.kind === "subagent" ? "session.subagent" : "session.untitled", { id: short });
 }
 
 function usageTotal(u) {
@@ -290,6 +294,7 @@ async function loadNativeSessions() {
         excerpt: r.excerpt || "",
         log: r.log || [],
         path: r.path || "",
+        kind: r.kind || "",
         sizeBytes: Number(r.size_bytes) || 0,
         subagents: Number(r.subagents) || 0,
       }));
@@ -350,14 +355,39 @@ function formatBytes(n) {
 async function loadNativeProxy() {
   try {
     const st = await invokeTauri("get_proxy_status");
-    if (st && typeof st.online === "boolean") {
-      state.proxyOnline = st.online;
+    if (st && typeof st.running === "boolean") {
+      state.proxy = st;
       return true;
     }
   } catch (e) {
     console.warn("get_proxy_status failed", e);
   }
+  state.proxy = mockProxy();
   return false;
+}
+
+/** 浏览器预览没有后端，给一份"未启用"的状态，按钮点了只提示 */
+function mockProxy() {
+  return {
+    running: false, online: false, endpoint: "http://127.0.0.1:8787/v1", listen: "127.0.0.1:8787",
+    auto_start: false, uptime_ms: 0, requests: 0, failures: 0, latency_ms: null,
+    last_request: null, last_error: null, routes: { ...state.routes },
+    config_path: "~/.openplane/proxy.json", message: "stopped",
+    providers: [
+      { name: "anthropic", base_url: "https://api.anthropic.com/v1", wire: "anthropic", key_env: "ANTHROPIC_API_KEY", key_present: false },
+      { name: "openai", base_url: "https://api.openai.com/v1", wire: "openai", key_env: "OPENAI_API_KEY", key_present: false },
+      { name: "moonshot", base_url: "https://api.moonshot.cn/v1", wire: "openai", key_env: "MOONSHOT_API_KEY", key_present: false },
+      { name: "deepseek", base_url: "https://api.deepseek.com/v1", wire: "openai", key_env: "DEEPSEEK_API_KEY", key_present: false },
+    ],
+  };
+}
+
+/** 三态：本进程在跑 / 端口被别的程序占着 / 未启用 */
+function proxyState() {
+  const p = state.proxy;
+  if (!p) return "off";
+  if (p.running) return "run";
+  return p.online ? "warn" : "off";
 }
 
 /* ── Persistence ── */
@@ -422,6 +452,7 @@ function rerenderAll(boot = false) {
   renderModels();
   renderStatus();
   updateProxyRow();
+  renderProxyPanel();
   if (state.selectedId && findSession(state.selectedId)) openSession(state.selectedId);
   else closeDetail();
 }
@@ -440,7 +471,7 @@ function renderAnnunciator(boot = false) {
   const bar = $("#annunciator");
   bar.innerHTML = "";
   const items = [
-    { id: "proxy", label: "PRX", state: state.proxyOnline ? "run" : "warn", title: t(state.proxyOnline ? "lamp.proxyOn" : "lamp.proxyOff") },
+    { id: "proxy", label: "PRX", state: proxyState(), title: t({ run: "lamp.proxyOn", warn: "lamp.proxyBusy", off: "lamp.proxyOff" }[proxyState()]) },
     ...HARNESS_IDS.map((hid) => ({
       id: hid,
       label: HARNESS[hid].label,
@@ -1017,6 +1048,8 @@ function renderModels() {
     });
   });
 
+  renderProxyPanel();
+
   $("#model-pool").innerHTML = MODELS.map((m) => `
     <div class="pool-item">
       <code>${escapeHtml(m.id)}</code>
@@ -1027,22 +1060,62 @@ function renderModels() {
 }
 
 function updateProxyRow() {
+  const p = state.proxy || mockProxy();
+  const mode = proxyState();
   const dot = $("#proxy-dot");
   const tag = $("#proxy-tag");
   const chip = $("#proxy-chip");
-  if (state.proxyOnline) {
-    dot.classList.remove("off");
-    tag.textContent = "ONLINE";
-    tag.style.color = "var(--run)";
-    chip.classList.remove("off");
-    $("#proxy-chip-text").textContent = "127.0.0.1:8787";
-  } else {
-    dot.classList.add("off");
-    tag.textContent = "OFFLINE";
-    tag.style.color = "var(--warn)";
-    chip.classList.add("off");
-    $("#proxy-chip-text").textContent = t("proxy.offlineChip");
+  chip.classList.toggle("off", mode !== "run");
+  chip.classList.toggle("busy", mode === "warn");
+  $("#proxy-chip-text").textContent = mode === "run" ? p.listen : t(mode === "warn" ? "proxy.busyChip" : "proxy.stoppedChip");
+  chip.title = t(mode === "run" ? "lamp.proxyOn" : mode === "warn" ? "lamp.proxyBusy" : "lamp.proxyOff");
+  if (!dot || !tag) return;
+  dot.classList.toggle("off", mode !== "run");
+  tag.textContent = { run: "RUNNING", warn: "PORT IN USE", off: "STOPPED" }[mode];
+  tag.style.color = { run: "var(--run)", warn: "var(--warn)", off: "var(--muted)" }[mode];
+}
+
+function formatUptime(ms) {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ${s % 60}s`;
+  return `${Math.floor(s / 3600)}h ${Math.floor((s % 3600) / 60)}m`;
+}
+
+/** 端点卡片里的运行信息与供应商密钥就绪情况 */
+function renderProxyPanel() {
+  const p = state.proxy || mockProxy();
+  const mode = proxyState();
+  const rows = [];
+  if (mode === "run") {
+    rows.push([t("proxy.uptime"), formatUptime(p.uptime_ms)]);
+    rows.push([t("proxy.requests"), `${p.requests}${p.failures ? " · " + t("proxy.failures", { n: p.failures }) : ""}`]);
+    if (p.last_request) {
+      rows.push([t("proxy.lastRequest"), `${p.last_request.provider} · ${p.last_request.model} · HTTP ${p.last_request.status}`]);
+    }
   }
+  if (p.last_error) rows.push([t("proxy.lastError"), p.last_error]);
+  rows.push([t("proxy.config"), p.config_path]);
+
+  $("#proxy-info").innerHTML = `<dl class="kv">${rows
+    .map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`)
+    .join("")}</dl>`;
+
+  $("#proxy-providers").innerHTML = p.providers
+    .map((pv) => `
+      <div class="pool-item">
+        <code>${escapeHtml(pv.name)}</code>
+        <span class="tag">${escapeHtml(pv.wire)} · ${escapeHtml(pv.key_env)}</span>
+        <span class="key-state ${pv.key_present ? "ok" : "missing"}">${escapeHtml(t(pv.key_present ? "proxy.keyReady" : "proxy.keyMissing"))}</span>
+      </div>`)
+    .join("");
+
+  const toggle = $("#btn-proxy-toggle");
+  toggle.textContent = t(mode === "run" ? "proxy.stop" : "proxy.start");
+  toggle.classList.toggle("primary", mode !== "run");
+  toggle.disabled = mode === "warn";
+  $("#proxy-autostart").checked = !!p.auto_start;
+  $("#proxy-endpoint").textContent = p.endpoint;
 }
 
 /* ── Status ── */
@@ -1103,11 +1176,12 @@ function renderStatus() {
   const cards = [
     {
       name: t("status.proxyName"),
-      pill: state.proxyOnline ? ["run", "ONLINE"] : ["warn", "OFFLINE"],
+      pill: { run: ["run", "RUNNING"], warn: ["warn", "PORT IN USE"], off: ["idle", "STOPPED"] }[proxyState()],
       kv: [
-        [t("status.endpoint"), "http://127.0.0.1:8787/v1"],
+        [t("status.endpoint"), (state.proxy || mockProxy()).endpoint],
         [t("status.protocol"), "OpenAI-compatible + Anthropic"],
-        [t("status.config"), "~/.openplane/proxy.json"],
+        [t("proxy.requests"), String((state.proxy || mockProxy()).requests)],
+        [t("status.config"), (state.proxy || mockProxy()).config_path],
         [t("status.note"), t("status.proxyNote")],
       ],
     },
@@ -1182,16 +1256,49 @@ async function init() {
 
   $("#btn-ping").addEventListener("click", async () => {
     const st = await invokeTauri("ping_proxy");
-    if (st && typeof st.online === "boolean") {
-      state.proxyOnline = st.online;
-      toast(st.online ? t("toast.proxyReachable", { ms: st.latency_ms || 0 }) : t("toast.proxyNoResponse"));
+    if (st && typeof st.running === "boolean") {
+      state.proxy = st;
+      toast(st.online ? t("toast.proxyReachable", { ms: st.latency_ms ?? 0 }) : t("toast.proxyNoResponse"));
     } else {
-      state.proxyOnline = Math.random() >= 0.15;
-      toast(state.proxyOnline ? t("toast.proxyReachable", { ms: 12 }) + t("toast.simulated") : t("toast.proxyNoResponse"));
+      toast(t("toast.proxyNeedsDesktop"));
     }
     updateProxyRow();
+    renderProxyPanel();
     renderAnnunciator();
     renderStatus();
+  });
+
+  $("#btn-proxy-toggle").addEventListener("click", async () => {
+    const running = proxyState() === "run";
+    const btn = $("#btn-proxy-toggle");
+    btn.disabled = true;
+    try {
+      const st = await invokeTauri(running ? "stop_proxy" : "start_proxy");
+      if (st && typeof st.running === "boolean") {
+        state.proxy = st;
+        toast(t(st.running ? "toast.proxyStarted" : "toast.proxyStopped", { listen: st.listen }));
+      } else {
+        toast(t("toast.proxyNeedsDesktop"));
+      }
+    } catch (e) {
+      // 端口被占、监听地址不是回环地址等都会走这里
+      toast(t("toast.proxyFailed", { error: String(e) }));
+    }
+    btn.disabled = false;
+    updateProxyRow();
+    renderProxyPanel();
+    renderAnnunciator();
+    renderStatus();
+  });
+
+  $("#proxy-autostart").addEventListener("change", async (e) => {
+    const ok = await invokeTauri("set_proxy_auto_start", { enabled: e.target.checked });
+    if (ok === null) {
+      toast(t("toast.proxyNeedsDesktop"));
+      e.target.checked = false;
+      return;
+    }
+    if (state.proxy) state.proxy.auto_start = e.target.checked;
   });
 
   $("#btn-copy-endpoint").addEventListener("click", async () => {

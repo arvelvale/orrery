@@ -155,6 +155,7 @@ fn parse_session(path: &Path, subagent_files: &[PathBuf]) -> Option<SessionSumma
         log: vec![],
         size_bytes: 0,
         subagents: subagent_files.len() as u32,
+        kind: String::new(),
     })
 }
 

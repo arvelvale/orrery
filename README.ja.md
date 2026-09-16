@@ -6,7 +6,7 @@
 
 **AI コーディングエージェントのための、ローカルファーストなコックピット。**
 
-手元の Claude Code・Kimi Code・DSH（DeepSeek）・Codex のセッションをひとつのウィンドウに集約します。トークン、ディスク使用量、プロジェクト、サブエージェントまで一目で把握でき、データは PC の外に出ません。
+手元の Claude Code・Kimi Code・DSH（DeepSeek）・Codex のセッションをひとつのウィンドウに集約します。トークン、ディスク使用量、プロジェクト、サブエージェントまで一目で把握でき、不要なセッションは削除でき、各ハーネスをひとつのローカルモデルプロキシ経由にまとめられます。データは PC の外に出ません。
 
 <p>
   <a href="https://github.com/arvelvale/openplane/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/arvelvale/openplane?style=flat-square&color=0B6BCB" /></a>
@@ -61,7 +61,7 @@ Openplane は、各ツールがすでにディスクへ書き出しているデ�
 | UI 三言語対応：English / 简体中文 / 日本語 | ✅ | システム言語に追従、トップバーで切り替え |
 | 差分再スキャン | ✅ | 変更のないファイルはメモリキャッシュから返す |
 | セッションを削除してディスクを空ける | ✅ | 1 件または複数選択、容量順に並べ替え可；ごみ箱または完全削除；各ツールのインデックスも整理 |
-| ローカルモデルプロキシ（`127.0.0.1:8787`） | ⏳ | ルーティング設定と死活監視のみ。リクエスト転送は未実装 |
+| ローカルモデルプロキシ（`127.0.0.1:8787`） | ✅ | 実際に転送します。OpenAI / Anthropic 両形式、ストリーミング透過、アプリから起動・停止 |
 | ターミナルで再開 | ⏳ | 現状はセッションフォルダを開くだけ |
 
 <img src=".github/assets/screenshot-status.ja.png" alt="Openplane ステータス画面とストレージ内訳" width="100%" />
@@ -126,11 +126,56 @@ openplane/
 │     │  ├─ dsh.rs
 │     │  ├─ codex.rs
 │     │  └─ cleanup.rs      # セッション削除とインデックス整理
-│     ├─ proxy.rs           # 8787 死活監視 + ~/.openplane/proxy.json
+│     ├─ proxy/             # ローカルモデルプロキシ
+│     │  ├─ mod.rs         # 起動・停止・状態
+│     │  ├─ config.rs      # プロバイダーとルート（~/.openplane/proxy.json）
+│     │  ├─ server.rs      # HTTP 面と上流への転送
+│     │  └─ state.rs       # カウンター、直近のリクエストとエラー
 │     └─ lib.rs             # Tauri コマンド
 ├─ scripts/preview.mjs      # 依存ゼロの静的プレビュー
 ├─ docs/                    # 設計ドキュメント（中国語）
 └─ DESIGN.md                # ビジュアル仕様
+```
+
+## ローカルモデルプロキシ
+
+ハーネスの接続先を `http://127.0.0.1:8787/v1` にすると、Openplane がリクエストを上流へ転送します。モデルの切り替えは各ツールの設定を編集せず、アプリ上で行えます。
+
+<img src=".github/assets/screenshot-proxy.ja.png" alt="Openplane プロキシ画面" width="100%" />
+
+| | |
+|---|---|
+| エンドポイント | `POST /v1/chat/completions`（OpenAI 形式）· `POST /v1/messages`（Anthropic 形式）· `GET /v1/models` · `GET /health` |
+| モデルのルーティング | `x-openplane-harness: <id>` を付けると、「モデル」画面でそのハーネスに設定したモデルに `model` を書き換えます。ヘッダーがなければリクエストのモデルをそのまま使います |
+| プロバイダーの選択 | モデル名の接頭辞で判定（`claude*` → anthropic、`kimi*` → moonshot など）。一致しない場合は明示的にエラーにし、別のプロバイダーで代替はしません |
+| ストリーミング | SSE はチャンク単位でそのまま透過し、バッファリングしません |
+| キー | 転送時に環境変数から読み取ります。Openplane は保存・記録・表示のいずれもせず、設定には変数**名**のみを保持します |
+| バインド | ループバックのみ。ループバック以外の `listen` は起動を拒否します |
+
+```bash
+# 1. アプリから見える環境変数にキーを設定
+setx ANTHROPIC_API_KEY sk-...        # Windows。設定後に Openplane を再起動
+
+# 2. 「モデル」画面でプロキシを起動し、ハーネスの接続先を変更
+set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
+```
+
+プロバイダー・ルート・待ち受けアドレスは `~/.openplane/proxy.json` にあります：
+
+```json
+{
+  "listen": "127.0.0.1:8787",
+  "auto_start": false,
+  "routes": { "cc": "claude-opus-5" },
+  "providers": {
+    "anthropic": {
+      "base_url": "https://api.anthropic.com/v1",
+      "api_key_env": "ANTHROPIC_API_KEY",
+      "wire": "anthropic",
+      "model_prefixes": ["claude"]
+    }
+  }
+}
 ```
 
 ## セッションの削除
@@ -167,8 +212,8 @@ openplane/
 - [x] Tauri 2 シェルとセッションハブ
 - [x] Claude Code・Kimi Code・DSH・Codex アダプター
 - [x] トークンとディスク使用量の集計
+- [x] 実際に転送するローカルモデルプロキシ
 - [ ] 永続インデックスによる高速起動
-- [ ] OpenAI 互換 / Anthropic 形式の本物のローカルプロキシ
 - [ ] 各 CLI でのセッション再開
 - [ ] トレイ、グローバルショートカット、インストーラー
 

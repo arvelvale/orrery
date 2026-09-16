@@ -162,6 +162,7 @@ fn parse_session(dir: &Path, wires: &[PathBuf]) -> Option<SessionSummary> {
         log: vec![],
         size_bytes: 0,
         subagents,
+        kind: String::new(),
     })
 }
 

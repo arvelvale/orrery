@@ -27,9 +27,21 @@ memchr = "2"
 zstd = "0.13"
 # 删除会话时移到系统回收站
 trash = "5"
+# 本地模型代理：axum 提供 HTTP 面，reqwest 转发上游（rustls，不依赖系统 OpenSSL）
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time"] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream", "http2"] }
+futures-util = { version = "0.3", default-features = false }
 
 # 扫盘解析在 debug 下慢一个数量级（594MB 会话冷解析实测 10.6s）；
 # 只给热路径依赖开优化，不拖慢其余依赖的增量编译
+[dev-dependencies]
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
+async-stream = "0.3"
+futures-util = { version = "0.3", default-features = false }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "json", "stream"] }
+
 [profile.dev]
 opt-level = 1
 
