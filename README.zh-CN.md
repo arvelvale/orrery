@@ -6,6 +6,8 @@
 
 **本地优先的 AI 编程 Agent 驾驶舱。**
 
+*Orrery 是太阳系仪：几颗天体装在同一台仪器里，各走各的轨道，你从一个位置看得见全部。*
+
 把本机所有 Claude Code、Kimi Code、DSH（DeepSeek）、Codex 会话收进一个窗口：token、磁盘占用、项目、子 agent 一眼看清。不要的会话可以直接删掉，各个 harness 还能统一走一个本地模型代理。数据不出本机。
 
 <p>
