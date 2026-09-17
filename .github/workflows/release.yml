@@ -15,6 +15,9 @@ jobs:
   build:
     name: ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
+    # 仓库默认的 GITHUB_TOKEN 是只读的，建 release 会报 Resource not accessible by integration
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
