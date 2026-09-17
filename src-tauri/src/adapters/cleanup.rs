@@ -685,4 +685,25 @@ mod tests {
         assert!(is_uuid("019fdba8-940e-7f20-bfda-365ecb643e52"));
         assert!(!is_uuid("019fdba8-940e-7f20-bfda-365ecb643e5; rm"));
     }
+
+    /// 进程表必须真取到东西。这两个函数是"删除前检查工具是否在运行"的地基，
+    /// 换平台后如果命令调错，只会返回空集合/false，不会报错——保护就静默失效了。
+    /// CI 在三个平台都跑这两个测试，就是为了让这种失效变成红灯
+    #[test]
+    fn running_processes_is_not_empty_and_normalized() {
+        let procs = running_processes();
+        assert!(!procs.is_empty(), "取不到进程表：本平台的进程枚举命令调用有问题");
+        for name in &procs {
+            assert!(!name.contains(['/', std::path::MAIN_SEPARATOR]), "进程名里不该留路径：{name}");
+            assert!(!name.ends_with(".exe"), "进程名里不该留 .exe 后缀：{name}");
+            assert_eq!(name, &name.to_ascii_lowercase(), "进程名要统一小写：{name}");
+        }
+    }
+
+    #[test]
+    fn pid_alive_knows_this_process() {
+        assert!(pid_alive(std::process::id() as u64), "当前进程必须被判定为存活");
+        // 超出各平台 pid 上限，必然不存在
+        assert!(!pid_alive(4_294_900_000), "不存在的 pid 不能判成存活");
+    }
 }
