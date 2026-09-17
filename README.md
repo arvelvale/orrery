@@ -67,7 +67,7 @@ Orrery reads what the harnesses already write to disk and puts it all on one boa
 | UI in English / 简体中文 / 日本語 | ✅ | Follows the system language; switch from the top bar |
 | Instant cold start | ✅ | The parsed index is kept on disk, so a restart only re-reads files that changed (188 sessions: 5.5s → 0.12s) |
 | Delete sessions to free disk space | ✅ | Pick one or many, sort by size; Recycle Bin or permanent; each tool's own index is cleaned too |
-| Local model proxy (`127.0.0.1:8787`) | ✅ | Real forwarding, OpenAI and Anthropic shapes, streaming passthrough, start/stop from the app |
+| Local model proxy (`127.0.0.1:8787`) | ✅ | Real forwarding, OpenAI and Anthropic shapes, streaming passthrough, start/stop from the app; verified against live providers |
 | Resume in terminal | ✅ | Opens a terminal in the session's folder and runs that harness's own resume command. DSH falls back to its web UI when only the `web` profile is installed; registered tools have no resume command |
 
 <img src=".github/assets/screenshot-status.en.png" alt="Orrery status page with storage breakdown" width="100%" />

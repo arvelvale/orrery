@@ -9,7 +9,7 @@
 - 阶段 0B：`npm run dev` 桌面窗口已跑通（2026-09-14），Claude Code 会话真扫 + 磁盘占用统计
 - 前端：`ui/`（`index.html` + `styles.css` + `app.js`，浏览器 mock / Tauri invoke 双模式）
 - 真实扫描：Claude Code、Kimi Code、DSH（DeepSeek）、Codex、OpenCode 五家；另有通用适配器 `custom.rs`，读 `~/.orrery/harnesses.json` 登记的 OpenCode 系工具（只读、不支持删除与恢复）。**不要把未公开工具的目录名/表结构写进仓库**，那属于用户本地配置
-- 模型代理：`src-tauri/src/proxy/` 已能真实转发（OpenAI / Anthropic 两种 wire、SSE 透传、应用内启停），仅对假上游验证过，未与真实供应商联调
+- 模型代理：`src-tauri/src/proxy/` 已能真实转发（OpenAI / Anthropic 两种 wire、SSE 透传、应用内启停）；**真实供应商联调已通过（作者本机，2026-09）**
 - 解析索引：`~/.orrery/index.json` 落盘，冷启动 188 个会话 5.5s → 0.12s
 - 在终端恢复：`src-tauri/src/resume.rs`，五家各自的恢复命令见该文件头部表格；Windows 上找可执行文件必须 `.exe`/`.cmd` 优先于无扩展名（npm 的 bash shim 会假装启动成功）
 - 发版：打 `v*` tag → GitHub Actions 三平台出包（Windows msi/nsis、macOS universal dmg、Linux deb/rpm/AppImage）→ 进**草稿** release，人工确认再公开。改版本号要同时改 `package.json` / `tauri.conf.json` / `Cargo.toml` + `Cargo.lock`，再打 tag
@@ -21,7 +21,7 @@
 1. UI 对齐 `DESIGN.md`；状态灯语义固定（绿 run / 蓝 idle / 琥珀 warn / 灰 off）。
 2. 浏览器预览可 mock；Tauri 路径必须走 `invoke`，失败要有可见提示。
 3. 密钥只走环境变量：配置里只存变量名，转发瞬间才 `std::env::var` 读，不落盘、不进日志、不回传界面。代理只听回环地址（非回环的 `listen` 拒绝启动）；调用方带来的鉴权头一律丢弃并按目标供应商重建；选供应商按模型前缀严格匹配，匹配不到报错，不许加兜底。
-4. 提交信息用中文。仓库：https://github.com/arvelvale/orrery（公开，MIT）；README 英文为默认，改 README 时三语（README.md / README.zh-CN.md / README.ja.md）同步。
+4. 提交信息用英文（公开仓库便于国际化；历史已从中文改写为英文）。仓库：https://github.com/arvelvale/orrery（公开，MIT）；README 英文为默认，改 README 时三语（README.md / README.zh-CN.md / README.ja.md）同步。
 5. `docs/` 是设计文档正本（作者本机的笔记库以目录链接挂载到这里，路径不入库）。
 6. README 截图用 mock 数据（无头 Edge 截 `npm run preview?lang=<locale>` 页面，三语各一套 `screenshot-*.{en,zh-CN,ja}.png`），不要用真实会话截图——会暴露会话标题与项目路径。
 7. 界面文案一律走 `ui/i18n.js` 的 `t()`，新增键三种语言同时写（控制台 `[i18n] missing keys` 会报缺失）；Rust 后端只返回原始数据（时间戳、空标题），不产出任何自然语言。
