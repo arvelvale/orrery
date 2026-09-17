@@ -18,7 +18,7 @@
 </p>
 <p>
   <img alt="Status" src="https://img.shields.io/badge/状态-早期原型-C47B0A?style=flat-square" />
-  <img alt="Platform" src="https://img.shields.io/badge/平台-Windows-0B6BCB?style=flat-square" />
+  <img alt="Platform" src="https://img.shields.io/badge/平台-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-0B6BCB?style=flat-square" />
   <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-24C8DB?style=flat-square&logo=tauri&logoColor=white" />
   <img alt="Rust" src="https://img.shields.io/badge/Rust-1.77%2B-B7410E?style=flat-square&logo=rust&logoColor=white" />
   <img alt="Frontend" src="https://img.shields.io/badge/前端-原生%20JS-F7DF1E?style=flat-square&logo=javascript&logoColor=black" />
@@ -92,14 +92,26 @@ Orrery 只读取各工具本来就写在磁盘上的数据，汇总到一块面�
 
 ## 快速开始
 
-**只想用？**到[最新 release](https://github.com/arvelvale/orrery/releases/latest) 下载 `Orrery_x.y.z_x64-setup.exe`，Windows 10/11 x64，装到用户目录不需要管理员。安装包没有代码签名，SmartScreen 会拦一下，点「更多信息 → 仍要运行」即可；release 页面附了 SHA-256 供校验。
+**只想用？**到[最新 release](https://github.com/arvelvale/orrery/releases/latest) 下载对应平台的安装包：
 
-**依赖（Windows）**
+| 平台 | 文件 |
+|---|---|
+| Windows 10/11 x64 | `_x64-setup.exe`（装到用户目录，不需要管理员）或 `_x64_en-US.msi` |
+| macOS 11+（Intel 与 Apple 芯片通用） | `_universal.dmg` |
+| Linux x64 | `_amd64.AppImage`（免安装）或 `_amd64.deb` / `.rpm` |
 
-- [Rust](https://rustup.rs)（MSVC 工具链）
-- [Visual Studio Build Tools](https://aka.ms/vs/17/release/vs_BuildTools.exe)，勾选 MSVC 与 Windows SDK
+都没有代码签名，首次运行要确认一次：Windows SmartScreen 点「更多信息 → 仍要运行」；macOS 右键点应用选「打开」，或执行 `xattr -cr /Applications/Orrery.app`；Linux 的 AppImage 先 `chmod +x`。
+
+> [!NOTE]
+> 作者日常用的是 Windows。macOS 和 Linux 的包由 CI 构建，三个平台的 clippy 与单元测试都过了，**但还没有人在 Mac 或 Linux 桌面上真正跑过这个应用**。那边出问题的话，开个 issue 附上终端里运行 `orrery` 的输出，非常欢迎。
+
+**从源码构建 — 依赖**
+
+- [Rust](https://rustup.rs)（Windows 上用 MSVC 工具链）
 - Node.js 18+
-- WebView2（Windows 10/11 自带）
+- **Windows**：[Visual Studio Build Tools](https://aka.ms/vs/17/release/vs_BuildTools.exe)，勾选 MSVC 与 Windows SDK；WebView2（Windows 10/11 自带）
+- **macOS**：Xcode 命令行工具
+- **Linux**：`libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev`
 
 ```powershell
 git clone https://github.com/arvelvale/orrery.git

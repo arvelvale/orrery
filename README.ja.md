@@ -18,7 +18,7 @@
 </p>
 <p>
   <img alt="Status" src="https://img.shields.io/badge/status-early%20prototype-C47B0A?style=flat-square" />
-  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-0B6BCB?style=flat-square" />
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-0B6BCB?style=flat-square" />
   <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-24C8DB?style=flat-square&logo=tauri&logoColor=white" />
   <img alt="Rust" src="https://img.shields.io/badge/Rust-1.77%2B-B7410E?style=flat-square&logo=rust&logoColor=white" />
   <img alt="Frontend" src="https://img.shields.io/badge/frontend-vanilla%20JS-F7DF1E?style=flat-square&logo=javascript&logoColor=black" />
@@ -92,14 +92,26 @@ Orrery は、各ツールがすでにディスクへ書き出しているデー�
 
 ## はじめに
 
-**すぐ使いたい場合**は[最新リリース](https://github.com/arvelvale/orrery/releases/latest)から `Orrery_x.y.z_x64-setup.exe` をダウンロードしてください（Windows 10/11 x64、管理者権限不要）。コード署名をしていないため SmartScreen の確認が出ます。「詳細情報 → 実行」で進めるか、リリースノートの SHA-256 で検証してください。
+**すぐ使いたい場合**は[最新リリース](https://github.com/arvelvale/orrery/releases/latest)からお使いのプラットフォーム向けのファイルをどうぞ：
 
-**必要なもの（Windows）**
+| プラットフォーム | ファイル |
+|---|---|
+| Windows 10/11 x64 | `_x64-setup.exe`（ユーザー領域にインストール、管理者権限不要）または `_x64_en-US.msi` |
+| macOS 11+（Intel・Apple シリコン共通） | `_universal.dmg` |
+| Linux x64 | `_amd64.AppImage`（インストール不要）または `_amd64.deb` / `.rpm` |
 
-- [Rust](https://rustup.rs)（MSVC ツールチェーン）
-- [Visual Studio Build Tools](https://aka.ms/vs/17/release/vs_BuildTools.exe)（MSVC と Windows SDK）
+いずれもコード署名をしていないため、初回起動時に確認が出ます。Windows は SmartScreen で「詳細情報 → 実行」、macOS はアプリを右クリックして「開く」または `xattr -cr /Applications/Orrery.app`、Linux は AppImage に `chmod +x` を実行してください。
+
+> [!NOTE]
+> 作者が日常的に使っているのは Windows です。macOS と Linux 向けのビルドは CI が作成し、3 つのプラットフォームで clippy とユニットテストが通っていますが、**実際に Mac や Linux デスクトップでアプリを動かした人はまだいません**。不具合があれば、ターミナルで `orrery` を実行した出力を添えて issue を立てていただけると助かります。
+
+**ソースからビルドする場合の依存**
+
+- [Rust](https://rustup.rs)（Windows では MSVC ツールチェーン）
 - Node.js 18+
-- WebView2（Windows 10/11 に標準搭載）
+- **Windows**：[Visual Studio Build Tools](https://aka.ms/vs/17/release/vs_BuildTools.exe)（MSVC と Windows SDK）、WebView2（Windows 10/11 に標準搭載）
+- **macOS**：Xcode コマンドラインツール
+- **Linux**：`libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev`
 
 ```powershell
 git clone https://github.com/arvelvale/orrery.git

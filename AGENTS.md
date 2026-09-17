@@ -11,6 +11,8 @@
 - 真实扫描：Claude Code、Kimi Code、DSH（DeepSeek）、Codex 均已接；MiMoCode 已移出范围
 - 模型代理：`src-tauri/src/proxy/` 已能真实转发（OpenAI / Anthropic 两种 wire、SSE 透传、应用内启停），仅对假上游验证过，未与真实供应商联调
 - 解析索引：`~/.orrery/index.json` 落盘，冷启动 188 个会话 5.5s → 0.12s
+- 发版：打 `v*` tag → GitHub Actions 三平台出包（Windows msi/nsis、macOS universal dmg、Linux deb/rpm/AppImage）→ 进**草稿** release，人工确认再公开。改版本号要同时改 `package.json` / `tauri.conf.json` / `Cargo.toml` + `Cargo.lock`，再打 tag
+- macOS / Linux 的包只有 CI 验证过（clippy + 测试），没有人在真机上跑过应用，README 里如实标注了这点
 - token 口径：主 agent + 子 agent，按 API 调用去重求和（CC 按 message.id 保留最后一行；Kimi 每条 usage.record 即一次调用；DSH 只读 v3 日志；Codex 以 token_usage_record 为准、之前时段累加去重后的 token_count.last，输入要减缓存命中）。每接一个新 harness 都要用独立脚本逐会话对账后再宣布完成。字段对照写在 `src-tauri/src/adapters/mod.rs` 的 `TokenUsage` 注释里，改口径先改那张表
 
 ## 约束
@@ -23,8 +25,9 @@
 6. README 截图用 mock 数据（无头 Edge 截 `npm run preview?lang=<locale>` 页面，三语各一套 `screenshot-*.{en,zh-CN,ja}.png`），不要用真实会话截图——会暴露会话标题与项目路径。
 7. 界面文案一律走 `ui/i18n.js` 的 `t()`，新增键三种语言同时写（控制台 `[i18n] missing keys` 会报缺失）；Rust 后端只返回原始数据（时间戳、空标题），不产出任何自然语言。
 8. `ui/app.js` 的 mock 会话必须是虚构项目（acme-web、weather-cli…），不得出现真实项目名或本机路径。
-9. **改 `SessionSummary` / `Rollout` 的字段就要 bump `adapters/index.rs` 的 `INDEX_VERSION`**：索引按这个版本号判断能不能用，忘了 bump 会读出半截旧数据。索引只是缓存，坏了直接整份丢弃重建，任何情况下都不允许它让会话列表出错。
-10. **删除功能是破坏性操作**：改 `cleanup.rs` 前先读模块顶部的安全约束；验证只在沙盒做（调试构建设 `ORRERY_HOME` 指向沙盒主目录），不对真实会话调用 `delete_sessions`；前后对真实目录做快照比对。
+9. **加平台专有调用前先想清楚另外两个平台**：`Command::new("tasklist")` 这类在别的平台上只是执行失败返回空值，编译和测试都不报错，靠它做判断的逻辑会静默失效（删除保护就踩过）。三平台分支写全，或者显式降级并说明。
+10. **改 `SessionSummary` / `Rollout` 的字段就要 bump `adapters/index.rs` 的 `INDEX_VERSION`**：索引按这个版本号判断能不能用，忘了 bump 会读出半截旧数据。索引只是缓存，坏了直接整份丢弃重建，任何情况下都不允许它让会话列表出错。
+11. **删除功能是破坏性操作**：改 `cleanup.rs` 前先读模块顶部的安全约束；验证只在沙盒做（调试构建设 `ORRERY_HOME` 指向沙盒主目录），不对真实会话调用 `delete_sessions`；前后对真实目录做快照比对。
 
 ## 常用命令
 

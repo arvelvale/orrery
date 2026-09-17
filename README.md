@@ -18,7 +18,7 @@ Every Claude Code, Kimi Code, DSH (DeepSeek) and Codex session on your machine i
 </p>
 <p>
   <img alt="Status" src="https://img.shields.io/badge/status-early%20prototype-C47B0A?style=flat-square" />
-  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-0B6BCB?style=flat-square" />
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%C2%B7%20macOS%20%C2%B7%20Linux-0B6BCB?style=flat-square" />
   <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-24C8DB?style=flat-square&logo=tauri&logoColor=white" />
   <img alt="Rust" src="https://img.shields.io/badge/Rust-1.77%2B-B7410E?style=flat-square&logo=rust&logoColor=white" />
   <img alt="Frontend" src="https://img.shields.io/badge/frontend-vanilla%20JS-F7DF1E?style=flat-square&logo=javascript&logoColor=black" />
@@ -92,14 +92,26 @@ Known limits: the ledger resets on `--resume`, so Orrery rebuilds totals from th
 
 ## Getting started
 
-**Just want to run it?** Download `Orrery_x.y.z_x64-setup.exe` from the [latest release](https://github.com/arvelvale/orrery/releases/latest) — Windows 10/11 x64, no admin needed. The build is not code-signed, so SmartScreen will ask you to confirm; the release notes list SHA-256 checksums.
+**Just want to run it?** Grab the installer for your platform from the [latest release](https://github.com/arvelvale/orrery/releases/latest):
 
-**Building from source — requirements (Windows)**
+| Platform | File |
+|---|---|
+| Windows 10/11 x64 | `_x64-setup.exe` (per-user, no admin) or `_x64_en-US.msi` |
+| macOS 11+ (Intel & Apple silicon) | `_universal.dmg` |
+| Linux x64 | `_amd64.AppImage` (portable) or `_amd64.deb` / `.rpm` |
 
-- [Rust](https://rustup.rs) (MSVC toolchain)
-- [Visual Studio Build Tools](https://aka.ms/vs/17/release/vs_BuildTools.exe) with MSVC and a Windows SDK
+Nothing is code-signed, so the first launch needs one confirmation: Windows SmartScreen → *More info → Run anyway*; macOS → right-click the app → *Open*, or `xattr -cr /Applications/Orrery.app`; Linux → `chmod +x` the AppImage.
+
+> [!NOTE]
+> Windows is what the author uses daily. The macOS and Linux builds are produced and tested by CI (clippy + unit tests on all three platforms), but nobody has run the app on a Mac or a Linux desktop yet. If something is broken there, an issue with the output of `orrery` from a terminal is very welcome.
+
+**Building from source — requirements**
+
+- [Rust](https://rustup.rs) — MSVC toolchain on Windows
 - Node.js 18+
-- WebView2 (preinstalled on Windows 10/11)
+- **Windows**: [Visual Studio Build Tools](https://aka.ms/vs/17/release/vs_BuildTools.exe) with MSVC and a Windows SDK; WebView2 (preinstalled on Windows 10/11)
+- **macOS**: Xcode command line tools
+- **Linux**: `libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf libxdo-dev`
 
 ```powershell
 git clone https://github.com/arvelvale/orrery.git
