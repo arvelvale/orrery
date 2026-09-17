@@ -546,6 +546,10 @@ fn codex_bin() -> Option<PathBuf> {
 ///
 /// Windows 走 `tasklist`，macOS / Linux 走 `ps`。取不到就返回空集合——
 /// 结果只用来提示"该工具正在运行"，宁可不提示，也不要因为拿不到进程表就拦住删除
+///
+/// 平台差异：macOS 的 `comm` 是完整路径（取最后一段）；Linux 的 `comm` 来自内核的
+/// `TASK_COMM_LEN`，**截断到 15 个字符**。目前要匹配的 `kimi` / `codex` 都很短，
+/// 以后要匹配更长的进程名得改用 `-o args=` 再自己取第一段
 fn running_processes() -> HashSet<String> {
     let mut cmd = if cfg!(windows) {
         let mut c = std::process::Command::new("tasklist");
