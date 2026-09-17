@@ -4,7 +4,7 @@
 //! - `session.v3.jsonl.zstd`   当前格式（事件日志，每次追加一个 zstd 帧）
 //! - `session.jsonl.zstd`      旧格式；升级后会迁移成 v3 并继续写 v3
 //!   → 两者并存时只读 v3，否则会重复计数（实测 v3 合计与 DSH 自己的
-//!     `storages/session_projcache` 完全一致，v0 是迁移前的旧副本）
+//!   `storages/session_projcache` 完全一致，v0 是迁移前的旧副本）
 //! - `storages/workspace.json` 归档列表 `global.archivedSessionIds`
 //!
 //! 关键事件：
@@ -13,8 +13,8 @@
 //! - `model/selection`    所选模型
 //! - `user/message`       用户输入（取首条文本作摘要）
 //! - `assistant/message`  `data.usage` 每步一条：inputTokens（已不含缓存）/ outputTokens（含推理）
-//!                        / cacheReadTokens / cacheWriteTokens；实测
-//!                        totalTokens = inputTokens + outputTokens + cacheReadTokens
+//!   / cacheReadTokens / cacheWriteTokens；实测 totalTokens = inputTokens + outputTokens
+//!   + cacheReadTokens
 //!
 //! `storages/session_projcache` 是 DSH 的投影缓存，会落后于日志（实测落后 7 条事件），
 //! 所以以日志为准，缓存只在验证时对照。
