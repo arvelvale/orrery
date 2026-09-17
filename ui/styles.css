@@ -439,6 +439,8 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 .badge.kimi { color: #0369A1; border-color: #BAE6FD; background: #F0F9FF; }
 .badge.dsh { color: #C2410C; border-color: #FDBA74; background: #FFF7ED; }
 .badge.codex { color: #374151; border-color: #D1D5DB; background: #F3F4F6; }
+.badge.opencode { color: #0F766E; border-color: #99F6E4; background: #F0FDFA; }
+.badge.custom { color: #B45309; border-color: #FCD34D; background: #FFFBEB; }
 
 .strip-title {
   flex: 1;
@@ -807,7 +809,7 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 .storage-rows { display: grid; gap: 8px; }
 .storage-row {
   display: grid;
-  grid-template-columns: 44px 1fr 64px;
+  grid-template-columns: 8ch 1fr 64px;
   align-items: center;
   gap: 10px;
   font-family: var(--mono);

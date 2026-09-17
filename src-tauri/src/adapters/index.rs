@@ -16,9 +16,10 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::Mutex;
 
 /// 索引格式版本：`SessionSummary` / `Rollout` 改字段必须 +1
-const VERSION: u32 = 1;
+const VERSION: u32 = 3;
 
 #[derive(Serialize, Deserialize)]
 struct Snapshot {
@@ -27,6 +28,38 @@ struct Snapshot {
     /// Windows 路径进 key 会很难看，也容易在反序列化时丢信息
     sessions: Vec<(PathBuf, u64, SessionSummary)>,
     rollouts: Vec<(PathBuf, u64, Rollout)>,
+    /// OpenCode 的会话体积：(session_id, time_updated, bytes)。它的会话在 SQLite 里，
+    /// 没有对应的文件路径，所以单独存一张小表
+    #[serde(default)]
+    sizes: Vec<(String, u64, u64)>,
+}
+
+/// 按 id 缓存的体积表（OpenCode 用）
+pub(crate) struct SizeCache {
+    map: Mutex<HashMap<String, (u64, u64)>>,
+}
+
+impl SizeCache {
+    fn new(map: HashMap<String, (u64, u64)>) -> Self {
+        Self { map: Mutex::new(map) }
+    }
+
+    pub(crate) fn get(&self, id: &str, sig: u64) -> Option<u64> {
+        let map = self.map.lock().ok()?;
+        let (old, bytes) = map.get(id)?;
+        (*old == sig).then_some(*bytes)
+    }
+
+    pub(crate) fn put(&self, id: &str, sig: u64, bytes: u64) {
+        if let Ok(mut map) = self.map.lock() {
+            map.insert(id.to_string(), (sig, bytes));
+        }
+    }
+
+    fn entries(&self) -> Vec<(String, u64, u64)> {
+        let Ok(map) = self.map.lock() else { return vec![] };
+        map.iter().map(|(k, (sig, b))| (k.clone(), *sig, *b)).collect()
+    }
 }
 
 /// 进程内的解析缓存 + 落盘状态
@@ -35,6 +68,8 @@ pub(crate) struct Store {
     pub(crate) sessions: MemoTable<SessionSummary>,
     /// Codex：一个 rollout 文件一条（多个 rollout 合并成一个会话，缓存要在合并之前）
     pub(crate) rollouts: MemoTable<Rollout>,
+    /// OpenCode 会话体积，键是 session id 而不是路径
+    pub(crate) sizes: SizeCache,
     dirty: AtomicBool,
     /// 本进程真正重新解析过的文件数（缓存命中的不算），进日志方便看索引有没有生效
     parsed: AtomicUsize,
@@ -83,7 +118,7 @@ fn load_from(file: Option<&Path>) -> Store {
         .and_then(|p| std::fs::read(p).ok())
         .and_then(|b| serde_json::from_slice::<Snapshot>(&b).ok())
         .filter(|s| s.version == VERSION)
-        .unwrap_or(Snapshot { version: VERSION, sessions: vec![], rollouts: vec![] });
+        .unwrap_or(Snapshot { version: VERSION, sessions: vec![], rollouts: vec![], sizes: vec![] });
     if !snap.sessions.is_empty() || !snap.rollouts.is_empty() {
         eprintln!(
             "[orrery] index: {} sessions + {} rollouts loaded",
@@ -94,6 +129,7 @@ fn load_from(file: Option<&Path>) -> Store {
     let store = Store {
         sessions: MemoTable::new(to_map(snap.sessions, &mut dropped)),
         rollouts: MemoTable::new(to_map(snap.rollouts, &mut dropped)),
+        sizes: SizeCache::new(snap.sizes.into_iter().map(|(id, sig, b)| (id, (sig, b))).collect()),
         dirty: AtomicBool::new(false),
         parsed: AtomicUsize::new(0),
     };
@@ -114,6 +150,7 @@ pub(crate) fn save_if_dirty(store: &Store) {
         version: VERSION,
         sessions: store.sessions.entries(alive),
         rollouts: store.rollouts.entries(alive),
+        sizes: store.sizes.entries(),
     };
     if let Err(e) = write_to(path().as_deref(), &snap) {
         // 索引只是缓存，写不进去不该影响功能，记一笔就算了
@@ -133,9 +170,10 @@ fn write_to(file: Option<&Path>, snap: &Snapshot) -> Result<(), String> {
     std::fs::write(&tmp, &bytes).map_err(|e| e.to_string())?;
     std::fs::rename(&tmp, path).map_err(|e| e.to_string())?;
     eprintln!(
-        "[orrery] index: saved {} sessions + {} rollouts ({} KB)",
+        "[orrery] index: saved {} sessions + {} rollouts + {} sizes ({} KB)",
         snap.sessions.len(),
         snap.rollouts.len(),
+        snap.sizes.len(),
         bytes.len() / 1024
     );
     Ok(())
@@ -201,6 +239,7 @@ mod tests {
             version: VERSION,
             sessions: store.sessions.entries(|p| p.exists()),
             rollouts: vec![],
+            sizes: vec![],
         };
         write_to(Some(&file), &snap).unwrap();
 

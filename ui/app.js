@@ -11,9 +11,21 @@ const HARNESS = {
   kimi: { id: "kimi", label: "KIMI", name: "Kimi Code",   badge: "kimi" },
   dsh:  { id: "dsh",  label: "DSH",  name: "DSH",         badge: "dsh" },
   codex: { id: "codex", label: "CODEX", name: "Codex",     badge: "codex" },
+  opencode: { id: "opencode", label: "OPENCODE", name: "OpenCode", badge: "opencode" },
 };
 
 const HARNESS_IDS = Object.keys(HARNESS);
+
+/*
+ * 未知 harness 的兜底：用户可以在 ~/.orrery/harnesses.json 里登记自定义来源，
+ * 它们的 id 不在上面那张表里，这里按需补一个中性角标，避免界面直接崩掉。
+ */
+function harnessOf(id) {
+  if (HARNESS[id]) return HARNESS[id];
+  HARNESS[id] = { id, label: String(id).toUpperCase().slice(0, 8), name: id, badge: "custom" };
+  if (!HARNESS_IDS.includes(id)) HARNESS_IDS.push(id);
+  return HARNESS[id];
+}
 
 const MODELS = [
   { id: "claude-opus-5", vendor: "anthropic", note: "models.note.flagship" },
@@ -184,6 +196,31 @@ const SEED_SESSIONS = [
       ["ok", "depth 7: +38 Elo, 2.1× slower"],
     ],
   },
+  {
+    id: "ses_a4d0e7b1",
+    harness: "opencode",
+    title: {
+      en: "ledger-sync · Reconcile duplicate entries",
+      "zh-CN": "ledger-sync · 对账去掉重复流水",
+      ja: "ledger-sync · 重複した仕訳を突き合わせる",
+    },
+    excerpt: {
+      en: "Two imports created the same rows; dedupe by external id, not by amount.",
+      "zh-CN": "两次导入生成了相同的流水，按外部 id 去重，不按金额。",
+      ja: "2 回の取り込みで同じ行ができた。金額ではなく外部 ID で重複を排除する。",
+    },
+    project: "~/code/ledger-sync",
+    model: "claude-sonnet-5",
+    status: "idle",
+    ago: 9 * 60 * MIN,
+    usage: { input: 6400, cache_write: 900, cache_read: 88200, output: 5100, calls: 27 },
+    sizeBytes: 14_680_064,
+    subagents: 2,
+    log: [
+      ["ok", "found 312 duplicate rows"],
+      ["", "waiting on the dedupe key decision"],
+    ],
+  },
 ];
 
 const DEFAULT_ROUTES = {
@@ -191,6 +228,7 @@ const DEFAULT_ROUTES = {
   kimi: "kimi-k2.5",
   dsh: "deepseek-v3.2",
   codex: "gpt-5.3-codex",
+  opencode: "claude-sonnet-5",
 };
 
 function seedSessions() {
@@ -614,7 +652,7 @@ function renderSessions() {
 
   list.innerHTML = "";
   items.forEach((s) => {
-    const h = HARNESS[s.harness] || HARNESS.cc;
+    const h = harnessOf(s.harness);
     const key = sessionKey(s);
     const checked = state.selected.has(key);
     // 情报条内含复选框，不能用 <button> 嵌套交互元素
@@ -705,11 +743,11 @@ function mockPlans(targets) {
   return targets.map((s) => ({
     harness: s.harness,
     id: s.id,
-    files: [s.project],
-    bytes: s.sizeBytes || 0,
-    index_files: s.harness === "cc" ? [] : ["session_index.jsonl"],
+    files: s.harness === "opencode" ? [] : [s.project],
+    bytes: s.harness === "opencode" ? 0 : s.sizeBytes || 0,
+    index_files: ["cc", "opencode"].includes(s.harness) ? [] : ["session_index.jsonl"],
     codex_threads: s.harness === "codex" ? [s.id] : [],
-    blocked: s.status === "running" ? "active" : null,
+    blocked: s.harness === "opencode" ? "read_only" : s.status === "running" ? "active" : null,
     warnings: [],
   }));
 }
@@ -930,12 +968,14 @@ function usageSplitHtml(u) {
 }
 
 function sessionDetailHtml(s) {
-  const h = HARNESS[s.harness] || HARNESS.cc;
+  const h = harnessOf(s.harness);
   const log = (s.log || []).map(([cls, line]) => {
     const c = cls ? ` class="${cls}"` : "";
     return `<span${c}>${escapeHtml(line)}</span>`;
   }).join("\n");
-  const calls = s.usage ? ` · ${escapeHtml(t("detail.calls", { n: s.usage.calls }))}` : "";
+  // OpenCode 的 session 汇总没有可靠的 API 调用次数，不能把未知显示成 0 次。
+  const calls = s.usage && !(s.harness === "opencode" && !s.usage.calls)
+    ? ` · ${escapeHtml(t("detail.calls", { n: s.usage.calls }))}` : "";
   const subagents = s.subagents ? ` · ${escapeHtml(t("detail.subagents", { n: s.subagents }))}` : "";
   return `
     <dl class="kv">
@@ -953,6 +993,7 @@ function sessionDetailHtml(s) {
     ${log ? `<div class="log">${log}</div>` : ""}
     <div class="btn-row">
       <button type="button" class="btn primary" data-act="resume">${escapeHtml(t("detail.resume"))}</button>
+      <button type="button" class="btn" data-act="open-folder">${escapeHtml(t("detail.openFolder"))}</button>
       <button type="button" class="btn" data-act="copy-path">${escapeHtml(t("detail.copyPath"))}</button>
       <button type="button" class="btn danger" data-act="delete">${escapeHtml(t("detail.delete"))}</button>
     </div>`;
@@ -962,7 +1003,7 @@ function openSession(id) {
   state.selectedId = id;
   const s = findSession(id);
   if (!s) return;
-  const h = HARNESS[s.harness] || HARNESS.cc;
+  const h = harnessOf(s.harness);
   $("#shell").classList.add("has-detail");
   const badge = $("#detail-badge");
   badge.textContent = h.label;
@@ -983,11 +1024,37 @@ function closeDetail() {
   renderSessions();
 }
 
+/*
+ * 在终端里恢复会话。后端返回将要执行的命令，成功时原样提示给用户，
+ * 失败时按错误码给出能直接照做的说明（缺 CLI / 目录没了 / 该 harness 不支持）。
+ */
+async function resumeSession(s) {
+  if (state.runtime !== "tauri") {
+    toast(t("toast.previewWouldResume", { harness: HARNESS[s.harness]?.name || s.harness }));
+    return;
+  }
+  try {
+    const cmd = await invokeTauri("resume_session", { harness: s.harness, id: s.id, project: s.project });
+    // DSH 只装了 web profile 时打开的是网页界面，不是直接恢复这条会话，要说清楚
+    if (String(cmd).startsWith("web_fallback:")) toast(t("toast.resumedWebUi", { cmd: String(cmd).slice(13) }));
+    else toast(t("toast.resumed", { cmd }));
+  } catch (err) {
+    const code = String(err || "");
+    if (code.startsWith("cli_missing:")) toast(t("toast.resumeNoCli", { cli: code.split(":")[1] }));
+    else if (code === "dsh_no_terminal_profile") toast(t("toast.resumeDshProfile"));
+    else if (code === "cwd_missing") toast(t("toast.resumeNoCwd", { path: s.project }));
+    else if (code === "unsupported_harness") toast(t("toast.resumeUnsupported"));
+    else toast(t("toast.resumeFailed", { msg: code.slice(0, 80) }));
+  }
+}
+
 function wireDetailActions(root, s) {
   root.querySelectorAll("[data-act]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const act = btn.getAttribute("data-act");
       if (act === "resume") {
+        await resumeSession(s);
+      } else if (act === "open-folder") {
         const path = s.path || s.project;
         const res = await invokeTauri("open_path", { path });
         if (res === true) toast(t("toast.openedExplorer"));

@@ -8,9 +8,10 @@
 
 - 阶段 0B：`npm run dev` 桌面窗口已跑通（2026-09-14），Claude Code 会话真扫 + 磁盘占用统计
 - 前端：`ui/`（`index.html` + `styles.css` + `app.js`，浏览器 mock / Tauri invoke 双模式）
-- 真实扫描：Claude Code、Kimi Code、DSH（DeepSeek）、Codex 均已接；MiMoCode 已移出范围
+- 真实扫描：Claude Code、Kimi Code、DSH（DeepSeek）、Codex、OpenCode 五家；另有通用适配器 `custom.rs`，读 `~/.orrery/harnesses.json` 登记的 OpenCode 系工具（只读、不支持删除与恢复）。**不要把未公开工具的目录名/表结构写进仓库**，那属于用户本地配置
 - 模型代理：`src-tauri/src/proxy/` 已能真实转发（OpenAI / Anthropic 两种 wire、SSE 透传、应用内启停），仅对假上游验证过，未与真实供应商联调
 - 解析索引：`~/.orrery/index.json` 落盘，冷启动 188 个会话 5.5s → 0.12s
+- 在终端恢复：`src-tauri/src/resume.rs`，五家各自的恢复命令见该文件头部表格；Windows 上找可执行文件必须 `.exe`/`.cmd` 优先于无扩展名（npm 的 bash shim 会假装启动成功）
 - 发版：打 `v*` tag → GitHub Actions 三平台出包（Windows msi/nsis、macOS universal dmg、Linux deb/rpm/AppImage）→ 进**草稿** release，人工确认再公开。改版本号要同时改 `package.json` / `tauri.conf.json` / `Cargo.toml` + `Cargo.lock`，再打 tag
 - macOS / Linux 的包只有 CI 验证过（clippy + 测试），没有人在真机上跑过应用，README 里如实标注了这点
 - token 口径：主 agent + 子 agent，按 API 调用去重求和（CC 按 message.id 保留最后一行；Kimi 每条 usage.record 即一次调用；DSH 只读 v3 日志；Codex 以 token_usage_record 为准、之前时段累加去重后的 token_count.last，输入要减缓存命中）。每接一个新 harness 都要用独立脚本逐会话对账后再宣布完成。字段对照写在 `src-tauri/src/adapters/mod.rs` 的 `TokenUsage` 注释里，改口径先改那张表

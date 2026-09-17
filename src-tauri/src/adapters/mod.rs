@@ -4,8 +4,10 @@ mod claude_code;
 pub mod cleanup;
 mod codex;
 mod dsh;
+mod custom;
 mod index;
 mod kimi_code;
+mod opencode;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -49,6 +51,10 @@ pub struct SessionSummary {
 /// | cache_read  | cache_read_input_tokens     | inputCacheRead     | cacheReadTokens       | cached_input_tokens                    |
 /// | output      | output_tokens               | output             | outputTokens（含推理）  | output_tokens（含 reasoning_output）     |
 /// | unsplit     | —                           | —                  | —                     | 旧版/导入会话只有 total_tokens、分项全 0     |
+///
+/// OpenCode（SQLite session 累计值）：input = tokens_input；cache_write =
+/// tokens_cache_write；cache_read = tokens_cache_read；output = tokens_output +
+/// tokens_reasoning（独立桶）；unsplit = 0。递归合并子 agent；calls 暂无可靠口径，保留 0。
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct TokenUsage {
     pub input: u64,
@@ -94,11 +100,13 @@ pub struct HarnessStorage {
 type Adapter = (&'static str, fn() -> Result<Vec<SessionSummary>, String>);
 
 pub fn list_all_sessions() -> Result<Vec<SessionSummary>, String> {
-    let adapters: [Adapter; 4] = [
+    let adapters: [Adapter; 6] = [
         ("cc", claude_code::list_sessions),
         ("kimi", kimi_code::list_sessions),
         ("dsh", dsh::list_sessions),
         ("codex", codex::list_sessions),
+        ("opencode", opencode::list_sessions),
+        ("custom", custom::list_sessions),
     ];
     let mut out = Vec::new();
     let mut timing = Vec::new();
@@ -132,7 +140,11 @@ pub fn storage_stats() -> Vec<HarnessStorage> {
         kimi_code::storage(),
         dsh::storage(),
         codex::storage(),
+        opencode::storage(),
     ]
+    .into_iter()
+    .chain(custom::storage())
+    .collect()
 }
 
 /// harness 目录不存在时的统一返回

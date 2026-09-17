@@ -8,6 +8,8 @@ src-tauri/*.log
 
 # Local config & secrets
 .orrery/
+# 本机 MCP 工具留下的锁文件，不属于项目
+.mcp-ssh.lock
 *.local.json
 
 # OS / editor

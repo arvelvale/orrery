@@ -8,7 +8,7 @@
 
 *An orrery is a clockwork model of the solar system: several bodies, each on its own orbit, all readable from one place.*
 
-Every Claude Code, Kimi Code, DSH (DeepSeek) and Codex session on your machine in one window: tokens, disk usage, projects, subagents. Delete what you no longer need, and route every harness through one local model proxy. Nothing leaves your computer.
+Every Claude Code, Kimi Code, DSH (DeepSeek), Codex and OpenCode session on your machine in one window: tokens, disk usage, projects, subagents. Delete what you no longer need (OpenCode is read-only), and route every harness through one local model proxy. Nothing leaves your computer.
 
 <p>
   <a href="https://github.com/arvelvale/orrery/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/arvelvale/orrery?style=flat-square&label=download&color=0F9D6E" /></a>
@@ -29,6 +29,7 @@ Every Claude Code, Kimi Code, DSH (DeepSeek) and Codex session on your machine i
   <img alt="Kimi Code" src="https://img.shields.io/badge/Kimi%20Code-connected-0F9D6E?style=flat-square" />
   <img alt="DSH" src="https://img.shields.io/badge/DSH%20(DeepSeek)-connected-0F9D6E?style=flat-square" />
   <img alt="Codex" src="https://img.shields.io/badge/Codex-connected-0F9D6E?style=flat-square" />
+  <img alt="OpenCode" src="https://img.shields.io/badge/OpenCode-connected-0F9D6E?style=flat-square" />
 </p>
 
 **English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
@@ -58,6 +59,8 @@ Orrery reads what the harnesses already write to disk and puts it all on one boa
 | Session hub: Kimi Code | ✅ | `~/.kimi-code/sessions`, both old and new `state.json` layouts |
 | Session hub: DSH (DeepSeek) | ✅ | `~/.dsh/sessions`, zstd-compressed event logs, v0 and v3 formats |
 | Session hub: Codex | ✅ | `~/.codex/sessions`, rollouts sharing an id are merged, guardian subagents folded in |
+| Session hub: OpenCode | ✅ | Read-only `opencode.db` under `$XDG_DATA_HOME/opencode` or `~/.local/share/opencode`; nested subagents folded in; requires session token-summary columns |
+| Session hub: your own OpenCode-style tool | ✅ | Register it in `~/.orrery/harnesses.json` and Orrery reads its SQLite the same way — handy for forks and private builds |
 | Accurate token accounting | ✅ | Deduplicated per API call, split into input / cache write / cache read / output |
 | Disk usage per session and per harness | ✅ | Status page shows totals and a per-harness breakdown |
 | Search by title, path and model | ✅ | |
@@ -65,7 +68,7 @@ Orrery reads what the harnesses already write to disk and puts it all on one boa
 | Instant cold start | ✅ | The parsed index is kept on disk, so a restart only re-reads files that changed (188 sessions: 5.5s → 0.12s) |
 | Delete sessions to free disk space | ✅ | Pick one or many, sort by size; Recycle Bin or permanent; each tool's own index is cleaned too |
 | Local model proxy (`127.0.0.1:8787`) | ✅ | Real forwarding, OpenAI and Anthropic shapes, streaming passthrough, start/stop from the app |
-| Resume in terminal | ⏳ | Currently opens the session folder |
+| Resume in terminal | ✅ | Opens a terminal in the session's folder and runs that harness's own resume command. DSH falls back to its web UI when only the `web` profile is installed; registered tools have no resume command |
 
 <img src=".github/assets/screenshot-status.en.png" alt="Orrery status page with storage breakdown" width="100%" />
 
@@ -79,6 +82,8 @@ Every harness records usage per API call, and none of them can simply be added u
 | **Kimi Code** | `usage.record` events in `agents/*/wire.jsonl` | `usageScope: "session"` records are separate context-compaction calls, not totals | Counts every record once |
 | **DSH** | `data.usage` on `assistant/message` events, inside multi-frame zstd logs | Upgraded sessions keep both a v0 and a v3 log of the same history | Reads only v3 when both exist |
 | **Codex** | `token_count` events, plus `token_usage_record` in newer versions | `total_token_usage` is per process and resets on resume; `input_tokens` already includes cached tokens; older `token_count` misses compaction calls | Sums deduplicated per-call usage, prefers `token_usage_record` where it exists, subtracts cached tokens from input |
+| **OpenCode** | SQLite `session.tokens_*` | Reasoning is a separate bucket; child sessions have their own totals | Adds reasoning to output and recursively folds children into their root session; API call count is unavailable |
+| **Registered tool** | `session.tokens_*` when present, otherwise the `tokens` object on each message | Older OpenCode forks have no token columns on the session | Detects which layout the database uses and sums accordingly; reasoning always folds into output |
 
 The session total adds up the main agent and every subagent. How it was checked:
 
@@ -87,6 +92,8 @@ The session total adds up the main agent and every subagent. How it was checked:
 - **Codex**: `token_count` and `token_usage_record` agree exactly in 8 of 12 files that have both; in the other 4 the difference is exactly the context-compaction calls.
 
 Old Codex alpha sessions only stored a total without a breakdown. Orrery shows that part as *unsplit* instead of guessing.
+
+OpenCode was checked per session against independent SQL and `opencode stats`: 53 records become 41 sessions plus 12 folded subagents. Input 108.4M, cache read 1853.0M and cache write 1.2M agree; output 4.7M includes 1.3M reasoning tokens. Session size measures UTF-8 payload bytes in message/part/event, not reclaimable SQLite file space. Windows desktop verified; macOS/Linux remain untested on hardware. Existing screenshots predate this adapter.
 
 Known limits: the ledger resets on `--resume`, so Orrery rebuilds totals from the transcript instead. The ledger also counts side calls that never reach the transcript, such as title generation, so Orrery's Claude Code totals can read about 1–5% lower.
 
@@ -213,6 +220,8 @@ Every session is just files on disk, so Orrery can remove the ones you no longer
 | Kimi Code | `sessions/<ws>/<id>/` | `session_index.jsonl`, `file-history/<ws>` |
 | DSH | `sessions/<ws>/<id>/`, its projection cache | `storages/workspace.json` |
 | Codex | the session's rollouts plus its subagent rollouts | Codex database (via `codex delete`), `session_index.jsonl` |
+| OpenCode | Not supported (read-only) | No changes |
+| Registered tool | Not supported (read-only) | No changes |
 
 > [!TIP]
 > Close the tool before deleting its sessions. A running Kimi Code or Codex may write the removed entries back into its index.
@@ -231,7 +240,7 @@ Every session is just files on disk, so Orrery can remove the ones you no longer
 - [x] Token and disk accounting
 - [x] Local model proxy with real forwarding
 - [x] Persistent index for instant cold start
-- [ ] Resume a session in its own CLI
+- [x] Resume a session in its own CLI
 - [ ] Tray, global shortcut, installer
 
 Design docs, in Chinese: [positioning](docs/00-项目定位.md) · [architecture](docs/01-架构与技术路线.md) · [roadmap](docs/02-MVP路线图.md)

@@ -139,6 +139,12 @@ fn plan(t: &Target, ctx: &Ctx) -> Plan {
         p.blocked = Some("invalid".into());
         return p;
     }
+    // OpenCode 与自定义登记的 harness 都在各自的 SQLite 里；适配器只读，不接删除入口。
+    // 在查找目录之前挡掉，避免未来的路径解析改动误删整个共享数据库。
+    if t.harness == "opencode" || super::custom::is_custom(&t.harness) {
+        p.blocked = Some("read_only".into());
+        return p;
+    }
     let Some(root) = harness_root(&t.harness) else {
         p.blocked = Some("not_found".into());
         return p;
@@ -651,6 +657,16 @@ fn backup_stamp() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn opencode_plan_is_read_only_without_resolving_files() {
+        let p = plan(&Target { harness: "opencode".into(), id: "ses_sandbox_only".into() },
+            &Ctx::with_running(HashSet::new()));
+        assert_eq!(p.blocked.as_deref(), Some("read_only"));
+        assert!(p.files.is_empty());
+        assert!(p.index_files.is_empty());
+        assert_eq!(p.bytes, 0);
+    }
 
     #[test]
     fn id_validation_rejects_paths() {

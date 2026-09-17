@@ -27,6 +27,8 @@ memchr = "2"
 zstd = "0.13"
 # 删除会话时移到系统回收站
 trash = "5"
+# OpenCode 把会话存在 SQLite 里；bundled 自带 sqlite 源码，不依赖系统库
+rusqlite = { version = "0.32", features = ["bundled"] }
 # 本地模型代理：axum 提供 HTTP 面，reqwest 转发上游（rustls，不依赖系统 OpenSSL）
 axum = { version = "0.8", default-features = false, features = ["http1", "json", "tokio"] }
 tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "time"] }

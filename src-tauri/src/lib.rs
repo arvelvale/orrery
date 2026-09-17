@@ -1,6 +1,7 @@
 mod adapters;
 // 集成测试要直接调代理的启停与状态
 pub mod proxy;
+mod resume;
 
 use adapters::{cleanup, HarnessStorage, SessionSummary};
 use proxy::ProxyStatus;
@@ -59,6 +60,12 @@ fn set_proxy_auto_start(enabled: bool) -> Result<(), String> {
     proxy::set_auto_start(enabled)
 }
 
+/// 在终端里恢复会话：起终端 → cd 到工作目录 → 跑该 harness 的恢复命令
+#[tauri::command(async)]
+fn resume_session(harness: String, id: String, project: String) -> Result<String, String> {
+    resume::resume(&harness, &id, &project)
+}
+
 #[tauri::command]
 fn open_path(path: String) -> Result<bool, String> {
     let p = Path::new(&path);
@@ -103,7 +110,8 @@ pub fn run() {
             set_proxy_auto_start,
             ping_proxy,
             save_route,
-            open_path
+            open_path,
+            resume_session
         ])
         .run(tauri::generate_context!())
         .expect("error while running Orrery");

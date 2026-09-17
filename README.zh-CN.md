@@ -8,7 +8,7 @@
 
 *Orrery 是太阳系仪：几颗天体装在同一台仪器里，各走各的轨道，你从一个位置看得见全部。*
 
-把本机所有 Claude Code、Kimi Code、DSH（DeepSeek）、Codex 会话收进一个窗口：token、磁盘占用、项目、子 agent 一眼看清。不要的会话可以直接删掉，各个 harness 还能统一走一个本地模型代理。数据不出本机。
+把本机所有 Claude Code、Kimi Code、DSH（DeepSeek）、Codex、OpenCode 会话收进一个窗口：token、磁盘占用、项目、子 agent 一眼看清。不要的会话可以直接删掉（OpenCode 暂为只读），各个 harness 还能统一走一个本地模型代理。数据不出本机。
 
 <p>
   <a href="https://github.com/arvelvale/orrery/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/arvelvale/orrery?style=flat-square&label=download&color=0F9D6E" /></a>
@@ -58,6 +58,8 @@ Orrery 只读取各工具本来就写在磁盘上的数据，汇总到一块面�
 | 会话中枢：Kimi Code | ✅ | `~/.kimi-code/sessions`，兼容新旧两版 `state.json` |
 | 会话中枢：DSH（DeepSeek） | ✅ | `~/.dsh/sessions`，zstd 压缩的事件日志，兼容 v0 / v3 格式 |
 | 会话中枢：Codex | ✅ | `~/.codex/sessions`，同 id 的多个 rollout 合并，guardian 子 agent 并入父会话 |
+| 会话中枢：OpenCode | ✅ | 只读 `$XDG_DATA_HOME/opencode` 或 `~/.local/share/opencode` 下的 `opencode.db`，递归合并子 agent；需要 session token 汇总字段 |
+| 会话中枢：自己登记的 OpenCode 系工具 | ✅ | 在 `~/.orrery/harnesses.json` 里登记，Orrery 用同一套方式只读它的 SQLite——分支版本和自用版本都能接 |
 | 准确的 token 统计 | ✅ | 按 API 调用去重，拆成输入 / 缓存写 / 缓存读 / 输出 |
 | 单会话与各 harness 的磁盘占用 | ✅ | 状态页显示总计与按 harness 的拆分 |
 | 按标题、路径、模型搜索 | ✅ | |
@@ -65,7 +67,7 @@ Orrery 只读取各工具本来就写在磁盘上的数据，汇总到一块面�
 | 冷启动秒开 | ✅ | 解析结果落盘成索引，重启后只重读变动过的文件（188 个会话：5.5s → 0.12s）|
 | 删除会话，腾出磁盘空间 | ✅ | 单条或多选，可按占用排序；回收站或永久删除；同时清理各工具自己的索引 |
 | 本地模型代理（`127.0.0.1:8787`） | ✅ | 真实转发，OpenAI 与 Anthropic 两种形状，流式透传，可在应用里启停 |
-| 在终端恢复会话 | ⏳ | 目前只打开会话目录 |
+| 在终端恢复会话 | ✅ | 在会话的工作目录起终端，执行该工具自己的恢复命令。DSH 只装了 web profile 时改为打开它的网页界面；自己登记的工具没有恢复命令 |
 
 <img src=".github/assets/screenshot-status.zh-CN.png" alt="Orrery 状态页与存储统计" width="100%" />
 
@@ -87,6 +89,8 @@ Orrery 只读取各工具本来就写在磁盘上的数据，汇总到一块面�
 - **Codex**：同时有两本账的 12 个文件里 8 个完全一致，另外 4 个的差额正好是上下文压缩调用。
 
 早期 Codex alpha 版本的会话只记了总数、没有分项，Orrery 把这部分单独显示为"未拆分"，不做猜测。
+
+OpenCode 使用 SQLite `session.tokens_*` 累计值，推理是独立的一桶，并入 output；子 agent 递归并入根会话，API 调用次数暂不展示。独立 SQL 逐会话对账及 `opencode stats` 核对通过：53 条记录合并为 41 条会话、12 个子 agent；input 108.4M、cache read 1853.0M、cache write 1.2M 一致，output 4.7M 包含推理 1.3M。会话体积是 message/part/event 的 UTF-8 内容字节数，不代表 SQLite 可回收空间。已验证 Windows 桌面，macOS/Linux 尚未真机验证；现有截图早于此次接入。
 
 已知限制：官方记账在 `--resume` 后会清零，所以 Orrery 改为从对话记录重新累加。官方记账还包含生成标题这类不写进对话记录的后台调用，所以 Orrery 算出的 Claude Code 总量可能少 1–5%。
 
@@ -213,6 +217,8 @@ set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 | Kimi Code | `sessions/<ws>/<id>/` | `session_index.jsonl`、`file-history/<ws>` |
 | DSH | `sessions/<ws>/<id>/` 及其投影缓存 | `storages/workspace.json` |
 | Codex | 该会话的 rollout 及其子 agent 的 rollout | Codex 数据库（经 `codex delete`）、`session_index.jsonl` |
+| OpenCode | 暂不支持（只读） | 不修改 |
+| 登记的工具 | 暂不支持（只读） | 不修改 |
 
 > [!TIP]
 > 删除某个工具的会话前，建议先关闭这个工具。运行中的 Kimi Code 或 Codex 可能会把删掉的条目重新写回索引。
@@ -231,7 +237,7 @@ set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 - [x] token 与磁盘占用统计
 - [x] 本地模型代理（真实转发）
 - [x] 持久化索引，冷启动秒开
-- [ ] 在对应 CLI 里恢复会话
+- [x] 在对应 CLI 里恢复会话
 - [ ] 托盘、全局快捷键、安装包
 
 设计文档：[项目定位](docs/00-项目定位.md) · [架构与技术路线](docs/01-架构与技术路线.md) · [MVP 路线图](docs/02-MVP路线图.md)

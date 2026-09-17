@@ -8,7 +8,7 @@
 
 *Orrery（オーラリー）は太陽系儀のこと。複数の天体がひとつの装置の中でそれぞれの軌道を回り、ひとところから全体を読み取れます。*
 
-手元の Claude Code・Kimi Code・DSH（DeepSeek）・Codex のセッションをひとつのウィンドウに集約します。トークン、ディスク使用量、プロジェクト、サブエージェントまで一目で把握でき、不要なセッションは削除でき、各ハーネスをひとつのローカルモデルプロキシ経由にまとめられます。データは PC の外に出ません。
+手元の Claude Code・Kimi Code・DSH（DeepSeek）・Codex・OpenCode のセッションをひとつのウィンドウに集約します。トークン、ディスク使用量、プロジェクト、サブエージェントまで一目で把握でき、不要なセッションは削除できます（OpenCode は読み取り専用）。各ハーネスをひとつのローカルモデルプロキシ経由にまとめられます。データは PC の外に出ません。
 
 <p>
   <a href="https://github.com/arvelvale/orrery/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/arvelvale/orrery?style=flat-square&label=download&color=0F9D6E" /></a>
@@ -58,6 +58,8 @@ Orrery は、各ツールがすでにディスクへ書き出しているデー�
 | セッションハブ：Kimi Code | ✅ | `~/.kimi-code/sessions`、新旧両方の `state.json` 形式に対応 |
 | セッションハブ：DSH（DeepSeek） | ✅ | `~/.dsh/sessions`、zstd 圧縮のイベントログ、v0 / v3 形式に対応 |
 | セッションハブ：Codex | ✅ | `~/.codex/sessions`、同じ id の rollout を統合、guardian サブエージェントは親セッションに統合 |
+| セッションハブ：OpenCode | ✅ | `$XDG_DATA_HOME/opencode` または `~/.local/share/opencode` の `opencode.db` を読み取り専用で参照。子孫エージェントを統合。session のトークン集計列が必要 |
+| セッションハブ：自分で登録したツール | ✅ | `~/.orrery/harnesses.json` に登録すると、同じ方式でその SQLite を読み取り専用で参照します |
 | 正確なトークン集計 | ✅ | API 呼び出し単位で重複排除し、入力 / キャッシュ書込 / キャッシュ読込 / 出力に分割 |
 | セッション別・ハーネス別のディスク使用量 | ✅ | ステータス画面に合計と内訳を表示 |
 | タイトル・パス・モデルで検索 | ✅ | |
@@ -65,7 +67,7 @@ Orrery は、各ツールがすでにディスクへ書き出しているデー�
 | 高速起動 | ✅ | 解析結果をディスク上のインデックスに保存し、再起動後は変更されたファイルだけ読み直します（188 セッションで 5.5 秒 → 0.12 秒）|
 | セッションを削除してディスクを空ける | ✅ | 1 件または複数選択、容量順に並べ替え可；ごみ箱または完全削除；各ツールのインデックスも整理 |
 | ローカルモデルプロキシ（`127.0.0.1:8787`） | ✅ | 実際に転送します。OpenAI / Anthropic 両形式、ストリーミング透過、アプリから起動・停止 |
-| ターミナルで再開 | ⏳ | 現状はセッションフォルダを開くだけ |
+| ターミナルで再開 | ✅ | セッションの作業ディレクトリでターミナルを開き、そのツール自身の再開コマンドを実行します。DSH は web プロファイルのみの場合は Web UI を開きます。登録したツールには再開コマンドがありません |
 
 <img src=".github/assets/screenshot-status.ja.png" alt="Orrery ステータス画面とストレージ内訳" width="100%" />
 
@@ -87,6 +89,8 @@ Orrery は、各ツールがすでにディスクへ書き出しているデー�
 - **Codex**：両方の記録を持つ 12 ファイル中 8 ファイルで完全一致。残り 4 ファイルの差はちょうどコンテキスト圧縮の呼び出し分。
 
 初期の Codex alpha 版のセッションは内訳のない合計値しか持たないため、推測せず「内訳なし」として表示します。
+
+OpenCode は SQLite の `session.tokens_*` 集計値を使用し、独立した推論トークンを output に加算します。子孫エージェントはルートに統合し、API 呼び出し回数は未取得のため表示しません。独立 SQL によるセッション単位の照合と `opencode stats` の確認済み：53 件を 41 セッションと 12 サブエージェントに統合。input 108.4M、cache read 1853.0M、cache write 1.2M が一致し、output 4.7M には推論 1.3M を含みます。サイズは message/part/event の UTF-8 データ量であり、SQLite から回収可能な容量ではありません。Windows デスクトップで検証済み、macOS/Linux の実機は未検証です。既存のスクリーンショットは今回の対応前のものです。
 
 既知の制限：公式記録は `--resume` でリセットされるため、Orrery は会話ログから合計を再構築しています。公式記録にはタイトル生成など会話ログに残らない副次的な呼び出しも含まれるため、Orrery の Claude Code 合計は 1〜5% ほど少なく出ることがあります。
 
@@ -213,6 +217,7 @@ set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 | Kimi Code | `sessions/<ws>/<id>/` | `session_index.jsonl`、`file-history/<ws>` |
 | DSH | `sessions/<ws>/<id>/` とその投影キャッシュ | `storages/workspace.json` |
 | Codex | セッションの rollout とそのサブエージェントの rollout | Codex データベース（`codex delete` 経由）、`session_index.jsonl` |
+| OpenCode | 未対応（読み取り専用） | 変更なし |
 
 > [!TIP]
 > セッションを削除する前に、そのツールを終了してください。実行中の Kimi Code や Codex が削除した項目をインデックスに書き戻す可能性があります。
@@ -231,7 +236,7 @@ set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 - [x] トークンとディスク使用量の集計
 - [x] 実際に転送するローカルモデルプロキシ
 - [x] 永続インデックスによる高速起動
-- [ ] 各 CLI でのセッション再開
+- [x] 各 CLI でのセッション再開
 - [ ] トレイ、グローバルショートカット、インストーラー
 
 設計ドキュメント（中国語）：[プロジェクト概要](docs/00-项目定位.md) · [アーキテクチャ](docs/01-架构与技术路线.md) · [ロードマップ](docs/02-MVP路线图.md)
