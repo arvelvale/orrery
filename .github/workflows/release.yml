@@ -25,12 +25,10 @@ jobs:
           - os: windows-latest
             label: Windows x64
             args: ""
+          # 通用二进制：一个 dmg 同时跑 Intel 和 Apple 芯片，也不用排 macos-13 的队
           - os: macos-latest
-            label: macOS (Apple silicon)
-            args: "--target aarch64-apple-darwin"
-          - os: macos-13
-            label: macOS (Intel)
-            args: "--target x86_64-apple-darwin"
+            label: macOS (universal)
+            args: "--target universal-apple-darwin"
           - os: ubuntu-22.04
             label: Linux x64
             args: ""
@@ -43,7 +41,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.os == 'macos-latest' && 'aarch64-apple-darwin' || matrix.os == 'macos-13' && 'x86_64-apple-darwin' || '' }}
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
