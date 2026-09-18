@@ -52,13 +52,12 @@ async fn health(State(state): State<Arc<AppState>>) -> Json<Value> {
 async fn models(State(state): State<Arc<AppState>>) -> Json<Value> {
     let cfg = state.config.read().unwrap();
     let data: Vec<Value> = cfg
-        .routes
-        .values()
-        .collect::<std::collections::BTreeSet<_>>()
-        .into_iter()
+        .models
+        .iter()
+        .filter(|m| !m.id.trim().is_empty())
         .map(|m| {
-            let owner = cfg.owner_of(m).unwrap_or("orrery").to_string();
-            json!({ "id": m, "object": "model", "owned_by": owner })
+            let owner = m.provider.clone();
+            json!({ "id": m.id, "object": "model", "owned_by": owner })
         })
         .collect();
     Json(json!({ "object": "list", "data": data }))
@@ -88,7 +87,7 @@ async fn forward(
 
     let harness = headers.get(HARNESS_HEADER).and_then(|v| v.to_str().ok()).map(str::to_owned);
     // 解析路由：读锁范围内拿到需要的值就放锁，不跨 await 持有
-    let (url, provider_name, key_env, model, overridden) = {
+    let (url, provider_name, key, model, overridden) = {
         let cfg = state.config.read().unwrap();
         let requested = body.get("model").and_then(Value::as_str).unwrap_or("").to_string();
         let routed = cfg.route_model(harness.as_deref()).map(str::to_owned);
@@ -101,23 +100,25 @@ async fn forward(
             drop(cfg);
             return state.metrics.fail(error_response(
                 StatusCode::SERVICE_UNAVAILABLE,
-                format!("no provider matches model {model}; add its prefix to a provider in proxy.json"),
+                format!("no provider for model {model}; register it in the Models page (or set a model_prefixes on a provider)"),
             ));
         };
         let url = format!("{}/{suffix}", provider.base_url.trim_end_matches('/'));
-        (url, name.to_string(), provider.api_key_env.clone(), model.clone(), routed.is_some_and(|r| r != requested))
+        let Some(key) = provider.resolve_key() else {
+            let hint = if provider.api_key_env.trim().is_empty() {
+                format!("{name}: set an API key in Orrery (Models → provider)")
+            } else {
+                format!("{name}: set API key in Orrery, or environment variable {}", provider.api_key_env)
+            };
+            drop(cfg);
+            return state.metrics.fail(error_response(StatusCode::SERVICE_UNAVAILABLE, hint));
+        };
+        (url, name.to_string(), key, model.clone(), routed.is_some_and(|r| r != requested))
     };
 
     if overridden {
         body["model"] = Value::String(model.clone());
     }
-
-    let Ok(key) = std::env::var(&key_env).map(|k| k.trim().to_string()).and_then(|k| if k.is_empty() { Err(std::env::VarError::NotPresent) } else { Ok(k) }) else {
-        return state.metrics.fail(error_response(
-            StatusCode::SERVICE_UNAVAILABLE,
-            format!("{provider_name}: environment variable {key_env} is not set on this machine"),
-        ));
-    };
 
     let mut req = state.client.post(&url).json(&body);
     req = match wire {

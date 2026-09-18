@@ -20,7 +20,7 @@
 
 1. UI 对齐 `DESIGN.md`；状态灯语义固定（绿 run / 蓝 idle / 琥珀 warn / 灰 off）。
 2. 浏览器预览可 mock；Tauri 路径必须走 `invoke`，失败要有可见提示。
-3. 密钥只走环境变量：配置里只存变量名，转发瞬间才 `std::env::var` 读，不落盘、不进日志、不回传界面。代理只听回环地址（非回环的 `listen` 拒绝启动）；调用方带来的鉴权头一律丢弃并按目标供应商重建；选供应商按模型前缀严格匹配，匹配不到报错，不许加兜底。
+3. **代理密钥（2026-09 产品决策）**：用户可在应用内填写 API Key，**明文**保存在 `~/.orrery/proxy.json`；仍可用环境变量名回退。解析顺序：`api_key` 非空优先，否则读 `api_key_env`。状态列表只显示「是否已设置 / 来源」，不展示密钥原文；编辑接口（`get_proxy_config`）仅本机 IPC。仓库与日志仍禁止提交真实密钥。模型/供应商由用户在 UI 登记，不再依赖硬编码列表。代理只听回环地址；调用方鉴权头一律丢弃并按目标供应商重建。
 4. 提交信息用英文（公开仓库便于国际化；历史已从中文改写为英文）。仓库：https://github.com/arvelvale/orrery（公开，MIT）；README 英文为默认，改 README 时三语（README.md / README.zh-CN.md / README.ja.md）同步。
 5. `docs/` 是设计文档正本（作者本机的笔记库以目录链接挂载到这里，路径不入库）。
 6. README 截图用 mock 数据（无头 Edge 截 `npm run preview?lang=<locale>` 页面，三语各一套 `screenshot-*.{en,zh-CN,ja}.png`），不要用真实会话截图——会暴露会话标题与项目路径。

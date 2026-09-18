@@ -190,7 +190,7 @@ Providers, routes and the listen address live in `~/.orrery/proxy.json`:
 {
   "listen": "127.0.0.1:8787",
   "auto_start": false,
-  "routes": { "cc": "claude-opus-5" },
+  "routes": { "cc": "claude-sonnet-4.6", "kimi": "kimi-k3" },
   "providers": {
     "anthropic": {
       "base_url": "https://api.anthropic.com/v1",

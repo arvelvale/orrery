@@ -557,6 +557,85 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   font-size: 13px;
   color: var(--ink-2);
 }
+.card p.howto {
+  margin-top: -4px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.edit-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.edit-item {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  padding: 10px 12px;
+}
+.edit-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.edit-item-head .name { font-weight: 650; flex: 1; min-width: 0; word-break: break-all; }
+.edit-item .meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-2);
+  word-break: break-all;
+}
+.pill.ok { color: var(--run); border-color: #A7E8C8; background: var(--run-soft); }
+.pill.none { color: var(--muted); }
+.pill.src-config { color: var(--nav); border-color: #A8CFF0; background: var(--nav-soft); }
+
+.edit-form {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.edit-form h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+}
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.field input, .field select {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.field input:focus-visible, .field select:focus-visible {
+  outline: 2px solid var(--nav);
+  outline-offset: 1px;
+}
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 720px) {
+  .field-row { grid-template-columns: 1fr; }
+}
+.key-row { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+.btn.danger {
+  border-color: #e0b4b4;
+  color: var(--fault);
+  background: var(--fault-soft);
+}
+.btn.small { height: 28px; padding: 0 10px; font-size: 12px; }
+
 
 .endpoint-row {
   display: flex;

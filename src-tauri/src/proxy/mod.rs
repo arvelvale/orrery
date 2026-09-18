@@ -1,14 +1,14 @@
-//! 本地模型代理：启停、状态、路由配置
+//! 本地模型代理：启停、状态、供应商/模型/路由配置
 //!
-//! 只允许监听回环地址；密钥只在转发瞬间从环境变量读取，不落盘、不回传界面。
+//! 只允许监听回环地址。API Key 可在应用内填写并明文存 `proxy.json`，
+//! 也可用环境变量名回退；状态列表只回报是否已设置，不回传密钥原文。
 
 pub mod config;
 mod server;
 mod state;
 
+use config::{Provider, ProxyConfig};
 pub use config::Wire;
-
-use config::Provider;
 use serde::Serialize;
 use server::AppState;
 use state::{LastRequest, Metrics};
@@ -28,21 +28,47 @@ fn slot() -> &'static Mutex<Option<Running>> {
     SLOT.get_or_init(|| Mutex::new(None))
 }
 
+/// 配置变更写盘后，同步进正在运行的代理内存
+fn push_config_to_running(cfg: ProxyConfig) {
+    if let Some(running) = slot().lock().unwrap().as_ref() {
+        *running.state.config.write().unwrap() = cfg;
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ProviderStatus {
     pub name: String,
     pub base_url: String,
     pub wire: Wire,
+    /// 环境变量名（可为空）；仅作展示
     pub key_env: String,
-    /// 只报告环境变量有没有值，不回传值本身
+    /// 密钥是否可用（配置里写了，或环境变量有值）
     pub key_present: bool,
+    /// config | env | none
+    pub key_source: &'static str,
+    pub model_prefixes: Vec<String>,
+}
+
+/// 编辑表单用：包含明文密钥（仅本地 IPC）
+#[derive(Debug, Clone, Serialize)]
+pub struct ProviderEdit {
+    pub name: String,
+    pub base_url: String,
+    pub wire: Wire,
+    pub api_key: String,
+    pub api_key_env: String,
+    pub model_prefixes: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ModelStatus {
+    pub id: String,
+    pub provider: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ProxyStatus {
-    /// 代理是否由本进程启动并在运行
     pub running: bool,
-    /// 端口上有监听（可能是本进程，也可能是别的程序占着）
     pub online: bool,
     pub endpoint: String,
     pub listen: String,
@@ -54,6 +80,7 @@ pub struct ProxyStatus {
     pub last_request: Option<LastRequest>,
     pub last_error: Option<String>,
     pub providers: Vec<ProviderStatus>,
+    pub models: Vec<ModelStatus>,
     pub routes: std::collections::BTreeMap<String, String>,
     pub config_path: String,
     pub message: String,
@@ -190,8 +217,16 @@ pub fn status() -> ProxyStatus {
             base_url: p.base_url.clone(),
             wire: p.wire,
             key_env: p.api_key_env.clone(),
-            key_present: std::env::var(&p.api_key_env).is_ok_and(|v| !v.trim().is_empty()),
+            key_present: p.key_present(),
+            key_source: p.key_source(),
+            model_prefixes: p.model_prefixes.clone(),
         })
+        .collect();
+
+    let models = cfg
+        .models
+        .iter()
+        .map(|m| ModelStatus { id: m.id.clone(), provider: m.provider.clone() })
         .collect();
 
     ProxyStatus {
@@ -207,6 +242,7 @@ pub fn status() -> ProxyStatus {
         last_request: metrics.as_ref().and_then(|m| m.last_request()),
         last_error: metrics.as_ref().and_then(|m| m.last_error()),
         providers,
+        models,
         routes: cfg.routes.clone(),
         config_path: config::config_path().map(|p| p.to_string_lossy().to_string()).unwrap_or_default(),
         message: if running {
@@ -224,18 +260,100 @@ pub fn ping() -> ProxyStatus {
     status()
 }
 
+/// 编辑表单：返回含密钥的配置（本地桌面 IPC；状态列表不走这条）
+pub fn config_for_edit() -> Result<ProxyConfig, String> {
+    Ok(config::load())
+}
+
+/// 保存供应商。`api_key` 为 Some 时覆盖（空字符串=清除）；None 表示不动密钥
+pub fn save_provider(
+    name: &str,
+    base_url: &str,
+    wire: Wire,
+    api_key: Option<&str>,
+    api_key_env: &str,
+    model_prefixes: &[String],
+) -> Result<(), String> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err("provider name is empty".into());
+    }
+    let base_url = base_url.trim().trim_end_matches('/').to_string();
+    if base_url.is_empty() {
+        return Err("base_url is empty".into());
+    }
+    if !base_url.starts_with("http://") && !base_url.starts_with("https://") {
+        return Err("base_url must start with http:// or https://".into());
+    }
+    let mut cfg = config::load();
+    let mut existing_key = cfg.providers.get(name).map(|p| p.api_key.clone()).unwrap_or_default();
+    if let Some(k) = api_key {
+        existing_key = k.to_string();
+    }
+    let prefixes: Vec<String> = model_prefixes
+        .iter()
+        .map(|s| s.trim().to_ascii_lowercase())
+        .filter(|s| !s.is_empty())
+        .collect();
+    cfg.providers.insert(
+        name.to_string(),
+        Provider {
+            base_url,
+            api_key: existing_key,
+            api_key_env: api_key_env.trim().to_string(),
+            wire,
+            model_prefixes: prefixes,
+        },
+    );
+    config::save(&cfg)?;
+    push_config_to_running(cfg);
+    Ok(())
+}
+
+pub fn remove_provider(name: &str) -> Result<(), String> {
+    let mut cfg = config::load();
+    if !cfg.providers.contains_key(name) {
+        return Err(format!("provider {name} does not exist"));
+    }
+    if cfg.models.iter().any(|m| m.provider == name) {
+        return Err(format!("provider {name} is still used by models; remove those models first"));
+    }
+    cfg.providers.remove(name);
+    config::save(&cfg)?;
+    push_config_to_running(cfg);
+    Ok(())
+}
+
+pub fn save_model(id: &str, provider: &str) -> Result<(), String> {
+    let mut cfg = config::load();
+    cfg.upsert_model(id, provider)?;
+    config::save(&cfg)?;
+    push_config_to_running(cfg);
+    Ok(())
+}
+
+pub fn remove_model(id: &str) -> Result<(), String> {
+    let mut cfg = config::load();
+    cfg.remove_model(id);
+    config::save(&cfg)?;
+    push_config_to_running(cfg);
+    Ok(())
+}
+
 /// 改某个 harness 的默认模型：写配置文件，并让正在运行的代理立刻生效
 pub fn save_route(harness: &str, model: &str) -> Result<(), String> {
     let mut cfg = config::load();
-    if model.trim().is_empty() {
+    let model = model.trim();
+    if model.is_empty() {
         cfg.routes.remove(harness);
+    } else if cfg.models.iter().all(|m| m.id != model) && !cfg.has_model(model) {
+        // 允许路由指向未登记模型（前缀仍可命中），但登记过的优先
+        cfg.routes.insert(harness.to_string(), model.to_string());
     } else {
         cfg.routes.insert(harness.to_string(), model.to_string());
     }
     config::save(&cfg)?;
-    if let Some(running) = slot().lock().unwrap().as_ref() {
-        *running.state.config.write().unwrap() = cfg;
-    }
+    push_config_to_running(cfg);
     Ok(())
 }
 

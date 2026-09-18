@@ -76,6 +76,7 @@
             <div class="card">
               <h2 data-i18n="models.endpointTitle"></h2>
               <p data-i18n="models.endpointDesc"></p>
+              <p data-i18n="models.howto" class="howto"></p>
               <div class="endpoint-row">
                 <span class="dot" id="proxy-dot"></span>
                 <code id="proxy-endpoint">http://127.0.0.1:8787/v1</code>
@@ -92,16 +93,19 @@
             <div class="card">
               <h2 data-i18n="proxy.providersTitle"></h2>
               <p data-i18n="proxy.providersDesc"></p>
-              <div class="pool" id="proxy-providers"></div>
+              <div class="edit-list" id="provider-list"></div>
+              <div class="edit-form" id="provider-form"></div>
+            </div>
+            <div class="card">
+              <h2 data-i18n="models.modelsTitle"></h2>
+              <p data-i18n="models.modelsDesc"></p>
+              <div class="edit-list" id="model-list"></div>
+              <div class="edit-form" id="model-form"></div>
             </div>
             <div class="card">
               <h2 data-i18n="models.routesTitle"></h2>
               <p data-i18n="models.routesDesc"></p>
               <div id="routes"></div>
-            </div>
-            <div class="card">
-              <h2 data-i18n="models.poolTitle"></h2>
-              <div class="pool" id="model-pool"></div>
             </div>
           </div>
         </section>

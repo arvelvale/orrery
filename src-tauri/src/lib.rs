@@ -35,6 +35,12 @@ fn get_proxy_status() -> ProxyStatus {
     proxy::status()
 }
 
+/// 编辑表单数据（含密钥明文，仅本机 IPC）
+#[tauri::command]
+fn get_proxy_config() -> Result<proxy::config::ProxyConfig, String> {
+    proxy::config_for_edit()
+}
+
 #[tauri::command]
 fn ping_proxy() -> ProxyStatus {
     proxy::ping()
@@ -43,6 +49,38 @@ fn ping_proxy() -> ProxyStatus {
 #[tauri::command]
 fn save_route(harness: String, model: String) -> Result<(), String> {
     proxy::save_route(&harness, &model)
+}
+
+#[tauri::command]
+fn save_provider(
+    name: String,
+    base_url: String,
+    wire: String,
+    api_key: Option<String>,
+    api_key_env: String,
+    model_prefixes: Vec<String>,
+) -> Result<(), String> {
+    let wire = match wire.as_str() {
+        "openai" => proxy::Wire::Openai,
+        "anthropic" => proxy::Wire::Anthropic,
+        other => return Err(format!("unknown wire {other}")),
+    };
+    proxy::save_provider(&name, &base_url, wire, api_key.as_deref(), &api_key_env, &model_prefixes)
+}
+
+#[tauri::command]
+fn remove_provider(name: String) -> Result<(), String> {
+    proxy::remove_provider(&name)
+}
+
+#[tauri::command]
+fn save_model(id: String, provider: String) -> Result<(), String> {
+    proxy::save_model(&id, &provider)
+}
+
+#[tauri::command]
+fn remove_model(id: String) -> Result<(), String> {
+    proxy::remove_model(&id)
 }
 
 #[tauri::command(async)]
@@ -105,11 +143,16 @@ pub fn run() {
             plan_delete,
             delete_sessions,
             get_proxy_status,
+            get_proxy_config,
             start_proxy,
             stop_proxy,
             set_proxy_auto_start,
             ping_proxy,
             save_route,
+            save_provider,
+            remove_provider,
+            save_model,
+            remove_model,
             open_path,
             resume_session
         ])
