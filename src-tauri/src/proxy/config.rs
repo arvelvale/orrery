@@ -260,13 +260,48 @@ pub fn load() -> ProxyConfig {
     cfg
 }
 
+/// 写配置。这个文件里可能有**明文 API Key**，所以：
+///
+/// - Unix 上权限收成 `0600`（只有本人可读写）。默认 umask 会给 `0644`，
+///   在多用户机器上等于把密钥给同机所有人看
+/// - 先写临时文件再 rename：进程中途被杀不会留下截断的配置，
+///   否则所有供应商和密钥会一起丢失
+///
+/// Windows 上用户主目录默认只对本人和管理员开放，不另做 ACL 处理
 pub fn save(cfg: &ProxyConfig) -> Result<(), String> {
     let path = config_path().ok_or("cannot resolve ~/.orrery")?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     let json = serde_json::to_string_pretty(cfg).map_err(|e| e.to_string())?;
-    std::fs::write(&path, json).map_err(|e| e.to_string())
+    let tmp = path.with_extension("json.tmp");
+    // 上次崩溃可能留下旧的临时文件；mode(0o600) 只在新建时生效，所以先删
+    let _ = std::fs::remove_file(&tmp);
+    write_private(&tmp, json.as_bytes()).map_err(|e| e.to_string())?;
+    std::fs::rename(&tmp, &path).map_err(|e| e.to_string())
+}
+
+#[cfg(unix)]
+fn write_private(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    use std::os::unix::fs::OpenOptionsExt;
+    // 创建时就带 0600，避免先以 0644 落盘、再 chmod 之间的窗口
+    let mut f = std::fs::OpenOptions::new()
+        .write(true)
+        .create(true)
+        .truncate(true)
+        .mode(0o600)
+        .open(path)?;
+    f.write_all(bytes)?;
+    f.sync_all()
+}
+
+#[cfg(not(unix))]
+fn write_private(path: &std::path::Path, bytes: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    let mut f = std::fs::File::create(path)?;
+    f.write_all(bytes)?;
+    f.sync_all()
 }
 
 pub fn ensure_exists() {
@@ -333,5 +368,23 @@ mod tests {
         cfg.remove_model("claude-sonnet-4.6");
         assert!(!cfg.has_model("claude-sonnet-4.6"));
         assert!(!cfg.routes.contains_key("cc"));
+    }
+
+    /// 配置里可能有明文密钥，Unix 上必须只有本人可读（CI 的 Linux/macOS 会跑这条）
+    #[cfg(unix)]
+    #[test]
+    fn config_file_is_private_on_unix() {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("orrery-perm-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("proxy.json");
+        // 模拟上次崩溃留下的、权限过宽的旧文件
+        std::fs::write(&file, b"old").unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let _ = std::fs::remove_file(&file);
+        write_private(&file, b"{\"api_key\":\"sk-test\"}").unwrap();
+        let mode = std::fs::metadata(&file).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o600, "含密钥的配置文件权限是 {mode:o}，应为 600");
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

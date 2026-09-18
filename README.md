@@ -173,7 +173,7 @@ Point a harness at `http://127.0.0.1:8787/v1` and Orrery forwards its requests u
 | Model routing | Send `x-orrery-harness: <id>` and the proxy rewrites `model` to whatever that harness is set to on the Models page. Without the header your requested model is kept. |
 | Provider choice | By model prefix (`claude*` → anthropic, `kimi*` → moonshot …). No match is an explicit error, never a silent fallback to some other provider. |
 | Streaming | SSE is passed through chunk by chunk, not buffered. |
-| Keys | Read from environment variables at request time. Orrery never stores, logs or displays them; the config only holds variable **names**. |
+| Keys | Two options per provider. **Environment variable** (recommended): the config stores only the variable name and the key is read at request time. **Typed into the app**: saved in **plain text** in `~/.orrery/proxy.json` (owner-only `0600` on macOS/Linux). Keys are never logged, and the status list shows only whether a key is set. |
 | Binding | Loopback only. A non-loopback `listen` value is refused. |
 
 ```bash
@@ -229,7 +229,7 @@ Every session is just files on disk, so Orrery can remove the ones you no longer
 ## Privacy
 
 - Orrery only writes to harness folders when you delete sessions, as described above.
-- Its own files live in `~/.orrery/`: your route config, index backups, and `index.json` — the parsed session list (titles, paths, token counts) that makes restarts instant. Delete it anytime; it is rebuilt on the next scan.
+- Its own files live in `~/.orrery/`: your route config (**including any API key you typed into the app, in plain text**), index backups, and `index.json` — the parsed session list (titles, paths, token counts) that makes restarts instant. Delete it anytime; it is rebuilt on the next scan.
 - No network calls and no telemetry. The proxy listens on `127.0.0.1` only.
 - Fields that may contain pasted secrets (for example Kimi's `lastPrompt`) are never read.
 
