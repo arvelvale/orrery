@@ -332,6 +332,6 @@ mod tests {
         cfg.routes.insert("cc".into(), "claude-sonnet-4.6".into());
         cfg.remove_model("claude-sonnet-4.6");
         assert!(!cfg.has_model("claude-sonnet-4.6"));
-        assert!(cfg.routes.get("cc").is_none());
+        assert!(!cfg.routes.contains_key("cc"));
     }
 }
