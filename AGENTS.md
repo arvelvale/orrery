@@ -8,7 +8,7 @@
 
 - 阶段 0B：`npm run dev` 桌面窗口已跑通（2026-09-14），Claude Code 会话真扫 + 磁盘占用统计
 - 前端：`ui/`（`index.html` + `styles.css` + `app.js`，浏览器 mock / Tauri invoke 双模式）
-- 真实扫描：Claude Code、Kimi Code、DSH（DeepSeek）、Codex、OpenCode 五家；另有通用适配器 `custom.rs`，读 `~/.orrery/harnesses.json` 登记的 OpenCode 系工具（只读、不支持删除与恢复）。**不要把未公开工具的目录名/表结构写进仓库**，那属于用户本地配置
+- 真实扫描：Claude Code、Kimi Code、DSH（DeepSeek）、Codex、OpenCode、Z Code 六家（Z Code（`zcode.rs`，只读，用量以 `model_usage` 为准、逐行按 `computed_total_tokens` 判断缓存是否已含在 input 里）；另有通用适配器 `custom.rs`，读 `~/.orrery/harnesses.json` 登记的 OpenCode 系工具（只读、不支持删除与恢复）。**不要把未公开工具的目录名/表结构写进仓库**，那属于用户本地配置
 - 模型代理：`src-tauri/src/proxy/` 已能真实转发（OpenAI / Anthropic 两种 wire、SSE 透传、应用内启停）；**真实供应商联调已通过（作者本机，2026-09）**
 - 解析索引：`~/.orrery/index.json` 落盘，冷启动 188 个会话 5.5s → 0.12s
 - 在终端恢复：`src-tauri/src/resume.rs`，五家各自的恢复命令见该文件头部表格；Windows 上找可执行文件必须 `.exe`/`.cmd` 优先于无扩展名（npm 的 bash shim 会假装启动成功）

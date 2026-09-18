@@ -8,7 +8,7 @@
 
 *An orrery is a clockwork model of the solar system: several bodies, each on its own orbit, all readable from one place.*
 
-Every Claude Code, Kimi Code, DSH (DeepSeek), Codex and OpenCode session on your machine in one window: tokens, disk usage, projects, subagents. Delete what you no longer need (OpenCode is read-only), and route every harness through one local model proxy. Nothing leaves your computer.
+Every Claude Code, Kimi Code, DSH (DeepSeek), Codex, OpenCode and Z Code session on your machine in one window: tokens, disk usage, projects, subagents. Delete what you no longer need (OpenCode and Z Code are read-only), and route every harness through one local model proxy. Nothing leaves your computer.
 
 <p>
   <a href="https://github.com/arvelvale/orrery/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/arvelvale/orrery?style=flat-square&label=download&color=0F9D6E" /></a>
@@ -30,6 +30,7 @@ Every Claude Code, Kimi Code, DSH (DeepSeek), Codex and OpenCode session on your
   <img alt="DSH" src="https://img.shields.io/badge/DSH%20(DeepSeek)-connected-0F9D6E?style=flat-square" />
   <img alt="Codex" src="https://img.shields.io/badge/Codex-connected-0F9D6E?style=flat-square" />
   <img alt="OpenCode" src="https://img.shields.io/badge/OpenCode-connected-0F9D6E?style=flat-square" />
+  <img alt="Z Code" src="https://img.shields.io/badge/Z%20Code-connected-0F9D6E?style=flat-square" />
 </p>
 
 **English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
@@ -60,6 +61,7 @@ Orrery reads what the harnesses already write to disk and puts it all on one boa
 | Session hub: DSH (DeepSeek) | ✅ | `~/.dsh/sessions`, zstd-compressed event logs, v0 and v3 formats |
 | Session hub: Codex | ✅ | `~/.codex/sessions`, rollouts sharing an id are merged, guardian subagents folded in |
 | Session hub: OpenCode | ✅ | Read-only `opencode.db` under `$XDG_DATA_HOME/opencode` or `~/.local/share/opencode`; nested subagents folded in; requires session token-summary columns |
+| Session hub: Z Code | ✅ | Read-only `~/.zcode/cli/db/db.sqlite`; size includes each session's model I/O log, artifacts and image cache, which are most of its disk footprint |
 | Session hub: your own OpenCode-style tool | ✅ | Register it in `~/.orrery/harnesses.json` and Orrery reads its SQLite the same way — handy for forks and private builds |
 | Accurate token accounting | ✅ | Deduplicated per API call, split into input / cache write / cache read / output |
 | Disk usage per session and per harness | ✅ | Status page shows totals and a per-harness breakdown |
@@ -83,6 +85,7 @@ Every harness records usage per API call, and none of them can simply be added u
 | **DSH** | `data.usage` on `assistant/message` events, inside multi-frame zstd logs | Upgraded sessions keep both a v0 and a v3 log of the same history | Reads only v3 when both exist |
 | **Codex** | `token_count` events, plus `token_usage_record` in newer versions | `total_token_usage` is per process and resets on resume; `input_tokens` already includes cached tokens; older `token_count` misses compaction calls | Sums deduplicated per-call usage, prefers `token_usage_record` where it exists, subtracts cached tokens from input |
 | **OpenCode** | SQLite `session.tokens_*` | Reasoning is a separate bucket; child sessions have their own totals | Adds reasoning to output and recursively folds children into their root session; API call count is unavailable |
+| **Z Code** | `model_usage`, one row per API call | `input_tokens` already contains cache reads, and `turn_usage` leaves out side calls such as title generation | Sums every call in `model_usage`, and uses each row's `computed_total_tokens` to decide whether caches and reasoning are inside input/output, so the buckets always add up to the provider's total |
 | **Registered tool** | `session.tokens_*` when present, otherwise the `tokens` object on each message | Older OpenCode forks have no token columns on the session | Detects which layout the database uses and sums accordingly; reasoning always folds into output |
 
 The session total adds up the main agent and every subagent. How it was checked:
@@ -221,6 +224,7 @@ Every session is just files on disk, so Orrery can remove the ones you no longer
 | DSH | `sessions/<ws>/<id>/`, its projection cache | `storages/workspace.json` |
 | Codex | the session's rollouts plus its subagent rollouts | Codex database (via `codex delete`), `session_index.jsonl` |
 | OpenCode | Not supported (read-only) | No changes |
+| Z Code | Not supported (read-only) | No changes |
 | Registered tool | Not supported (read-only) | No changes |
 
 > [!TIP]

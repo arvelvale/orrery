@@ -141,7 +141,7 @@ fn plan(t: &Target, ctx: &Ctx) -> Plan {
     }
     // OpenCode 与自定义登记的 harness 都在各自的 SQLite 里；适配器只读，不接删除入口。
     // 在查找目录之前挡掉，避免未来的路径解析改动误删整个共享数据库。
-    if t.harness == "opencode" || super::custom::is_custom(&t.harness) {
+    if t.harness == "opencode" || t.harness == "zcode" || super::custom::is_custom(&t.harness) {
         p.blocked = Some("read_only".into());
         return p;
     }

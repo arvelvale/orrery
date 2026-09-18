@@ -12,6 +12,7 @@ const HARNESS = {
   dsh:  { id: "dsh",  label: "DSH",  name: "DSH",         badge: "dsh" },
   codex: { id: "codex", label: "CODEX", name: "Codex",     badge: "codex" },
   opencode: { id: "opencode", label: "OPENCODE", name: "OpenCode", badge: "opencode" },
+  zcode: { id: "zcode", label: "ZCODE", name: "Z Code", badge: "zcode" },
 };
 
 const HARNESS_IDS = Object.keys(HARNESS);
@@ -220,6 +221,31 @@ const SEED_SESSIONS = [
     log: [
       ["ok", "found 312 duplicate rows"],
       ["", "waiting on the dedupe key decision"],
+    ],
+  },
+  {
+    id: "sess_5be02c71",
+    harness: "zcode",
+    title: {
+      en: "trail-map · Cluster markers at low zoom",
+      "zh-CN": "trail-map · 缩小时合并地图标记",
+      ja: "trail-map · 縮小時にマーカーをまとめる",
+    },
+    excerpt: {
+      en: "4,000 markers freeze the tab below zoom 9; cluster on the server side instead.",
+      "zh-CN": "缩放到 9 级以下时 4000 个标记会卡死页面，改成服务端聚合。",
+      ja: "ズーム 9 未満で 4,000 個のマーカーがタブを固める。サーバー側でまとめる。",
+    },
+    project: "~/code/trail-map",
+    model: "glm-5.3-flash",
+    status: "idle",
+    ago: 5 * 60 * MIN,
+    usage: { input: 5200, cache_write: 0, cache_read: 96400, output: 3100, calls: 31 },
+    sizeBytes: 12_582_912,
+    subagents: 0,
+    log: [
+      ["ok", "supercluster wired to /tiles"],
+      ["", "benchmarking zoom 6–9"],
     ],
   },
 ];

@@ -8,6 +8,7 @@ mod custom;
 mod index;
 mod kimi_code;
 mod opencode;
+mod zcode;
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -100,12 +101,13 @@ pub struct HarnessStorage {
 type Adapter = (&'static str, fn() -> Result<Vec<SessionSummary>, String>);
 
 pub fn list_all_sessions() -> Result<Vec<SessionSummary>, String> {
-    let adapters: [Adapter; 6] = [
+    let adapters: [Adapter; 7] = [
         ("cc", claude_code::list_sessions),
         ("kimi", kimi_code::list_sessions),
         ("dsh", dsh::list_sessions),
         ("codex", codex::list_sessions),
         ("opencode", opencode::list_sessions),
+        ("zcode", zcode::list_sessions),
         ("custom", custom::list_sessions),
     ];
     let mut out = Vec::new();
@@ -141,6 +143,7 @@ pub fn storage_stats() -> Vec<HarnessStorage> {
         dsh::storage(),
         codex::storage(),
         opencode::storage(),
+        zcode::storage(),
     ]
     .into_iter()
     .chain(custom::storage())

@@ -440,6 +440,7 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 .badge.dsh { color: #C2410C; border-color: #FDBA74; background: #FFF7ED; }
 .badge.codex { color: #374151; border-color: #D1D5DB; background: #F3F4F6; }
 .badge.opencode { color: #0F766E; border-color: #99F6E4; background: #F0FDFA; }
+.badge.zcode { color: #1D4ED8; border-color: #BFDBFE; background: #EFF6FF; }
 .badge.custom { color: #B45309; border-color: #FCD34D; background: #FFFBEB; }
 
 .strip-title {

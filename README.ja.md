@@ -8,7 +8,7 @@
 
 *Orrery（オーラリー）は太陽系儀のこと。複数の天体がひとつの装置の中でそれぞれの軌道を回り、ひとところから全体を読み取れます。*
 
-手元の Claude Code・Kimi Code・DSH（DeepSeek）・Codex・OpenCode のセッションをひとつのウィンドウに集約します。トークン、ディスク使用量、プロジェクト、サブエージェントまで一目で把握でき、不要なセッションは削除できます（OpenCode は読み取り専用）。各ハーネスをひとつのローカルモデルプロキシ経由にまとめられます。データは PC の外に出ません。
+手元の Claude Code・Kimi Code・DSH（DeepSeek）・Codex・OpenCode・Z Code のセッションをひとつのウィンドウに集約します。トークン、ディスク使用量、プロジェクト、サブエージェントまで一目で把握でき、不要なセッションは削除できます（OpenCode は読み取り専用）。各ハーネスをひとつのローカルモデルプロキシ経由にまとめられます。データは PC の外に出ません。
 
 <p>
   <a href="https://github.com/arvelvale/orrery/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/arvelvale/orrery?style=flat-square&label=download&color=0F9D6E" /></a>
@@ -59,6 +59,7 @@ Orrery は、各ツールがすでにディスクへ書き出しているデー�
 | セッションハブ：DSH（DeepSeek） | ✅ | `~/.dsh/sessions`、zstd 圧縮のイベントログ、v0 / v3 形式に対応 |
 | セッションハブ：Codex | ✅ | `~/.codex/sessions`、同じ id の rollout を統合、guardian サブエージェントは親セッションに統合 |
 | セッションハブ：OpenCode | ✅ | `$XDG_DATA_HOME/opencode` または `~/.local/share/opencode` の `opencode.db` を読み取り専用で参照。子孫エージェントを統合。session のトークン集計列が必要 |
+| セッションハブ：Z Code | ✅ | `~/.zcode/cli/db/db.sqlite` を読み取り専用で参照。サイズには各セッションのモデル I/O ログ・成果物・画像キャッシュを含みます（ディスク使用量の大半はこちら） |
 | セッションハブ：自分で登録したツール | ✅ | `~/.orrery/harnesses.json` に登録すると、同じ方式でその SQLite を読み取り専用で参照します |
 | 正確なトークン集計 | ✅ | API 呼び出し単位で重複排除し、入力 / キャッシュ書込 / キャッシュ読込 / 出力に分割 |
 | セッション別・ハーネス別のディスク使用量 | ✅ | ステータス画面に合計と内訳を表示 |
@@ -218,6 +219,7 @@ set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 | DSH | `sessions/<ws>/<id>/` とその投影キャッシュ | `storages/workspace.json` |
 | Codex | セッションの rollout とそのサブエージェントの rollout | Codex データベース（`codex delete` 経由）、`session_index.jsonl` |
 | OpenCode | 未対応（読み取り専用） | 変更なし |
+| Z Code | 未対応（読み取り専用） | 変更なし |
 
 > [!TIP]
 > セッションを削除する前に、そのツールを終了してください。実行中の Kimi Code や Codex が削除した項目をインデックスに書き戻す可能性があります。
