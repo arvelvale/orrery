@@ -1,5 +1,6 @@
 //! Harness adapters: discover local agent sessions.
 
+mod antigravity;
 mod claude_code;
 pub mod cleanup;
 mod codex;
@@ -101,13 +102,14 @@ pub struct HarnessStorage {
 type Adapter = (&'static str, fn() -> Result<Vec<SessionSummary>, String>);
 
 pub fn list_all_sessions() -> Result<Vec<SessionSummary>, String> {
-    let adapters: [Adapter; 7] = [
+    let adapters: [Adapter; 8] = [
         ("cc", claude_code::list_sessions),
         ("kimi", kimi_code::list_sessions),
         ("dsh", dsh::list_sessions),
         ("codex", codex::list_sessions),
         ("opencode", opencode::list_sessions),
         ("zcode", zcode::list_sessions),
+        ("antigravity", antigravity::list_sessions),
         ("custom", custom::list_sessions),
     ];
     let mut out = Vec::new();
@@ -144,6 +146,7 @@ pub fn storage_stats() -> Vec<HarnessStorage> {
         codex::storage(),
         opencode::storage(),
         zcode::storage(),
+        antigravity::storage(),
     ]
     .into_iter()
     .chain(custom::storage())

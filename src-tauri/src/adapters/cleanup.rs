@@ -12,6 +12,17 @@
 //!    - 不会删 guardian 子 agent → 逐个子 agent 再调用
 //!    - rollout 已先移到回收站时仍能清掉数据库记录 → 回收站模式可行
 //!    - id 不在数据库里时报错 → 退回自行删除文件与 session_index 行
+//! 5. OpenCode 的会话只在它自己的 SQLite 里，同样只经官方 CLI 删除（1.18.31 沙盒实测，
+//!    用真实库的副本）：
+//!    - `opencode session delete <id>` 会连同子 agent 一起删（父子行、message、part 全清）
+//!    - `opencode export <id>` 只导出这一条，**不含**子 agent → 回收站模式逐条导出
+//!    - `opencode import <file>` 能还原：父子 2 条、261 条消息、1195 个 part 的 `data` 解析后
+//!      全部相等（只是 JSON 键顺序被重排），会话行逐字段相等；但项目与 `directory` 取自
+//!      **运行 import 时的工作目录** → 恢复说明里先 cd
+//!    - 库是 `auto_vacuum=0`，删掉的行变成空闲页留给 OpenCode 复用，文件不会立即变小
+//!
+//!    所以"回收站"对 OpenCode 的含义是：导出 JSON 到 `~/.orrery/exports/` 再删，旁边写一份
+//!    RESTORE.txt 给出按顺序执行的恢复命令
 //!
 //! 各 harness 牵涉的数据（均为本机实测）：
 //! | harness | 文件 | 索引 |
@@ -20,8 +31,9 @@
 //! | kimi  | `sessions/<ws>/<id>/` | `session_index.jsonl` 行、`file-history/<ws>` 的 `sessions[]` |
 //! | dsh   | `sessions/<ws>/<id>/`、`storages/session_projcache/sessions/<id>.json` | `storages/workspace.json` 的 `sessionIds` / `archivedSessionIds` |
 //! | codex | 该 id 的所有 rollout + 以它为父的子 agent rollout | sqlite（经 `codex delete`）、`session_index.jsonl` 行（兜底） |
+//! | opencode | 无（全在 `opencode.db`） | 经 `opencode session delete` |
 
-use super::{claude_home, codex, codex_home, data_dir, dir_size, dsh_home, forget_memo, kimi_home, system_time_ms};
+use super::{claude_home, codex, codex_home, data_dir, dir_size, dsh_home, forget_memo, kimi_home, opencode, system_time_ms};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
@@ -54,7 +66,12 @@ pub struct Plan {
     pub index_files: Vec<String>,
     /// Codex：需要经 `codex delete` 清理数据库的 thread id（父 + 子 agent）
     pub codex_threads: Vec<String>,
-    /// 非空 = 不允许删除，值为原因代码：not_found / active / running / invalid
+    /// OpenCode：要经 CLI 处理的会话 id，根会话在前、子 agent 按层级在后（导入也按这个顺序）
+    pub cli_sessions: Vec<String>,
+    /// OpenCode：会话记录的工作目录，恢复时要在这里运行 `opencode import`
+    #[serde(skip)]
+    pub directory: String,
+    /// 非空 = 不允许删除，值为原因代码：not_found / active / running / invalid / read_only / cli_missing
     pub blocked: Option<String>,
     /// 不阻止删除的提醒代码：harness_running / codex_cli_missing
     pub warnings: Vec<String>,
@@ -73,6 +90,8 @@ pub struct Outcome {
     pub codex_cli: Option<String>,
     pub error: Option<String>,
     pub backup_dir: Option<String>,
+    /// OpenCode 回收站模式：导出的 JSON 与 RESTORE.txt 所在目录
+    pub export_dir: Option<String>,
 }
 
 /* ── 入口 ── */
@@ -139,9 +158,13 @@ fn plan(t: &Target, ctx: &Ctx) -> Plan {
         p.blocked = Some("invalid".into());
         return p;
     }
-    // OpenCode 与自定义登记的 harness 都在各自的 SQLite 里；适配器只读，不接删除入口。
+    // OpenCode 不碰任何文件，整条走官方 CLI
+    if t.harness == "opencode" {
+        return plan_opencode(p, ctx);
+    }
+    // Z Code 与自定义登记的 harness 在各自的 SQLite 里，也没有可用的删除命令。
     // 在查找目录之前挡掉，避免未来的路径解析改动误删整个共享数据库。
-    if t.harness == "opencode" || t.harness == "zcode" || super::custom::is_custom(&t.harness) {
+    if t.harness == "zcode" || t.harness == "antigravity" || super::custom::is_custom(&t.harness) {
         p.blocked = Some("read_only".into());
         return p;
     }
@@ -309,6 +332,197 @@ fn codex_targets(root: &Path, id: &str, ctx: &Ctx) -> Targets {
     (files, index, threads)
 }
 
+/* ── OpenCode ── */
+
+/// 只读查库：会话在不在、子 agent 有哪些、多大、最近什么时候写过
+fn plan_opencode(mut p: Plan, ctx: &Ctx) -> Plan {
+    let Some(db) = opencode::opencode_home().map(|h| h.join(opencode::DB)).filter(|d| d.is_file()) else {
+        p.blocked = Some("not_found".into());
+        return p;
+    };
+    let Some(con) = opencode::open(&db) else {
+        p.blocked = Some("not_found".into());
+        return p;
+    };
+    let Ok(sessions) = opencode_tree(&con, &p.id) else {
+        p.blocked = Some("not_found".into());
+        return p;
+    };
+    if sessions.is_empty() {
+        p.blocked = Some("not_found".into());
+        return p;
+    }
+    p.directory = sessions[0].2.clone();
+    p.bytes = sessions.iter().map(|(id, updated, _)| opencode::cached_size(&con, id, *updated)).sum();
+    let last_write = sessions.iter().map(|(_, updated, _)| *updated).max().unwrap_or(0);
+    p.cli_sessions = sessions.into_iter().map(|(id, _, _)| id).collect();
+
+    let now = system_time_ms(SystemTime::now());
+    if now.saturating_sub(last_write) < ACTIVE_WINDOW_MS {
+        p.blocked = Some("active".into());
+    } else if opencode_bin().is_none() {
+        // 没有 CLI 就没有安全的删法——不退回去自己写库
+        p.blocked = Some("cli_missing".into());
+    }
+    if ctx.running.contains("opencode") {
+        p.warnings.push("harness_running".into());
+    }
+    p
+}
+
+/// 根会话及其所有后代：(id, time_updated, directory)，父在前子在后
+fn opencode_tree(con: &rusqlite::Connection, root: &str) -> Result<Vec<(String, u64, String)>, String> {
+    let mut stmt = con
+        .prepare("SELECT id, parent_id, COALESCE(time_updated, time_created, 0), COALESCE(directory,'') FROM session")
+        .map_err(|e| e.to_string())?;
+    let rows: Vec<(String, Option<String>, u64, String)> = stmt
+        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get::<_, i64>(2)?.max(0) as u64, r.get(3)?)))
+        .map_err(|e| e.to_string())?
+        .collect::<Result<_, _>>()
+        .map_err(|e| e.to_string())?;
+    let Some(first) = rows.iter().find(|r| r.0 == root) else { return Ok(vec![]) };
+    let mut out = vec![(first.0.clone(), first.2, first.3.clone())];
+    // 逐层展开；`out` 既是结果也是队列，出现过的 id 不再加入，防 parent_id 成环
+    let mut i = 0;
+    while i < out.len() {
+        let parent = out[i].0.clone();
+        for r in rows.iter().filter(|r| r.1.as_deref() == Some(parent.as_str())) {
+            if !out.iter().any(|o| o.0 == r.0) {
+                out.push((r.0.clone(), r.2, r.3.clone()));
+            }
+        }
+        i += 1;
+    }
+    Ok(out)
+}
+
+/// 找 opencode 原生可执行文件：`ORRERY_OPENCODE_BIN` → PATH 里的 opencode →
+/// npm 全局包里的二进制（Windows 上 PATH 里只有 `opencode.cmd` 壳，与 codex 同理）
+fn opencode_bin() -> Option<PathBuf> {
+    if let Some(p) = std::env::var_os("ORRERY_OPENCODE_BIN").map(PathBuf::from).filter(|p| p.is_file()) {
+        return Some(p);
+    }
+    let exe_name = if cfg!(windows) { "opencode.exe" } else { "opencode" };
+    let path = std::env::var_os("PATH")?;
+    for dir in std::env::split_paths(&path) {
+        let exe = dir.join(exe_name);
+        if exe.is_file() {
+            return Some(exe);
+        }
+        if cfg!(windows) && dir.join("opencode.cmd").is_file() {
+            let vendor = dir.join("node_modules/opencode-ai/bin/opencode.exe");
+            if vendor.is_file() {
+                return Some(vendor);
+            }
+        }
+    }
+    None
+}
+
+/// 调 opencode CLI。`XDG_DATA_HOME` 指向我们规划时读的那个库的上级目录，保证两边是同一个库；
+/// `--pure` 不加载第三方插件
+fn opencode_cmd(bin: &Path, home: &Path, args: &[&str]) -> std::process::Command {
+    let mut cmd = std::process::Command::new(bin);
+    cmd.args(args).arg("--pure").stdin(std::process::Stdio::null());
+    if let Some(data) = home.parent() {
+        cmd.env("XDG_DATA_HOME", strip_verbatim(data)).current_dir(strip_verbatim(home));
+    }
+    no_window(&mut cmd);
+    cmd
+}
+
+fn execute_opencode(p: &Plan, mode: Mode, stamp: &str, o: &mut Outcome) {
+    let (Some(bin), Some(home)) = (opencode_bin(), opencode::opencode_home()) else {
+        o.error = Some("blocked:cli_missing".into());
+        return;
+    };
+
+    // 回收站模式：每条都导出成功才删，任何一条导不出来就整条放弃
+    if mode == Mode::Trash {
+        // 每条会话一个目录，同一批删多条时各自的 RESTORE.txt 互不覆盖
+        let Some(dir) = data_dir().map(|d| d.join("exports").join("opencode").join(stamp).join(&p.id)) else {
+            o.error = Some("export:cannot resolve ~/.orrery".into());
+            return;
+        };
+        if let Err(e) = fs::create_dir_all(&dir) {
+            o.error = Some(format!("export:{e}"));
+            return;
+        }
+        for id in &p.cli_sessions {
+            let out = opencode_cmd(&bin, &home, &["export", id]).stderr(std::process::Stdio::null()).output();
+            let json = match out {
+                Ok(out) if out.status.success() => out.stdout,
+                Ok(out) => {
+                    o.error = Some(format!("export:{id}: exit {}", out.status));
+                    return;
+                }
+                Err(e) => {
+                    o.error = Some(format!("export:{id}: {e}"));
+                    return;
+                }
+            };
+            // 导出内容必须是这条会话本身，否则宁可不删
+            let exported_id = serde_json::from_slice::<serde_json::Value>(&json)
+                .ok()
+                .and_then(|v| v.pointer("/info/id").and_then(|s| s.as_str()).map(String::from));
+            if exported_id.as_deref() != Some(id.as_str()) {
+                o.error = Some(format!("export:{id}: unexpected output"));
+                return;
+            }
+            if let Err(e) = fs::write(dir.join(format!("{id}.json")), &json) {
+                o.error = Some(format!("export:{e}"));
+                return;
+            }
+        }
+        let _ = fs::write(dir.join("RESTORE.txt"), restore_notes(p, &dir));
+        o.export_dir = Some(dir.to_string_lossy().to_string());
+    }
+
+    // 删根会话，CLI 会连带删子 agent；之后核对，还在的逐条再删（防以后版本不再级联）
+    let _ = opencode_cmd(&bin, &home, &["session", "delete", &p.id])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+    let left = opencode_remaining(&home, &p.cli_sessions);
+    for id in &left {
+        let _ = opencode_cmd(&bin, &home, &["session", "delete", id])
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
+    let left = opencode_remaining(&home, &p.cli_sessions);
+    if !left.is_empty() {
+        o.error = Some(format!("cli:{} of {} sessions still in OpenCode", left.len(), p.cli_sessions.len()));
+        return;
+    }
+    o.ok = true;
+}
+
+/// 这些 id 里还留在 OpenCode 库里的
+fn opencode_remaining(home: &Path, ids: &[String]) -> Vec<String> {
+    let Some(con) = opencode::open(&home.join(opencode::DB)) else { return ids.to_vec() };
+    ids.iter()
+        .filter(|id| {
+            con.query_row("SELECT 1 FROM session WHERE id = ?1", [id.as_str()], |_| Ok(()))
+                .is_ok()
+        })
+        .cloned()
+        .collect()
+}
+
+/// 写给人看的恢复步骤：import 要在原工作目录下跑（它按当前目录归项目），父会话先于子 agent
+fn restore_notes(p: &Plan, dir: &Path) -> String {
+    let mut s = String::from(
+        "Restore these OpenCode sessions by running, in order:\n\
+         按顺序运行下面几行即可恢复（import 按当前目录归项目，所以先回到原目录）：\n\n",
+    );
+    s.push_str(&format!("cd \"{}\"\n", p.directory));
+    for id in &p.cli_sessions {
+        s.push_str(&format!("opencode import \"{}\"\n", dir.join(format!("{id}.json")).display()));
+    }
+    s
+}
+
 /* ── 执行 ── */
 
 fn execute(p: &Plan, mode: Mode, stamp: &str) -> Outcome {
@@ -321,6 +535,10 @@ fn execute(p: &Plan, mode: Mode, stamp: &str) -> Outcome {
     };
     if let Some(reason) = &p.blocked {
         o.error = Some(format!("blocked:{reason}"));
+        return o;
+    }
+    if p.harness == "opencode" {
+        execute_opencode(p, mode, stamp, &mut o);
         return o;
     }
     let Some(root) = harness_root(&p.harness) else {
@@ -659,13 +877,73 @@ mod tests {
     use super::*;
 
     #[test]
-    fn opencode_plan_is_read_only_without_resolving_files() {
-        let p = plan(&Target { harness: "opencode".into(), id: "ses_sandbox_only".into() },
-            &Ctx::with_running(HashSet::new()));
-        assert_eq!(p.blocked.as_deref(), Some("read_only"));
-        assert!(p.files.is_empty());
-        assert!(p.index_files.is_empty());
-        assert_eq!(p.bytes, 0);
+    fn database_only_harnesses_are_read_only_without_resolving_files() {
+        for h in ["zcode", "antigravity"] {
+            let p = plan(&Target { harness: h.into(), id: "ses_sandbox_only".into() }, &Ctx::with_running(HashSet::new()));
+            assert_eq!(p.blocked.as_deref(), Some("read_only"), "{h}");
+            assert!(p.files.is_empty());
+            assert!(p.index_files.is_empty());
+            assert_eq!(p.bytes, 0);
+        }
+    }
+
+    /// 子 agent 递归展开、父在前；成环的 parent_id 不会死循环
+    #[test]
+    fn opencode_tree_lists_root_first_then_descendants() {
+        let con = rusqlite::Connection::open_in_memory().unwrap();
+        con.execute_batch(
+            "CREATE TABLE session(id TEXT, parent_id TEXT, time_created INT, time_updated INT, directory TEXT);
+             INSERT INTO session VALUES ('root', NULL, 1, 5, 'D:/p');
+             INSERT INTO session VALUES ('kid', 'root', 1, 9, 'D:/p');
+             INSERT INTO session VALUES ('grandkid', 'kid', 1, 7, 'D:/p');
+             INSERT INTO session VALUES ('other', NULL, 1, 3, 'D:/q');
+             INSERT INTO session VALUES ('a', 'b', 1, 1, '');
+             INSERT INTO session VALUES ('b', 'a', 1, 1, '');",
+        )
+        .unwrap();
+        let ids: Vec<String> = opencode_tree(&con, "root").unwrap().into_iter().map(|r| r.0).collect();
+        assert_eq!(ids, ["root", "kid", "grandkid"]);
+        assert_eq!(opencode_tree(&con, "a").unwrap().len(), 2, "成环也要停下");
+        assert!(opencode_tree(&con, "missing").unwrap().is_empty());
+    }
+
+    #[test]
+    fn restore_notes_cd_first_and_use_absolute_paths() {
+        let p = Plan {
+            directory: "D:/code/recipe-box".into(),
+            cli_sessions: vec!["ses_root".into(), "ses_kid".into()],
+            ..Default::default()
+        };
+        let dir = Path::new("C:/x/exports");
+        let notes = restore_notes(&p, dir);
+        let cd = notes.find("cd \"D:/code/recipe-box\"").unwrap();
+        let root = notes.find("ses_root.json").unwrap();
+        let kid = notes.find("ses_kid.json").unwrap();
+        assert!(cd < root && root < kid, "先 cd，再父会话，再子 agent");
+        assert!(notes.contains(&dir.join("ses_root.json").display().to_string()));
+    }
+
+    /// 在 OpenCode 库的**副本**上端到端跑回收站模式。默认不跑：
+    /// ORRERY_HOME 指向沙盒（放 `.local/share/opencode/opencode.db` 副本），ORRERY_OC_ID 是根会话，
+    /// `cargo test opencode_sandbox -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn opencode_sandbox_trash_roundtrip() {
+        let home = std::env::var_os("ORRERY_HOME").expect("ORRERY_HOME 必须指向沙盒");
+        assert_ne!(Some(PathBuf::from(&home)), dirs::home_dir(), "不能对真实主目录跑");
+        let id = std::env::var("ORRERY_OC_ID").expect("ORRERY_OC_ID");
+        let target = Target { harness: "opencode".into(), id };
+        let plan = plan_all(std::slice::from_ref(&target)).remove(0);
+        println!("{plan:?}");
+        assert!(plan.blocked.is_none(), "{:?}", plan.blocked);
+        let out = delete_all(&[target], Mode::Trash).remove(0);
+        println!("{out:?}");
+        assert!(out.ok, "{:?}", out.error);
+        let dir = PathBuf::from(out.export_dir.unwrap());
+        for sid in &plan.cli_sessions {
+            assert!(dir.join(format!("{sid}.json")).is_file(), "{sid} 没导出");
+        }
+        println!("{}", fs::read_to_string(dir.join("RESTORE.txt")).unwrap());
     }
 
     #[test]

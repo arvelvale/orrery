@@ -13,6 +13,7 @@ const HARNESS = {
   codex: { id: "codex", label: "CODEX", name: "Codex",     badge: "codex" },
   opencode: { id: "opencode", label: "OPENCODE", name: "OpenCode", badge: "opencode" },
   zcode: { id: "zcode", label: "ZCODE", name: "Z Code", badge: "zcode" },
+  antigravity: { id: "antigravity", label: "ANTIGRAVITY", name: "Antigravity", badge: "antigravity" },
 };
 
 const HARNESS_IDS = Object.keys(HARNESS);
@@ -246,6 +247,31 @@ const SEED_SESSIONS = [
     log: [
       ["ok", "supercluster wired to /tiles"],
       ["", "benchmarking zoom 6–9"],
+    ],
+  },
+  {
+    id: "4c1e9a07-2b6d-4f3e-9a51-7d0c8e2f6b13",
+    harness: "antigravity",
+    title: {
+      en: "recipe-box · Import recipes from a URL",
+      "zh-CN": "recipe-box · 从网址导入菜谱",
+      ja: "recipe-box · URL からレシピを取り込む",
+    },
+    excerpt: {
+      en: "Most sites embed schema.org Recipe JSON-LD; fall back to readability for the rest.",
+      "zh-CN": "大多数网站都内嵌了 schema.org 的 Recipe JSON-LD，其余的再用正文提取兜底。",
+      ja: "多くのサイトは schema.org の Recipe JSON-LD を埋め込んでいる。残りは本文抽出で補う。",
+    },
+    project: "~/code/recipe-box",
+    model: "gemini-3.8-flash",
+    status: "idle",
+    ago: 7 * 60 * MIN,
+    usage: { input: 48200, cache_write: 0, cache_read: 512400, output: 6300, calls: 22 },
+    sizeBytes: 1_153_434,
+    subagents: 0,
+    log: [
+      ["ok", "JSON-LD parser handles 9 of 10 test sites"],
+      ["", "adding the readability fallback"],
     ],
   },
 ];
@@ -824,14 +850,18 @@ const dialog = { targets: [], plans: [], mode: "trash", ack: false, phase: "plan
 
 /** 浏览器预览：按 mock 会话模拟后端的计划（运行中的会话按"最近写入"拦下，便于演示保护逻辑） */
 function mockPlans(targets) {
+  // 与后端同口径：OpenCode 走 CLI、不动文件；只在自己库里的工具只读
+  const readOnly = (h) => ["zcode", "antigravity"].includes(h);
+  const noFiles = (h) => h === "opencode" || readOnly(h);
   return targets.map((s) => ({
     harness: s.harness,
     id: s.id,
-    files: s.harness === "opencode" ? [] : [s.project],
-    bytes: s.harness === "opencode" ? 0 : s.sizeBytes || 0,
-    index_files: ["cc", "opencode"].includes(s.harness) ? [] : ["session_index.jsonl"],
+    files: noFiles(s.harness) ? [] : [s.project],
+    bytes: readOnly(s.harness) ? 0 : s.sizeBytes || 0,
+    index_files: noFiles(s.harness) || s.harness === "cc" ? [] : ["session_index.jsonl"],
     codex_threads: s.harness === "codex" ? [s.id] : [],
-    blocked: s.harness === "opencode" ? "read_only" : s.status === "running" ? "active" : null,
+    cli_sessions: s.harness === "opencode" ? [s.id] : [],
+    blocked: readOnly(s.harness) ? "read_only" : s.status === "running" ? "active" : null,
     warnings: [],
   }));
 }
@@ -892,7 +922,14 @@ function renderDeleteDialog() {
   const warnings = [...new Set(ok.flatMap((p) => p.warnings.map((w) => `${w}|${p.harness}`)))];
   const hasIndex = ok.some((p) => p.index_files.length);
   const hasCodex = ok.some((p) => p.harness === "codex");
+  const hasOpencode = ok.some((p) => p.harness === "opencode");
+  // 全是 OpenCode 时"可从回收站找回"不成立，顶部直接换成导出说明
+  const onlyOpencode = hasOpencode && ok.every((p) => p.harness === "opencode");
   const permanent = dialog.mode === "permanent";
+  // OpenCode 全在它的库里，没有文件可列；全是这种会话时不显示"0 个文件"
+  const summary = files
+    ? t("del.summary", { n: ok.length, files: t("del.files", { n: files }) })
+    : t("del.summary", { n: ok.length, files: "" }).replace(/\s*·\s*$/, "");
   const working = dialog.phase === "working";
   const canConfirm = ok.length > 0 && (!permanent || dialog.ack) && !working;
 
@@ -902,11 +939,11 @@ function renderDeleteDialog() {
       ${[["trash", "del.modeTrash"], ["permanent", "del.modePermanent"]].map(([m, label]) => `
         <button type="button" role="radio" class="seg-opt${dialog.mode === m ? " active" : ""}" aria-checked="${dialog.mode === m}" data-mode="${m}" ${working ? "disabled" : ""}>${escapeHtml(t(label))}</button>`).join("")}
     </div>
-    <p class="del-note${permanent ? " danger" : ""}">${escapeHtml(t(permanent ? "del.permanentNote" : "del.trashNote"))}</p>
+    <p class="del-note${permanent ? " danger" : ""}">${escapeHtml(t(permanent ? "del.permanentNote" : onlyOpencode ? "del.opencodeTrashNote" : "del.trashNote"))}</p>
     ${ok.length ? `
       <div class="del-summary">
         <strong>${formatBytes(bytes)}</strong>
-        <span>${escapeHtml(t("del.summary", { n: ok.length, files: t("del.files", { n: files }) }))}</span>
+        <span>${escapeHtml(summary)}</span>
       </div>
       ${listHtml(ok, (p) => planRowHtml(p))}` : `<p class="hint">${escapeHtml(t("del.nothing"))}</p>`}
     ${blocked.length ? `
@@ -918,6 +955,7 @@ function renderDeleteDialog() {
     }).join("")}
     ${hasIndex ? `<p class="del-fine">${escapeHtml(t("del.indexNote"))}</p>` : ""}
     ${hasCodex ? `<p class="del-fine">${escapeHtml(t("del.codexNote"))}</p>` : ""}
+    ${hasOpencode ? `<p class="del-fine">${escapeHtml(t("del.opencodeNote"))}${permanent || onlyOpencode ? "" : ` ${escapeHtml(t("del.opencodeTrashNote"))}`}</p>` : ""}
     ${state.runtime !== "tauri" ? `<p class="del-fine">${escapeHtml(t("del.previewNote"))}</p>` : ""}
     ${permanent && ok.length ? `
       <label class="del-ack"><input type="checkbox" id="del-ack" ${dialog.ack ? "checked" : ""} ${working ? "disabled" : ""} /> ${escapeHtml(t("del.ack"))}</label>` : ""}
@@ -987,12 +1025,14 @@ function renderDeleteResults() {
   const bytes = ok.reduce((n, r) => n + (r.bytes || 0), 0);
   const v = dialog.verified || { reported: 0, dropped: 0 };
   const backups = [...new Set(ok.map((r) => r.backup_dir).filter(Boolean))];
+  // 每条会话一个导出子目录，显示它们共同的上级（本批的时间戳目录）
+  const exports = [...new Set(ok.map((r) => r.export_dir).filter(Boolean))];
   const codexFallback = ok.some((r) => r.codex_cli === "fallback" || r.codex_cli === "missing");
   box.innerHTML = `
     <h2 id="modal-title">${escapeHtml(t("del.doneTitle"))}</h2>
     <div class="del-summary">
       <strong>${formatBytes(bytes)}</strong>
-      <span>${escapeHtml(t(dialog.mode === "permanent" ? "del.doneFreed" : "del.doneTrashed", { n: ok.length }))}</span>
+      <span>${escapeHtml(t(dialog.mode === "permanent" ? "del.doneFreed" : ok.length && ok.every((r) => r.export_dir) ? "del.doneExported" : "del.doneTrashed", { n: ok.length }))}</span>
     </div>
     ${ok.length ? `<p class="del-fine">${escapeHtml(t("del.verify", { reported: formatBytes(v.reported), dropped: formatBytes(Math.max(0, v.dropped)) }))}</p>` : ""}
     ${failed.length ? `
@@ -1000,6 +1040,7 @@ function renderDeleteResults() {
       ${listHtml(failed, (r) => planRowHtml(r, escapeHtml(errorLabel(r.error))))}` : ""}
     ${codexFallback ? `<p class="del-warn">${escapeHtml(t("del.codexFallback"))}</p>` : ""}
     ${backups.length ? `<p class="del-fine">${escapeHtml(t("del.backups", { path: backups[0].replace(/[\\/][^\\/]+$/, "") }))}</p>` : ""}
+    ${exports.length ? `<p class="del-fine">${escapeHtml(t("del.exports", { path: exports.length === 1 ? exports[0] : exports[0].replace(/[\\/][^\\/]+$/, "") }))}</p>` : ""}
     <div class="btn-row modal-actions">
       <button type="button" class="btn primary" data-act="close">${escapeHtml(t("del.close"))}</button>
     </div>`;

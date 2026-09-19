@@ -19,15 +19,14 @@
 //! （三张表都有 session_id / aggregate_id 索引，单会话最坏 51ms）。全量扫一遍要 2.6s，
 //! 所以按会话增量：`time_updated` 没变就用索引里缓存的值。
 //!
-//! 数据库只以只读方式打开。本适配器暂不接删除入口，Orrery 不直接写别人的
-//! 数据库，所以这些会话在界面上不可删除（`cleanup.rs` 里显式挡掉）。
+//! 数据库只以只读方式打开。删除走官方 `opencode session delete`，见 `cleanup.rs`。
 
 use super::{dir_size, format_tokens, storage_absent, store, truncate, HarnessStorage, SessionSummary, TokenUsage};
 use rusqlite::{Connection, OpenFlags};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-const DB: &str = "opencode.db";
+pub(super) const DB: &str = "opencode.db";
 
 /// `$XDG_DATA_HOME/<dir>`，否则 `~/.local/share/<dir>`。
 /// OpenCode 的分支们目录布局相同，所以这里按名字取（`custom.rs` 复用）
@@ -45,7 +44,7 @@ pub(super) fn family_home(dir: &str) -> Option<PathBuf> {
     p.is_dir().then_some(p)
 }
 
-fn opencode_home() -> Option<PathBuf> {
+pub(super) fn opencode_home() -> Option<PathBuf> {
     family_home("opencode")
 }
 

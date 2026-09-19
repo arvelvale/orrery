@@ -9,6 +9,7 @@
 //! | kimi     | `kimi --session <id>`                 | `session_<uuid>`（与 kimi 自己 `session_index.jsonl` 里的 `sessionId` 一致） |
 //! | dsh      | `dsh --profile <profile> --resume <id>` | `session-<uuid>`（与 dsh 自己投影缓存的文件名一致） |
 //! | opencode | `opencode --session <id>`             | `ses_xxx` |
+//! | antigravity | `agy --conversation <id>`          | UUID |
 //!
 //! DSH 的坑：`--resume` 不是启动器的参数，而是转发给被引导的 profile 应用。实测本机
 //! 只装了 `web` profile，而 web 应用没有 `--resume`（它在浏览器界面里选会话）。所以
@@ -78,6 +79,7 @@ fn command_for(harness: &str, id: &str) -> Option<(&'static str, Vec<String>)> {
             None => return None,
         },
         "opencode" => ("opencode", args(&["--session", id])),
+        "antigravity" => ("agy", args(&["--conversation", id])),
         _ => return None,
     })
 }
@@ -193,7 +195,7 @@ mod tests {
     #[test]
     fn every_supported_harness_has_a_command() {
         // dsh 取决于本机装了哪个 profile，单独测
-        for h in ["cc", "codex", "kimi", "opencode"] {
+        for h in ["cc", "codex", "kimi", "opencode", "antigravity"] {
             let (program, args) = command_for(h, "session_0ed9be17-001b-4642-8b8a").expect(h);
             assert!(!program.is_empty());
             assert!(args.iter().any(|a| a.contains("0ed9be17")), "{h} 的命令里必须带会话 id");

@@ -8,7 +8,7 @@
 
 *Orrery 是太阳系仪：几颗天体装在同一台仪器里，各走各的轨道，你从一个位置看得见全部。*
 
-把本机所有 Claude Code、Kimi Code、DSH（DeepSeek）、Codex、OpenCode、Z Code 会话收进一个窗口：token、磁盘占用、项目、子 agent 一眼看清。不要的会话可以直接删掉（OpenCode 与 Z Code 为只读），各个 harness 还能统一走一个本地模型代理。数据不出本机。
+把本机所有 Claude Code、Kimi Code、DSH（DeepSeek）、Codex、OpenCode、Z Code、Antigravity 会话收进一个窗口：token、磁盘占用、项目、子 agent 一眼看清。不要的会话可以直接删掉（Z Code 与 Antigravity 为只读），各个 harness 还能统一走一个本地模型代理。数据不出本机。
 
 <p>
   <a href="https://github.com/arvelvale/orrery/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/arvelvale/orrery?style=flat-square&label=download&color=0F9D6E" /></a>
@@ -60,6 +60,7 @@ Orrery 只读取各工具本来就写在磁盘上的数据，汇总到一块面�
 | 会话中枢：Codex | ✅ | `~/.codex/sessions`，同 id 的多个 rollout 合并，guardian 子 agent 并入父会话 |
 | 会话中枢：OpenCode | ✅ | 只读 `$XDG_DATA_HOME/opencode` 或 `~/.local/share/opencode` 下的 `opencode.db`，递归合并子 agent；需要 session token 汇总字段 |
 | 会话中枢：Z Code | ✅ | 只读 `~/.zcode/cli/db/db.sqlite`；体积包含每个会话的模型 I/O 日志、产物和图片缓存——这些才是它磁盘占用的大头 |
+| 会话中枢：Antigravity CLI | ✅ | 只读 `~/.gemini/antigravity-cli/`：每个对话一个 SQLite，外加 `conversation_summaries.db`；用量从每次调用的 protobuf 记录里解出；用 `agy --conversation` 恢复 |
 | 会话中枢：自己登记的 OpenCode 系工具 | ✅ | 在 `~/.orrery/harnesses.json` 里登记，Orrery 用同一套方式只读它的 SQLite——分支版本和自用版本都能接 |
 | 准确的 token 统计 | ✅ | 按 API 调用去重，拆成输入 / 缓存写 / 缓存读 / 输出 |
 | 单会话与各 harness 的磁盘占用 | ✅ | 状态页显示总计与按 harness 的拆分 |
@@ -210,6 +211,7 @@ set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 - **正在用的会话受保护。** 10 分钟内有写入的，或正在被运行中的 Claude Code 使用的，会自动跳过。
 - **同时清理各工具自己的索引**，不留死条目。改动前会把索引文件备份到 `~/.orrery/backups/`。
 - **Codex 通过官方的 `codex delete` 删除**，会一并清理 Codex 的历史数据库。Orrery 从不直接写其他工具的数据库。
+- **OpenCode 通过官方的 `opencode session delete` 删除**，子 agent 一并删除。OpenCode 没有回收站，所以回收站模式下会先把每条会话导出到 `~/.orrery/exports/`，旁边的 `RESTORE.txt` 写好了 `opencode import` 恢复命令。OpenCode 的数据库文件不会马上变小，空出的空间由它自己复用。
 - 路径由后端根据会话 id 解析，并且必须位于该工具的数据目录之内。
 
 | 工具 | 删除的文件 | 移除的索引条目 |
@@ -218,8 +220,9 @@ set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 | Kimi Code | `sessions/<ws>/<id>/` | `session_index.jsonl`、`file-history/<ws>` |
 | DSH | `sessions/<ws>/<id>/` 及其投影缓存 | `storages/workspace.json` |
 | Codex | 该会话的 rollout 及其子 agent 的 rollout | Codex 数据库（经 `codex delete`）、`session_index.jsonl` |
-| OpenCode | 暂不支持（只读） | 不修改 |
+| OpenCode | —（全在 `opencode.db` 里） | 会话及子 agent，经 `opencode session delete` |
 | Z Code | 暂不支持（只读） | 不修改 |
+| Antigravity | 暂不支持（只读） | 不修改 |
 | 登记的工具 | 暂不支持（只读） | 不修改 |
 
 > [!TIP]
