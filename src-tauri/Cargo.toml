@@ -1,6 +1,6 @@
 [package]
 name = "orrery"
-version = "0.2.2"
+version = "0.3.0"
 description = "Orrery — agent harness cockpit"
 authors = ["arvelvale"]
 edition = "2021"
