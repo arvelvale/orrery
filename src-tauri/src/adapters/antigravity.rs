@@ -18,15 +18,15 @@
 //!   上下文只是在涨，没有重叠。所以四项直接相加就是总量
 //! - 两行全零、没有模型名的调用（被取消的）不计次数
 //!
-//! 只读，也不接删除：`agy` 没有删除命令，而删对话文件会在 `conversation_summaries.db` 里
-//! 留下死记录——那是 agy 的库，我们不写。恢复用 `agy --conversation <id>`（见 `resume.rs`）。
+//! 数据库只读打开。删除只移走对话自己的文件（见 `cleanup.rs`），不写 agy 的摘要库。
+//! 恢复用 `agy --conversation <id>`（见 `resume.rs`）。
 
 use super::opencode::{open, summarize, Row};
 use super::{dir_size, storage_absent, system_time_ms, HarnessStorage, SessionSummary, TokenUsage};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-fn agy_home() -> Option<PathBuf> {
+pub(super) fn agy_home() -> Option<PathBuf> {
     // 本机这是个指向安装目录的软链接，is_dir 会跟随
     let p = super::home_dir()?.join(".gemini").join("antigravity-cli");
     p.is_dir().then_some(p)

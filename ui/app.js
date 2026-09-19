@@ -22,6 +22,13 @@ const HARNESS_IDS = Object.keys(HARNESS);
  * 未知 harness 的兜底：用户可以在 ~/.orrery/harnesses.json 里登记自定义来源，
  * 它们的 id 不在上面那张表里，这里按需补一个中性角标，避免界面直接崩掉。
  */
+/**
+ * 能在 Orrery 里删除、在终端恢复的 harness。其余（Z Code、自己登记的工具）只读：
+ * 不给复选框、不给删除/恢复按钮，详情里直接说去哪里管理——别让人点了才发现做不了
+ */
+const MANAGEABLE = new Set(["cc", "kimi", "dsh", "codex", "opencode", "antigravity"]);
+const canManage = (s) => MANAGEABLE.has(s.harness);
+
 function harnessOf(id) {
   if (HARNESS[id]) return HARNESS[id];
   HARNESS[id] = { id, label: String(id).toUpperCase().slice(0, 8), name: id, badge: "custom" };
@@ -774,9 +781,9 @@ function renderSessions() {
     btn.dataset.id = s.id;
     btn.innerHTML = `
       <span class="strip-bar" aria-hidden="true"></span>
-      <label class="strip-check" title="${escapeHtml(t("select.toggle"))}">
+      ${canManage(s) ? `<label class="strip-check" title="${escapeHtml(t("select.toggle"))}">
         <input type="checkbox" ${checked ? "checked" : ""} aria-label="${escapeHtml(t("select.toggle"))}" />
-      </label>
+      </label>` : `<span class="strip-check" aria-hidden="true"></span>`}
       <span class="strip-body">
         <span class="strip-top">
           <span class="badge ${h.badge}">${h.label}</span>
@@ -793,14 +800,16 @@ function renderSessions() {
       <span class="strip-side">
         <span class="strip-time">${escapeHtml(formatRelative(s.updatedMs))}</span>
       </span>`;
-    const check = btn.querySelector(".strip-check");
-    check.addEventListener("click", (e) => e.stopPropagation());
-    check.querySelector("input").addEventListener("change", (e) => {
-      if (e.target.checked) state.selected.add(key);
-      else state.selected.delete(key);
-      btn.classList.toggle("checked", e.target.checked);
-      renderSelectionBar();
-    });
+    const input = btn.querySelector(".strip-check input");
+    if (input) {
+      btn.querySelector(".strip-check").addEventListener("click", (e) => e.stopPropagation());
+      input.addEventListener("change", (e) => {
+        if (e.target.checked) state.selected.add(key);
+        else state.selected.delete(key);
+        btn.classList.toggle("checked", e.target.checked);
+        renderSelectionBar();
+      });
+    }
     btn.addEventListener("click", () => openSession(s.id));
     btn.addEventListener("keydown", (e) => {
       if (e.target !== btn) return;
@@ -836,7 +845,7 @@ function renderSelectionBar() {
     <button type="button" class="btn" data-sel="clear">${escapeHtml(t("select.clear"))}</button>
     <button type="button" class="btn danger" data-sel="delete">${escapeHtml(t("select.delete"))}</button>`;
   bar.querySelector('[data-sel="all"]').addEventListener("click", () => {
-    filteredSessions().forEach((s) => state.selected.add(sessionKey(s)));
+    filteredSessions().filter(canManage).forEach((s) => state.selected.add(sessionKey(s)));
     renderSessions();
   });
   bar.querySelector('[data-sel="clear"]').addEventListener("click", () => {
@@ -851,7 +860,7 @@ const dialog = { targets: [], plans: [], mode: "trash", ack: false, phase: "plan
 /** 浏览器预览：按 mock 会话模拟后端的计划（运行中的会话按"最近写入"拦下，便于演示保护逻辑） */
 function mockPlans(targets) {
   // 与后端同口径：OpenCode 走 CLI、不动文件；只在自己库里的工具只读
-  const readOnly = (h) => ["zcode", "antigravity"].includes(h);
+  const readOnly = (h) => !MANAGEABLE.has(h);
   const noFiles = (h) => h === "opencode" || readOnly(h);
   return targets.map((s) => ({
     harness: s.harness,
@@ -862,7 +871,7 @@ function mockPlans(targets) {
     codex_threads: s.harness === "codex" ? [s.id] : [],
     cli_sessions: s.harness === "opencode" ? [s.id] : [],
     blocked: readOnly(s.harness) ? "read_only" : s.status === "running" ? "active" : null,
-    warnings: [],
+    warnings: s.harness === "antigravity" ? ["agy_title_kept"] : [],
   }));
 }
 
@@ -1116,11 +1125,12 @@ function sessionDetailHtml(s) {
     </dl>
     <p class="excerpt">${escapeHtml(localized(s.excerpt))}</p>
     ${log ? `<div class="log">${log}</div>` : ""}
+    ${canManage(s) ? "" : `<p class="detail-note">${escapeHtml(t("detail.readOnly", { name: h.name }))}</p>`}
     <div class="btn-row">
-      <button type="button" class="btn primary" data-act="resume">${escapeHtml(t("detail.resume"))}</button>
+      ${canManage(s) ? `<button type="button" class="btn primary" data-act="resume">${escapeHtml(t("detail.resume"))}</button>` : ""}
       <button type="button" class="btn" data-act="open-folder">${escapeHtml(t("detail.openFolder"))}</button>
       <button type="button" class="btn" data-act="copy-path">${escapeHtml(t("detail.copyPath"))}</button>
-      <button type="button" class="btn danger" data-act="delete">${escapeHtml(t("detail.delete"))}</button>
+      ${canManage(s) ? `<button type="button" class="btn danger" data-act="delete">${escapeHtml(t("detail.delete"))}</button>` : ""}
     </div>`;
 }
 

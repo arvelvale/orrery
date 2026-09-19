@@ -32,8 +32,19 @@
 //! | dsh   | `sessions/<ws>/<id>/`、`storages/session_projcache/sessions/<id>.json` | `storages/workspace.json` 的 `sessionIds` / `archivedSessionIds` |
 //! | codex | 该 id 的所有 rollout + 以它为父的子 agent rollout | sqlite（经 `codex delete`）、`session_index.jsonl` 行（兜底） |
 //! | opencode | 无（全在 `opencode.db`） | 经 `opencode session delete` |
+//! | antigravity | `conversations/<id>.db`(-wal/-shm)、`brain/<id>/`、`annotations/<id>.pbtxt`，及子对话的同类文件 | 无 |
+//!
+//! Antigravity（agy，2026-09 版沙盒实测）：`conversation_summaries.db` 是 agy 的库，我们不写。
+//! 对话文件删掉后 agy 照常启动；`--conversation <已删 id>` 只提示 not found 并开新对话。
+//! 摘要库里那一行 agy 不会自己清（二进制里有 prune 逻辑，但启动、`-p`、交互三种方式都没触发），
+//! 所以它的历史列表里可能还留着标题——删除前在对话框里说明。
+//! 正在打开的对话：agy 会独占 `presence/<id>.lock`（旧锁文件不会被清，要看的是能否打开，
+//! 实测一个 agy 进程恰好锁一个文件）；Unix 上是建议锁、打得开，退回到 10 分钟写入窗口
 
-use super::{claude_home, codex, codex_home, data_dir, dir_size, dsh_home, forget_memo, kimi_home, opencode, system_time_ms};
+use super::{
+    antigravity, claude_home, codex, codex_home, data_dir, dir_size, dsh_home, forget_memo, kimi_home, opencode,
+    system_time_ms,
+};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::fs;
@@ -164,7 +175,7 @@ fn plan(t: &Target, ctx: &Ctx) -> Plan {
     }
     // Z Code 与自定义登记的 harness 在各自的 SQLite 里，也没有可用的删除命令。
     // 在查找目录之前挡掉，避免未来的路径解析改动误删整个共享数据库。
-    if t.harness == "zcode" || t.harness == "antigravity" || super::custom::is_custom(&t.harness) {
+    if t.harness == "zcode" || super::custom::is_custom(&t.harness) {
         p.blocked = Some("read_only".into());
         return p;
     }
@@ -177,6 +188,7 @@ fn plan(t: &Target, ctx: &Ctx) -> Plan {
         "kimi" => kimi_targets(&root, &t.id),
         "dsh" => dsh_targets(&root, &t.id),
         "codex" => codex_targets(&root, &t.id, ctx),
+        "antigravity" => agy_targets(&root, &t.id),
         _ => {
             p.blocked = Some("invalid".into());
             return p;
@@ -201,13 +213,23 @@ fn plan(t: &Target, ctx: &Ctx) -> Plan {
     p.index_files = index_files;
     p.codex_threads = codex_threads;
 
-    let last_write = files.iter().map(|f| latest_mtime(f)).max().unwrap_or(0);
+    // SQLite 的 `-shm` 是共享内存索引，只读打开也会刷新它的修改时间（Orrery 自己每次扫描都会碰），
+    // 不代表对话有新内容，不参与判断
+    let last_write = files
+        .iter()
+        .filter(|f| !f.to_string_lossy().ends_with("-shm"))
+        .map(|f| latest_mtime(f))
+        .max()
+        .unwrap_or(0);
     let now = system_time_ms(SystemTime::now());
     if now.saturating_sub(last_write) < ACTIVE_WINDOW_MS {
         p.blocked = Some("active".into());
     }
     if t.harness == "cc" && cc_is_running(&root, &t.id) {
         p.blocked = Some("running".into());
+    }
+    if t.harness == "antigravity" && agy_open(&root, &t.id) {
+        p.blocked = Some("open_in_tool".into());
     }
 
     // 进程名已在 running_processes 里去掉了 .exe 后缀，三个平台比同一个名字
@@ -216,6 +238,10 @@ fn plan(t: &Target, ctx: &Ctx) -> Plan {
         "codex" => Some("codex"),
         _ => None,
     };
+    // agy 的摘要库会留着标题：不阻止删除，但要让用户事先知道
+    if t.harness == "antigravity" {
+        p.warnings.push("agy_title_kept".into());
+    }
     if proc.is_some_and(|name| ctx.running.contains(name)) {
         p.warnings.push("harness_running".into());
     }
@@ -231,6 +257,7 @@ fn harness_root(harness: &str) -> Option<PathBuf> {
         "kimi" => kimi_home(),
         "dsh" => dsh_home(),
         "codex" => codex_home(),
+        "antigravity" => antigravity::agy_home(),
         _ => None,
     }?;
     root.is_dir().then_some(root)
@@ -330,6 +357,65 @@ fn codex_targets(root: &Path, id: &str, ctx: &Ctx) -> Targets {
         index.push("session_index.jsonl".into());
     }
     (files, index, threads)
+}
+
+/* ── Antigravity ── */
+
+/// 对话及其子对话自己的文件。子对话关系只读 agy 的摘要库
+fn agy_targets(root: &Path, id: &str) -> Targets {
+    let conv = root.join("conversations");
+    if !conv.join(format!("{id}.db")).is_file() {
+        return (vec![], vec![], vec![]);
+    }
+    let mut ids = vec![id.to_string()];
+    if let Some(con) = opencode::open(&root.join("conversation_summaries.db")) {
+        if let Ok(mut stmt) = con.prepare("SELECT conversation_id, parent_conversation_id FROM conversation_summaries") {
+            let pairs: Vec<(String, String)> = stmt
+                .query_map([], |r| Ok((r.get(0)?, r.get::<_, Option<String>>(1)?.unwrap_or_default())))
+                .map(|rows| rows.flatten().collect())
+                .unwrap_or_default();
+            // 逐层展开；出现过的不再加入，防成环
+            let mut i = 0;
+            while i < ids.len() {
+                let parent = ids[i].clone();
+                for (child, p) in &pairs {
+                    if *p == parent && valid_id(child) && !ids.contains(child) {
+                        ids.push(child.clone());
+                    }
+                }
+                i += 1;
+            }
+        }
+    }
+    let mut files = vec![];
+    for cid in &ids {
+        for ext in ["db", "db-wal", "db-shm"] {
+            let f = conv.join(format!("{cid}.{ext}"));
+            if f.exists() {
+                files.push(f);
+            }
+        }
+        for f in [root.join("brain").join(cid), root.join("annotations").join(format!("{cid}.pbtxt"))] {
+            if f.exists() {
+                files.push(f);
+            }
+        }
+    }
+    (files, vec![], vec![])
+}
+
+/// agy 正打开这条对话：它对 `presence/<id>.lock` 加了字节范围锁（Windows `LockFileEx`）。
+/// 实测文件照样打得开，**读**才会失败，所以要真读一下；没锁的空文件读到 0 字节
+fn agy_open(root: &Path, id: &str) -> bool {
+    use std::io::Read;
+    let lock = root.join("presence").join(format!("{id}.lock"));
+    if !lock.is_file() {
+        return false;
+    }
+    match fs::File::open(&lock) {
+        Ok(mut f) => f.read(&mut [0u8; 1]).is_err(),
+        Err(_) => true,
+    }
 }
 
 /* ── OpenCode ── */
@@ -877,14 +963,65 @@ mod tests {
     use super::*;
 
     #[test]
-    fn database_only_harnesses_are_read_only_without_resolving_files() {
-        for h in ["zcode", "antigravity"] {
-            let p = plan(&Target { harness: h.into(), id: "ses_sandbox_only".into() }, &Ctx::with_running(HashSet::new()));
-            assert_eq!(p.blocked.as_deref(), Some("read_only"), "{h}");
-            assert!(p.files.is_empty());
-            assert!(p.index_files.is_empty());
-            assert_eq!(p.bytes, 0);
+    fn zcode_plan_is_read_only_without_resolving_files() {
+        let p = plan(&Target { harness: "zcode".into(), id: "ses_sandbox_only".into() }, &Ctx::with_running(HashSet::new()));
+        assert_eq!(p.blocked.as_deref(), Some("read_only"));
+        assert!(p.files.is_empty());
+        assert!(p.index_files.is_empty());
+        assert_eq!(p.bytes, 0);
+    }
+
+    /// 对话自己的文件 + 子对话的文件；别的对话、摘要库都不碰
+    #[test]
+    fn agy_targets_cover_own_files_and_child_conversations_only() {
+        let root = std::env::temp_dir().join(format!("orrery-agy-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        for d in ["conversations", "brain/conv_parent_1/scratch", "brain/conv_child_22", "brain/conv_other_3", "annotations", "presence"] {
+            fs::create_dir_all(root.join(d)).unwrap();
         }
+        for f in ["conv_parent_1.db", "conv_parent_1.db-wal", "conv_child_22.db", "conv_other_3.db"] {
+            fs::write(root.join("conversations").join(f), b"x").unwrap();
+        }
+        fs::write(root.join("annotations/conv_parent_1.pbtxt"), b"x").unwrap();
+        let con = rusqlite::Connection::open(root.join("conversation_summaries.db")).unwrap();
+        con.execute_batch(
+            "CREATE TABLE conversation_summaries(conversation_id TEXT, parent_conversation_id TEXT);
+             INSERT INTO conversation_summaries VALUES ('conv_parent_1', ''), ('conv_child_22', 'conv_parent_1'), ('conv_other_3', '');",
+        )
+        .unwrap();
+        drop(con);
+
+        let (files, index, _) = agy_targets(&root, "conv_parent_1");
+        let names: Vec<String> =
+            files.iter().map(|f| f.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/")).collect();
+        assert_eq!(
+            names,
+            [
+                "conversations/conv_parent_1.db",
+                "conversations/conv_parent_1.db-wal",
+                "brain/conv_parent_1",
+                "annotations/conv_parent_1.pbtxt",
+                "conversations/conv_child_22.db",
+                "brain/conv_child_22",
+            ]
+        );
+        assert!(index.is_empty(), "摘要库是 agy 的，不改");
+        assert!(agy_targets(&root, "conv_missing_9").0.is_empty());
+
+        // 留下的旧锁文件不算"打开中"；被独占的才算
+        fs::write(root.join("presence/conv_parent_1.lock"), b"").unwrap();
+        assert!(!agy_open(&root, "conv_parent_1"));
+        // 和 agy 同一种锁：Windows 上 File::lock 就是 LockFileEx。只在测试里用，CI 跑 stable
+        #[cfg(windows)]
+        #[allow(clippy::incompatible_msrv)]
+        {
+            let held = fs::OpenOptions::new().read(true).write(true).open(root.join("presence/conv_parent_1.lock")).unwrap();
+            held.lock().unwrap();
+            assert!(agy_open(&root, "conv_parent_1"), "字节范围锁要判成打开中");
+            held.unlock().unwrap();
+            assert!(!agy_open(&root, "conv_parent_1"));
+        }
+        let _ = fs::remove_dir_all(&root);
     }
 
     /// 子 agent 递归展开、父在前；成环的 parent_id 不会死循环
@@ -921,6 +1058,27 @@ mod tests {
         let kid = notes.find("ses_kid.json").unwrap();
         assert!(cd < root && root < kid, "先 cd，再父会话，再子 agent");
         assert!(notes.contains(&dir.join("ses_root.json").display().to_string()));
+    }
+
+    /// 在 agy 数据目录的**副本**上端到端删一条对话。默认不跑：
+    /// ORRERY_HOME 指向沙盒（放 `.gemini/antigravity-cli` 副本），ORRERY_AGY_ID 是对话 id，
+    /// `cargo test --lib agy_sandbox -- --ignored --nocapture`
+    #[test]
+    #[ignore]
+    fn agy_sandbox_trash() {
+        let home = std::env::var_os("ORRERY_HOME").expect("ORRERY_HOME 必须指向沙盒");
+        assert_ne!(Some(PathBuf::from(&home)), dirs::home_dir(), "不能对真实主目录跑");
+        let id = std::env::var("ORRERY_AGY_ID").expect("ORRERY_AGY_ID");
+        let target = Target { harness: "antigravity".into(), id };
+        let plan = plan_all(std::slice::from_ref(&target)).remove(0);
+        println!("{plan:?}");
+        assert!(plan.blocked.is_none(), "{:?}", plan.blocked);
+        let out = delete_all(&[target], Mode::Trash).remove(0);
+        println!("{out:?}");
+        assert!(out.ok, "{:?}", out.error);
+        for f in &plan.files {
+            assert!(!Path::new(f).exists(), "{f} 还在");
+        }
     }
 
     /// 在 OpenCode 库的**副本**上端到端跑回收站模式。默认不跑：

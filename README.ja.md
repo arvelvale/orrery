@@ -8,7 +8,7 @@
 
 *Orrery（オーラリー）は太陽系儀のこと。複数の天体がひとつの装置の中でそれぞれの軌道を回り、ひとところから全体を読み取れます。*
 
-手元の Claude Code・Kimi Code・DSH（DeepSeek）・Codex・OpenCode・Z Code・Antigravity のセッションをひとつのウィンドウに集約します。トークン、ディスク使用量、プロジェクト、サブエージェントまで一目で把握でき、不要なセッションは削除できます（Z Code と Antigravity は読み取り専用）。各ハーネスをひとつのローカルモデルプロキシ経由にまとめられます。データは PC の外に出ません。
+手元の Claude Code・Kimi Code・DSH（DeepSeek）・Codex・OpenCode・Z Code・Antigravity のセッションをひとつのウィンドウに集約します。トークン、ディスク使用量、プロジェクト、サブエージェントまで一目で把握でき、不要なセッションは削除できます（Z Code は読み取り専用）。各ハーネスをひとつのローカルモデルプロキシ経由にまとめられます。データは PC の外に出ません。
 
 <p>
   <a href="https://github.com/arvelvale/orrery/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/arvelvale/orrery?style=flat-square&label=download&color=0F9D6E" /></a>
@@ -212,6 +212,7 @@ set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 - **各ツール自身のインデックスも整理し**、無効な項目を残しません。変更前にインデックスファイルを `~/.orrery/backups/` にバックアップします。
 - **Codex は公式の `codex delete` で削除し**、Codex の履歴データベースも整理します。Orrery が他のツールのデータベースに直接書き込むことはありません。
 - **OpenCode は公式の `opencode session delete` で削除し**、サブエージェントも一緒に削除します。OpenCode にはごみ箱がないため、ごみ箱モードでは各セッションを先に `~/.orrery/exports/` へ書き出し、`opencode import` の復元コマンドを `RESTORE.txt` に残します。データベースファイルはすぐには小さくならず、空いた領域は OpenCode が再利用します。
+- **実行中の agy で開いている Antigravity の会話はスキップします。** 会話自身のファイルだけを移動し、agy の要約データベースには触れないため、履歴にタイトルが残ることがあります。
 - パスはバックエンドがセッション id から解決し、そのツールのデータフォルダ内に限定されます。
 
 | ツール | 削除するファイル | 削除するインデックス項目 |
@@ -222,7 +223,7 @@ set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 | Codex | セッションの rollout とそのサブエージェントの rollout | Codex データベース（`codex delete` 経由）、`session_index.jsonl` |
 | OpenCode | —（すべて `opencode.db` 内） | セッションとサブエージェント（`opencode session delete` 経由） |
 | Z Code | 未対応（読み取り専用） | 変更なし |
-| Antigravity | 未対応（読み取り専用） | 変更なし |
+| Antigravity | `conversations/<id>.db`（`-wal`/`-shm` を含む）、`brain/<id>/`、`annotations/<id>.pbtxt`、子会話も同様 | —（agy 自身の履歴にタイトルが残ることがあり、開くと新しい会話になります） |
 
 > [!TIP]
 > セッションを削除する前に、そのツールを終了してください。実行中の Kimi Code や Codex が削除した項目をインデックスに書き戻す可能性があります。

@@ -8,7 +8,7 @@
 
 *Orrery 是太阳系仪：几颗天体装在同一台仪器里，各走各的轨道，你从一个位置看得见全部。*
 
-把本机所有 Claude Code、Kimi Code、DSH（DeepSeek）、Codex、OpenCode、Z Code、Antigravity 会话收进一个窗口：token、磁盘占用、项目、子 agent 一眼看清。不要的会话可以直接删掉（Z Code 与 Antigravity 为只读），各个 harness 还能统一走一个本地模型代理。数据不出本机。
+把本机所有 Claude Code、Kimi Code、DSH（DeepSeek）、Codex、OpenCode、Z Code、Antigravity 会话收进一个窗口：token、磁盘占用、项目、子 agent 一眼看清。不要的会话可以直接删掉（Z Code 为只读），各个 harness 还能统一走一个本地模型代理。数据不出本机。
 
 <p>
   <a href="https://github.com/arvelvale/orrery/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/arvelvale/orrery?style=flat-square&label=download&color=0F9D6E" /></a>
@@ -212,6 +212,7 @@ set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 - **同时清理各工具自己的索引**，不留死条目。改动前会把索引文件备份到 `~/.orrery/backups/`。
 - **Codex 通过官方的 `codex delete` 删除**，会一并清理 Codex 的历史数据库。Orrery 从不直接写其他工具的数据库。
 - **OpenCode 通过官方的 `opencode session delete` 删除**，子 agent 一并删除。OpenCode 没有回收站，所以回收站模式下会先把每条会话导出到 `~/.orrery/exports/`，旁边的 `RESTORE.txt` 写好了 `opencode import` 恢复命令。OpenCode 的数据库文件不会马上变小，空出的空间由它自己复用。
+- **正在 agy 里打开的 Antigravity 对话会跳过。** 只移走对话自己的文件，不碰 agy 的摘要库，所以它的历史列表里可能还留着标题。
 - 路径由后端根据会话 id 解析，并且必须位于该工具的数据目录之内。
 
 | 工具 | 删除的文件 | 移除的索引条目 |
@@ -222,7 +223,7 @@ set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 | Codex | 该会话的 rollout 及其子 agent 的 rollout | Codex 数据库（经 `codex delete`）、`session_index.jsonl` |
 | OpenCode | —（全在 `opencode.db` 里） | 会话及子 agent，经 `opencode session delete` |
 | Z Code | 暂不支持（只读） | 不修改 |
-| Antigravity | 暂不支持（只读） | 不修改 |
+| Antigravity | `conversations/<id>.db`（及 `-wal`/`-shm`）、`brain/<id>/`、`annotations/<id>.pbtxt`，子对话同理 | —（agy 自己的历史列表可能还留着标题，打开只会开新对话） |
 | 登记的工具 | 暂不支持（只读） | 不修改 |
 
 > [!TIP]

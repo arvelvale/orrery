@@ -349,7 +349,9 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   padding: 0 16px 10px;
   border-bottom: 1px solid var(--line);
   background: var(--bg);
-  overflow-x: auto;
+  /* harness 一多、详情栏一开就放不下：换行，不出横向滚动条、不截断 */
+  flex-wrap: wrap;
+  row-gap: 6px;
 }
 .chip {
   flex: none;
@@ -1071,6 +1073,8 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   line-height: 1.5;
 }
 .del-fine { margin: 10px 0 0; font-size: 12px; color: var(--ink-2); line-height: 1.5; }
+/* 只读 harness 的详情：说明去哪里管理，代替删除/恢复按钮 */
+.detail-note { margin: 12px 0 0; padding: 10px 12px; font-size: 12px; line-height: 1.55; color: var(--ink-2); background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; }
 .del-ack { display: flex; align-items: center; gap: 8px; margin-top: 14px; font-size: 13px; cursor: pointer; }
 .del-ack input { accent-color: var(--fault); width: 15px; height: 15px; margin: 0; }
 /* 跳过/失败原因是自然语言，不用等宽字体 */

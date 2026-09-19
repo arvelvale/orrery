@@ -8,7 +8,7 @@
 
 *An orrery is a clockwork model of the solar system: several bodies, each on its own orbit, all readable from one place.*
 
-Every Claude Code, Kimi Code, DSH (DeepSeek), Codex, OpenCode, Z Code and Antigravity session on your machine in one window: tokens, disk usage, projects, subagents. Delete what you no longer need (Z Code and Antigravity are read-only), and route every harness through one local model proxy. Nothing leaves your computer.
+Every Claude Code, Kimi Code, DSH (DeepSeek), Codex, OpenCode, Z Code and Antigravity session on your machine in one window: tokens, disk usage, projects, subagents. Delete what you no longer need (Z Code is read-only), and route every harness through one local model proxy. Nothing leaves your computer.
 
 <p>
   <a href="https://github.com/arvelvale/orrery/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/arvelvale/orrery?style=flat-square&label=download&color=0F9D6E" /></a>
@@ -219,6 +219,7 @@ Every session is just files on disk, so Orrery can remove the ones you no longer
 - **Each tool's own index is cleaned too**, so no dead entries are left behind. Index files are backed up to `~/.orrery/backups/` before they change.
 - **Codex goes through the official `codex delete`**, which also clears Codex's history database. Orrery never writes to another tool's database.
 - **OpenCode goes through the official `opencode session delete`**, subagents included. OpenCode has no Recycle Bin, so in that mode each session is first exported to `~/.orrery/exports/` with a `RESTORE.txt` that lists the `opencode import` commands. OpenCode's database file doesn't shrink right away; it reuses the freed space.
+- **Antigravity conversations open in a running `agy` are skipped.** Only the conversation's own files are moved; agy's summary database is left alone, so its history list may keep the title.
 - Paths are resolved by the backend from the session id and must stay inside that tool's data folder.
 
 | Tool | Files removed | Index entries removed |
@@ -229,7 +230,7 @@ Every session is just files on disk, so Orrery can remove the ones you no longer
 | Codex | the session's rollouts plus its subagent rollouts | Codex database (via `codex delete`), `session_index.jsonl` |
 | OpenCode | — (all in `opencode.db`) | Session and subagents, via `opencode session delete` |
 | Z Code | Not supported (read-only) | No changes |
-| Antigravity | Not supported (read-only) | No changes |
+| Antigravity | `conversations/<id>.db` (+ `-wal`/`-shm`), `brain/<id>/`, `annotations/<id>.pbtxt`, and the same for child conversations | — (agy's own history list may still show the title; opening it starts a new conversation) |
 | Registered tool | Not supported (read-only) | No changes |
 
 > [!TIP]
