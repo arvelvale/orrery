@@ -33,12 +33,12 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md) · **日本語**
 
-<img src=".github/assets/screenshot-sessions.ja.png" alt="Orrery セッションハブ" width="100%" />
+<img src=".github/assets/demo.ja.gif" alt="ハーネスで絞り込み、セッションを開き、削除ダイアログを確認" width="100%" />
 
 </div>
 
 > [!NOTE]
-> UI は English・简体中文・日本語に対応し、システム言語に自動で合わせます。トップバーからいつでも切り替えられます。スクリーンショットは架空のプロジェクトを使ったモックデータです。
+> UI は English・简体中文・日本語に対応し、システム言語に自動で合わせます。トップバーからいつでも切り替えられます。デモ GIF とスクリーンショットは架空のプロジェクトを使ったモックデータです。
 
 ## なぜ作ったか
 

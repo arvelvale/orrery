@@ -36,12 +36,12 @@ Every Claude Code, Kimi Code, DSH (DeepSeek), Codex, OpenCode, Z Code and Antigr
 
 **English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
 
-<img src=".github/assets/screenshot-sessions.en.png" alt="Orrery session hub" width="100%" />
+<img src=".github/assets/demo.en.gif" alt="Filtering sessions by harness, opening one, and the delete dialog" width="100%" />
 
 </div>
 
 > [!NOTE]
-> The UI speaks English, 简体中文 and 日本語. It follows your system language, and you can switch anytime from the top bar. Screenshots use built-in mock data with fictional projects.
+> The UI speaks English, 简体中文 and 日本語. It follows your system language, and you can switch anytime from the top bar. The demo and screenshots use built-in mock data with fictional projects.
 
 ## Why
 

@@ -33,12 +33,12 @@
 
 [English](README.md) · **简体中文** · [日本語](README.ja.md)
 
-<img src=".github/assets/screenshot-sessions.zh-CN.png" alt="Orrery 会话中枢" width="100%" />
+<img src=".github/assets/demo.zh-CN.gif" alt="按工具筛选会话、打开详情、删除确认" width="100%" />
 
 </div>
 
 > [!NOTE]
-> 界面支持 English、简体中文、日本語，默认跟随系统语言，可随时在顶栏切换。截图使用内置 mock 数据，项目均为虚构。
+> 界面支持 English、简体中文、日本語，默认跟随系统语言，可随时在顶栏切换。演示动图与截图使用内置 mock 数据，项目均为虚构。
 
 ## 为什么做
 
