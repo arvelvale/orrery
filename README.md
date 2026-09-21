@@ -6,8 +6,6 @@
 
 **A local-first cockpit for your AI coding agents.**
 
-*An orrery is a clockwork model of the solar system: several bodies, each on its own orbit, all readable from one place.*
-
 Every Claude Code, Kimi Code, DSH (DeepSeek), Codex, OpenCode, Z Code and Antigravity session on your machine in one window: tokens, disk usage, projects, subagents. Delete what you no longer need (Z Code is read-only), and route every harness through one local model proxy. Nothing leaves your computer.
 
 <p>
