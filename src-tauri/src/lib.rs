@@ -1,7 +1,9 @@
-mod adapters;
+// 集成测试与逐会话对账脚本要直接调扫描入口（见 scripts/verify-*.mjs）
+pub mod adapters;
 // 集成测试要直接调代理的启停与状态
 pub mod proxy;
 mod resume;
+mod transfer;
 
 use adapters::{cleanup, HarnessStorage, SessionSummary};
 use proxy::ProxyStatus;
@@ -65,7 +67,14 @@ fn save_provider(
         "anthropic" => proxy::Wire::Anthropic,
         other => return Err(format!("unknown wire {other}")),
     };
-    proxy::save_provider(&name, &base_url, wire, api_key.as_deref(), &api_key_env, &model_prefixes)
+    proxy::save_provider(
+        &name,
+        &base_url,
+        wire,
+        api_key.as_deref(),
+        &api_key_env,
+        &model_prefixes,
+    )
 }
 
 #[tauri::command]
@@ -104,6 +113,11 @@ fn resume_session(harness: String, id: String, project: String) -> Result<String
     resume::resume(&harness, &id, &project)
 }
 
+#[tauri::command(async)]
+fn convert_session(harness: String, id: String) -> Result<transfer::ConvertedSession, String> {
+    transfer::convert(&harness, &id)
+}
+
 #[tauri::command]
 fn open_path(path: String) -> Result<bool, String> {
     let p = Path::new(&path);
@@ -112,7 +126,9 @@ fn open_path(path: String) -> Result<bool, String> {
     }
     // 传文件路径时打开它所在的目录（三个平台的文件管理器都能接受目录）
     let target = if p.is_file() {
-        p.parent().map(|d| d.to_path_buf()).unwrap_or_else(|| p.to_path_buf())
+        p.parent()
+            .map(|d| d.to_path_buf())
+            .unwrap_or_else(|| p.to_path_buf())
     } else {
         p.to_path_buf()
     };
@@ -123,7 +139,10 @@ fn open_path(path: String) -> Result<bool, String> {
     } else {
         "xdg-open"
     };
-    Ok(std::process::Command::new(opener).arg(target).spawn().is_ok())
+    Ok(std::process::Command::new(opener)
+        .arg(target)
+        .spawn()
+        .is_ok())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -154,7 +173,8 @@ pub fn run() {
             save_model,
             remove_model,
             open_path,
-            resume_session
+            resume_session,
+            convert_session
         ])
         .run(tauri::generate_context!())
         .expect("error while running Orrery");

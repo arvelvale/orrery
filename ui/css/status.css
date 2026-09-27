@@ -1,0 +1,139 @@
+/* 状态页卡片 · pill · kv · 详情面板 · 日志 · toast · 无障碍
+ * 这是单一层叠顺序里的一段：各文件按 styles.css 里的固定顺序加载，先后即语义。
+ * 改某一块只动对应文件；要调整跨文件的前后关系（例如让某条覆盖提前）必须整套一起搬。
+ */
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 10px;
+  max-width: 960px;
+}
+.status-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+}
+.status-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.status-card-head .name { font-weight: 650; flex: 1; font-size: 13.5px; }
+.pill {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  color: var(--ink-2);
+  background: var(--bg);
+}
+.pill.run { color: var(--run); border-color: #A7E8C8; background: var(--run-soft); }
+.pill.idle { color: var(--nav); border-color: #A8CFF0; background: var(--nav-soft); }
+.pill.warn { color: var(--warn); border-color: #F0D48A; background: var(--warn-soft); }
+
+.kv {
+  display: grid;
+  grid-template-columns: 84px 1fr;
+  gap: 6px 10px;
+  font-size: 12.5px;
+  margin: 0;
+}
+.kv dt {
+  margin: 0;
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding-top: 1px;
+}
+.kv dd {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow-wrap: anywhere; /* 优先在空格处换行，长路径才从中间断 */
+  color: var(--ink);
+}
+
+.detail {
+  background: var(--surface);
+  border-left: 1px solid var(--line);
+  min-height: 0;
+  overflow: hidden;
+  display: none;
+  flex-direction: column;
+}
+.shell.has-detail .detail { display: flex; }
+.detail-head {
+  flex: none;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.detail-head-text { flex: 1; min-width: 0; }
+.detail-head h2 {
+  margin: 6px 0 0;
+  font-size: 14px;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+}
+.detail-body {
+  padding: 14px 16px 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+.detail-body p.excerpt {
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--ink);
+}
+.log {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-2);
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+.log .ok { color: var(--run); }
+.log .hi { color: var(--nav); }
+.log .warn { color: var(--warn); }
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 28px;
+  transform: translateX(-50%) translateY(10px);
+  background: var(--ink);
+  color: #fff;
+  padding: 9px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  z-index: 50;
+  box-shadow: 0 4px 16px rgba(21, 32, 43, 0.18);
+}
+.toast.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0,0,0,0); border: 0;
+}

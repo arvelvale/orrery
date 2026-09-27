@@ -1,0 +1,184 @@
+/* 模型页：卡片 · 供应商/模型表单 · 端点 · 路由表 · 模型池
+ * 这是单一层叠顺序里的一段：各文件按 styles.css 里的固定顺序加载，先后即语义。
+ * 改某一块只动对应文件；要调整跨文件的前后关系（例如让某条覆盖提前）必须整套一起搬。
+ */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  max-width: 720px;
+}
+.card h2 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 650;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+  font-family: var(--mono);
+}
+.card p {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.card p.howto {
+  margin-top: -4px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.edit-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px; }
+.edit-item {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  padding: 10px 12px;
+}
+.edit-item-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.edit-item-head .name { font-weight: 650; flex: 1; min-width: 0; word-break: break-all; }
+.edit-item .meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-2);
+  word-break: break-all;
+}
+.pill.ok { color: var(--run); border-color: #A7E8C8; background: var(--run-soft); }
+.pill.none { color: var(--muted); }
+.pill.src-config { color: var(--nav); border-color: #A8CFF0; background: var(--nav-soft); }
+
+.edit-form {
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.edit-form h3 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 650;
+}
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field label {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.field input, .field select {
+  height: 34px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.field input:focus-visible, .field select:focus-visible {
+  outline: 2px solid var(--nav);
+  outline-offset: 1px;
+}
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (max-width: 720px) {
+  .field-row { grid-template-columns: 1fr; }
+}
+.key-row { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+.btn.danger {
+  border-color: #e0b4b4;
+  color: var(--fault);
+  background: var(--fault-soft);
+}
+.btn.small { height: 28px; padding: 0 10px; font-size: 12px; }
+
+
+.endpoint-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.endpoint-row .dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--run);
+  flex: none;
+}
+.endpoint-row .dot.off { background: var(--warn); }
+.endpoint-row code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
+}
+.endpoint-row .tag { color: var(--ink-2); flex: none; }
+
+.route {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.route:last-child { border-bottom: none; padding-bottom: 0; }
+.route:first-of-type { padding-top: 0; }
+.route-harness .name { font-weight: 600; font-size: 13.5px; }
+.route-harness .sub {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.route-arrow { font-family: var(--mono); color: var(--muted); font-size: 12px; }
+.route-model { display: flex; justify-content: flex-end; }
+.route-model select {
+  height: 32px;
+  min-width: 180px;
+  padding: 0 8px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink);
+}
+
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+.pool {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.pool-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.pool-item code { flex: 1; color: var(--ink); }
+.pool-item .tag { color: var(--ink-2); }

@@ -2651,8 +2651,10 @@ dependencies = [
  "tauri",
  "tauri-build",
  "tauri-plugin-opener",
+ "time",
  "tokio",
  "trash",
+ "uuid",
  "zstd",
 ]
 

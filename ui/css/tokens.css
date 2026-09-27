@@ -1,0 +1,63 @@
+/* 设计变量 · reset · 页面骨架
+ * 这是单一层叠顺序里的一段：各文件按 styles.css 里的固定顺序加载，先后即语义。
+ * 改某一块只动对应文件；要调整跨文件的前后关系（例如让某条覆盖提前）必须整套一起搬。
+ */
+:root {
+  --bg: #F4F6F9;
+  --surface: #FFFFFF;
+  --surface-2: #EDF1F6;
+  --ink: #15202B;
+  --ink-2: #5B6B7C;
+  --line: #D8E0EA;
+  --nav: #0B6BCB;
+  --nav-soft: rgba(11, 107, 203, 0.08);
+  --run: #0F9D6E;
+  --run-soft: rgba(15, 157, 110, 0.12);
+  --warn: #C47B0A;
+  --warn-soft: rgba(196, 123, 10, 0.12);
+  --fault: #D64545;
+  --fault-soft: rgba(214, 69, 69, 0.1);
+  --muted: #9AA8B8;
+  --font: "Segoe UI", "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: "Cascadia Code", "SF Mono", Consolas, "Microsoft YaHei", ui-monospace, monospace;
+  --header-h: 48px;
+  --sidebar-w: 200px;
+  --detail-w: 340px;
+}
+
+/* 中日文共用汉字字形不同：跟随 <html lang> 切字体栈，日文界面不借用中文字形 */
+:root:lang(ja) {
+  --font: "Segoe UI", "Yu Gothic UI", "Hiragino Sans", "Meiryo", system-ui, sans-serif;
+  --mono: "Cascadia Code", "SF Mono", Consolas, "BIZ UDGothic", "Yu Gothic UI", ui-monospace, monospace;
+}
+:root:lang(en) {
+  --font: "Segoe UI", system-ui, -apple-system, "Microsoft YaHei", "Yu Gothic UI", sans-serif;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+/* 组件自己设了 display 时 hidden 属性会失效 */
+[hidden] { display: none !important; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: var(--font);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; border: none; background: none; padding: 0; }
+button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--nav);
+  outline-offset: 2px;
+}
+
+.app {
+  height: 100%;
+  display: grid;
+  grid-template-rows: var(--header-h) 1fr;
+}

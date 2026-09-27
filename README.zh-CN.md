@@ -6,7 +6,7 @@
 
 **本地优先的 AI 编程 Agent 驾驶舱。**
 
-把本机所有 Claude Code、Kimi Code、DSH（DeepSeek）、Codex、OpenCode、Z Code、Antigravity 会话收进一个窗口：token、磁盘占用、项目、子 agent 一眼看清。不要的会话可以直接删掉（Z Code 为只读），各个 harness 还能统一走一个本地模型代理。数据不出本机。
+把本机所有 Claude Code、Kimi Code、DSH（DeepSeek）、Codex、OpenCode、Z Code、Antigravity、CodeBuddy Code 会话收进一个窗口：token、磁盘占用、项目、子 agent 一眼看清。不要的会话可以直接删掉（Z Code 和 CodeBuddy Code 为只读），各个 harness 还能统一走一个本地模型代理。数据不出本机。
 
 <p>
   <a href="https://github.com/arvelvale/orrery/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/arvelvale/orrery?style=flat-square&label=download&color=0F9D6E" /></a>
@@ -59,6 +59,7 @@ Orrery 只读取各工具本来就写在磁盘上的数据，汇总到一块面�
 | 会话中枢：OpenCode | ✅ | 只读 `$XDG_DATA_HOME/opencode` 或 `~/.local/share/opencode` 下的 `opencode.db`，递归合并子 agent；需要 session token 汇总字段 |
 | 会话中枢：Z Code | ✅ | 只读 `~/.zcode/cli/db/db.sqlite`；体积包含每个会话的模型 I/O 日志、产物和图片缓存——这些才是它磁盘占用的大头 |
 | 会话中枢：Antigravity CLI | ✅ | 只读 `~/.gemini/antigravity-cli/`：每个对话一个 SQLite，外加 `conversation_summaries.db`；用量从每次调用的 protobuf 记录里解出；用 `agy --conversation` 恢复 |
+| 会话中枢：CodeBuddy Code | ✅ | 只读 `~/.codebuddy/projects/<工作目录>/<sessionId>.jsonl`；标题与 CodeBuddy 自己的 `--resume` 列表一致；暂不提供删除 |
 | 会话中枢：自己登记的 OpenCode 系工具 | ✅ | 在 `~/.orrery/harnesses.json` 里登记，Orrery 用同一套方式只读它的 SQLite——分支版本和自用版本都能接 |
 | 准确的 token 统计 | ✅ | 按 API 调用去重，拆成输入 / 缓存写 / 缓存读 / 输出 |
 | 单会话与各 harness 的磁盘占用 | ✅ | 状态页显示总计与按 harness 的拆分 |
@@ -81,6 +82,7 @@ Orrery 只读取各工具本来就写在磁盘上的数据，汇总到一块面�
 | **Kimi Code** | `agents/*/wire.jsonl` 里的 `usage.record` 事件 | `usageScope: "session"` 是上下文压缩的独立调用，不是汇总 | 每条记录计一次 |
 | **DSH** | 多帧 zstd 日志里 `assistant/message` 事件的 `data.usage` | 升级过的会话同时留着 v0 和 v3 两份同一段历史 | 两份都在时只读 v3 |
 | **Codex** | `token_count` 事件，新版另有 `token_usage_record` | `total_token_usage` 按进程累计、恢复会话后清零；`input_tokens` 已包含缓存命中；旧的 `token_count` 漏记上下文压缩调用 | 按调用去重累加，有 `token_usage_record` 的时段以它为准，输入减去缓存命中 |
+| **CodeBuddy Code** | 每条 history item 的 `message.usage`，原始记录在 `providerData.usage` | 落盘前 CLI 只把 `input_tokens`/`output_tokens`/`total_tokens` 规范化进 `message.usage`，缓存字段被丢掉；供应商字段名不统一 | 按消息 id 去重累加（流式重写同一 id 只算一次）；分项与 `total` 的差额记为「未分项」而不猜比例，分项超过 `total` 时按「缓存已含在 input 里」处理 |
 
 会话总量 = 主 agent + 全部子 agent。核对方式：
 
@@ -221,6 +223,7 @@ set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 | Codex | 该会话的 rollout 及其子 agent 的 rollout | Codex 数据库（经 `codex delete`）、`session_index.jsonl` |
 | OpenCode | —（全在 `opencode.db` 里） | 会话及子 agent，经 `opencode session delete` |
 | Z Code | 暂不支持（只读） | 不修改 |
+| CodeBuddy Code | 暂不支持（只读——会话文件由 CLI 自己追加写） | 不修改 |
 | Antigravity | `conversations/<id>.db`（及 `-wal`/`-shm`）、`brain/<id>/`、`annotations/<id>.pbtxt`，子对话同理 | —（agy 自己的历史列表可能还留着标题，打开只会开新对话） |
 | 登记的工具 | 暂不支持（只读） | 不修改 |
 

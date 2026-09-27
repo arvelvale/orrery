@@ -2,8 +2,9 @@
 
 mod antigravity;
 mod claude_code;
+mod codebuddy;
 pub mod cleanup;
-mod codex;
+pub(crate) mod codex;
 mod dsh;
 mod custom;
 mod index;
@@ -102,7 +103,7 @@ pub struct HarnessStorage {
 type Adapter = (&'static str, fn() -> Result<Vec<SessionSummary>, String>);
 
 pub fn list_all_sessions() -> Result<Vec<SessionSummary>, String> {
-    let adapters: [Adapter; 8] = [
+    let adapters: [Adapter; 9] = [
         ("cc", claude_code::list_sessions),
         ("kimi", kimi_code::list_sessions),
         ("dsh", dsh::list_sessions),
@@ -110,6 +111,7 @@ pub fn list_all_sessions() -> Result<Vec<SessionSummary>, String> {
         ("opencode", opencode::list_sessions),
         ("zcode", zcode::list_sessions),
         ("antigravity", antigravity::list_sessions),
+        ("codebuddy", codebuddy::list_sessions),
         ("custom", custom::list_sessions),
     ];
     let mut out = Vec::new();
@@ -147,6 +149,7 @@ pub fn storage_stats() -> Vec<HarnessStorage> {
         opencode::storage(),
         zcode::storage(),
         antigravity::storage(),
+        codebuddy::storage(),
     ]
     .into_iter()
     .chain(custom::storage())
