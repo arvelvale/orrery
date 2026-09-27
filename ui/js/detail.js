@@ -44,6 +44,7 @@ export function sessionDetailHtml(s) {
       ${canTransfer(s) ? `<button type="button" class="btn" data-act="transfer">${escapeHtml(t("detail.transfer"))}</button>` : ""}
       <button type="button" class="btn" data-act="open-folder">${escapeHtml(t("detail.openFolder"))}</button>
       <button type="button" class="btn" data-act="copy-path">${escapeHtml(t("detail.copyPath"))}</button>
+      <button type="button" class="btn" data-act="copy-session-id">${escapeHtml(t("detail.copySessionId"))}</button>
       ${canManage(s) ? `<button type="button" class="btn danger" data-act="delete">${escapeHtml(t("detail.delete"))}</button>` : ""}
     </div>`;
 }
@@ -111,6 +112,9 @@ function wireDetailActions(root, s) {
       } else if (act === "copy-path") {
         await copyText(s.project);
         toast(t("toast.pathCopied"));
+      } else if (act === "copy-session-id") {
+        await copyText(s.id);
+        toast(t("toast.sessionIdCopied"));
       } else if (act === "delete") {
         openDeleteDialog([s]);
       } else if (act === "transfer") {
