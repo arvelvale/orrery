@@ -6,7 +6,7 @@
 
 **AI コーディングエージェントのための、ローカルファーストなコックピット。**
 
-手元の Claude Code・Kimi Code・DSH（DeepSeek）・Codex・OpenCode・Z Code・Antigravity・CodeBuddy Code のセッションをひとつのウィンドウに集約します。トークン、ディスク使用量、プロジェクト、サブエージェントまで一目で把握でき、不要なセッションは削除できます（Z Code と CodeBuddy Code は読み取り専用）。各ハーネスをひとつのローカルモデルプロキシ経由にまとめられます。データは PC の外に出ません。
+手元の Claude Code・Kimi Code・DSH（DeepSeek）・Codex・OpenCode・Z Code・Antigravity・WorkBuddy のセッションをひとつのウィンドウに集約します。トークン、ディスク使用量、プロジェクト、サブエージェントまで一目で把握でき、不要なセッションは削除できます（Z Code と WorkBuddy は読み取り専用）。各ハーネスをひとつのローカルモデルプロキシ経由にまとめられます。データは PC の外に出ません。
 
 <p>
   <a href="https://github.com/arvelvale/orrery/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/arvelvale/orrery?style=flat-square&label=download&color=0F9D6E" /></a>
@@ -59,7 +59,8 @@ Orrery は、各ツールがすでにディスクへ書き出しているデー�
 | セッションハブ：OpenCode | ✅ | `$XDG_DATA_HOME/opencode` または `~/.local/share/opencode` の `opencode.db` を読み取り専用で参照。子孫エージェントを統合。session のトークン集計列が必要 |
 | セッションハブ：Z Code | ✅ | `~/.zcode/cli/db/db.sqlite` を読み取り専用で参照。サイズには各セッションのモデル I/O ログ・成果物・画像キャッシュを含みます（ディスク使用量の大半はこちら） |
 | セッションハブ：Antigravity CLI | ✅ | `~/.gemini/antigravity-cli/` を読み取り専用で参照。会話ごとの SQLite と `conversation_summaries.db` から読み、使用量は呼び出しごとの protobuf 記録から復号。`agy --conversation` で再開 |
-| セッションハブ：CodeBuddy Code | ✅ | `~/.codebuddy/projects/<作業ディレクトリ>/<sessionId>.jsonl` を読み取り専用で参照。タイトルは CodeBuddy 自身の `--resume` 一覧と揃えます。削除はまだ未対応 |
+| セッションハブ：WorkBuddy | ✅ | `~/.workbuddy/projects/<作業ディレクトリ>/<sessionId>.jsonl` を読み取り専用で参照。タイトルはセッション自身の `ai-title` を採ります。削除はまだ未対応 |
+| ネイティブセッション変換：Claude Code ↔ Codex | ✅ | 移行可能な会話を相手ツールの履歴にコピーして再開できます。元のセッションは残ります。未対応のメディアでは変換を停止し、内部の非表示の推論はコピーしません |
 | セッションハブ：自分で登録したツール | ✅ | `~/.orrery/harnesses.json` に登録すると、同じ方式でその SQLite を読み取り専用で参照します |
 | 正確なトークン集計 | ✅ | API 呼び出し単位で重複排除し、入力 / キャッシュ書込 / キャッシュ読込 / 出力に分割 |
 | セッション別・ハーネス別のディスク使用量 | ✅ | ステータス画面に合計と内訳を表示 |
@@ -82,7 +83,7 @@ Orrery は、各ツールがすでにディスクへ書き出しているデー�
 | **Kimi Code** | `agents/*/wire.jsonl` 内の `usage.record` イベント | `usageScope: "session"` はコンテキスト圧縮の独立した呼び出しで、合計値ではない | 各レコードを 1 回ずつ集計 |
 | **DSH** | マルチフレーム zstd ログ内の `assistant/message` イベントの `data.usage` | アップグレードしたセッションには同じ履歴の v0 と v3 のログが両方残る | 両方ある場合は v3 のみ読む |
 | **Codex** | `token_count` イベント（新しい版では `token_usage_record` も） | `total_token_usage` はプロセス単位で再開時にリセット、`input_tokens` はキャッシュ分を含む、古い `token_count` はコンテキスト圧縮の呼び出しを記録しない | 呼び出し単位で重複排除して合算し、`token_usage_record` がある区間はそちらを優先、入力からキャッシュ分を差し引く |
-| **CodeBuddy Code** | 各 history item の `message.usage`（元の記録は `providerData.usage`） | 保存前に CLI が `message.usage` には `input_tokens`/`output_tokens`/`total_tokens` だけを残し、キャッシュ項目は落ちる。プロバイダー側のフィールド名も一定しない | メッセージ id で重複排除して合算（ストリーミングで同じ id が書き直されても 1 回）。内訳と `total` の差は「内訳なし」として扱い、推測で割りません。内訳が `total` を超える場合はキャッシュが input に含まれる扱いにします |
+| **WorkBuddy** | 各 item の `message.usage`（元の記録は `providerData.rawUsage`） | 1 回のリクエストが message / function_call / reasoning 複数の item に分割され、同じ `providerData.messageId` と同じ使用量を共有します。プロバイダー側のフィールド名も一定しない | `providerData.messageId` で重複排除して合算（同じ id は 1 回）。内訳と `total` の差は「内訳なし」として扱い、推測で割りません。内訳が `total` を超える場合はキャッシュが input に含まれる扱いにします |
 
 セッション合計は、メインエージェントとすべてのサブエージェントの和です。検証方法：
 
@@ -223,7 +224,7 @@ set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 | Codex | セッションの rollout とそのサブエージェントの rollout | Codex データベース（`codex delete` 経由）、`session_index.jsonl` |
 | OpenCode | —（すべて `opencode.db` 内） | セッションとサブエージェント（`opencode session delete` 経由） |
 | Z Code | 未対応（読み取り専用） | 変更なし |
-| CodeBuddy Code | 未対応（読み取り専用 ― セッションファイルは CLI 自身が追記します） | 変更なし |
+| WorkBuddy | 未対応（読み取り専用 ― セッションファイルは WorkBuddy 自身が書きます） | 変更なし |
 | Antigravity | `conversations/<id>.db`（`-wal`/`-shm` を含む）、`brain/<id>/`、`annotations/<id>.pbtxt`、子会話も同様 | —（agy 自身の履歴にタイトルが残ることがあり、開くと新しい会話になります） |
 
 > [!TIP]

@@ -62,7 +62,7 @@ export function renderStatus() {
     kimi: "~/.kimi-code/sessions/",
     dsh: "~/.dsh/sessions/",
     codex: "~/.codex/sessions/",
-    codebuddy: "~/.codebuddy/projects/",
+    workbuddy: "~/.workbuddy/projects/",
   };
   const cards = [
     {

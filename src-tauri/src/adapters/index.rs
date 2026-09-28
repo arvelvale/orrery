@@ -18,8 +18,10 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::Mutex;
 
-/// 索引格式版本：`SessionSummary` / `Rollout` 改字段必须 +1
-const VERSION: u32 = 3;
+/// 索引格式版本：`SessionSummary` / `Rollout` 改字段必须 +1。
+/// 接入/移除 adapter 也 +1：旧索引里会留着已不再扫描的 harness 条目
+/// （死条目只按"文件是否存在"剔除，路径还在的会一直留着），整份丢弃重建更干净
+const VERSION: u32 = 5;
 
 #[derive(Serialize, Deserialize)]
 struct Snapshot {

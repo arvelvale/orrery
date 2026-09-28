@@ -60,6 +60,7 @@ mod targets;
 // 会话转换（transfer.rs）复用这两个能力
 pub(crate) use execute::codex_bin;
 pub(crate) use guard::no_window;
+pub(crate) use guard::pid_alive;
 
 use super::{
     antigravity, claude_home, codex, codex_home, dir_size, dsh_home, forget_memo, kimi_home, system_time_ms,

@@ -2,7 +2,7 @@
 
 mod antigravity;
 mod claude_code;
-mod codebuddy;
+mod workbuddy;
 pub mod cleanup;
 pub(crate) mod codex;
 mod dsh;
@@ -111,7 +111,7 @@ pub fn list_all_sessions() -> Result<Vec<SessionSummary>, String> {
         ("opencode", opencode::list_sessions),
         ("zcode", zcode::list_sessions),
         ("antigravity", antigravity::list_sessions),
-        ("codebuddy", codebuddy::list_sessions),
+        ("workbuddy", workbuddy::list_sessions),
         ("custom", custom::list_sessions),
     ];
     let mut out = Vec::new();
@@ -149,7 +149,7 @@ pub fn storage_stats() -> Vec<HarnessStorage> {
         opencode::storage(),
         zcode::storage(),
         antigravity::storage(),
-        codebuddy::storage(),
+        workbuddy::storage(),
     ]
     .into_iter()
     .chain(custom::storage())

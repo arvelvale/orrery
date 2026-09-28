@@ -13,14 +13,15 @@ export const HARNESS = {
   opencode: { id: "opencode", label: "OPENCODE", name: "OpenCode", badge: "opencode" },
   zcode: { id: "zcode", label: "ZCODE", name: "Z Code", badge: "zcode" },
   antigravity: { id: "antigravity", label: "ANTIGRAVITY", name: "Antigravity", badge: "antigravity" },
-  codebuddy: { id: "codebuddy", label: "CBUDDY", name: "CodeBuddy Code", badge: "codebuddy" },
+  workbuddy: { id: "workbuddy", label: "WBUDDY", name: "WorkBuddy", badge: "workbuddy" },
 };
 
 export const HARNESS_IDS = Object.keys(HARNESS);
 
 /*
- * 能在 Orrery 里删除会话的 harness。CodeBuddy Code 的 session 文件由它自己追加写，
- * Orrery 没在沙盒里验证过删掉后它的 --resume 列表会怎样，所以只读、不进这里
+ * 能在 Orrery 里删除、也能在终端恢复的 harness。其余（Z Code、WorkBuddy、
+ * 自己登记的工具）只读：不给复选框、不给删除/恢复按钮，详情里直接说去哪里管理
+ * ——别让人点了才发现做不了
  */
 const MANAGEABLE = new Set(["cc", "kimi", "dsh", "codex", "opencode", "antigravity"]);
 
@@ -28,14 +29,6 @@ export const canManage = (s) => MANAGEABLE.has(s.harness);
 
 /** 按 harness id 判断（删除计划里只有 id，没有整条会话） */
 export const canManageHarness = (id) => MANAGEABLE.has(id);
-
-/*
- * 能在终端里恢复的 harness：有自己的 CLI 且 resume 参数已确认。
- * 和 canManage 分开——CodeBuddy 能恢复但不能删，Z Code 两个都不能
- */
-const RESUMABLE = new Set(["cc", "kimi", "dsh", "codex", "opencode", "antigravity", "codebuddy"]);
-
-export const canResume = (s) => RESUMABLE.has(s.harness);
 
 /**
  * 未知 harness 的兜底：补一个中性条目并登记进 HARNESS_IDS，

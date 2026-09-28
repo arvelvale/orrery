@@ -6,7 +6,7 @@
 
 **A local-first cockpit for your AI coding agents.**
 
-Every Claude Code, Kimi Code, DSH (DeepSeek), Codex, OpenCode, Z Code, Antigravity and CodeBuddy Code session on your machine in one window: tokens, disk usage, projects, subagents. Delete what you no longer need (Z Code and CodeBuddy Code are read-only), and route every harness through one local model proxy. Nothing leaves your computer.
+Every Claude Code, Kimi Code, DSH (DeepSeek), Codex, OpenCode, Z Code, Antigravity and WorkBuddy session on your machine in one window: tokens, disk usage, projects, subagents. Delete what you no longer need (Z Code and WorkBuddy are read-only), and route every harness through one local model proxy. Nothing leaves your computer.
 
 <p>
   <a href="https://github.com/arvelvale/orrery/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/arvelvale/orrery?style=flat-square&label=download&color=0F9D6E" /></a>
@@ -30,7 +30,7 @@ Every Claude Code, Kimi Code, DSH (DeepSeek), Codex, OpenCode, Z Code, Antigravi
   <img alt="OpenCode" src="https://img.shields.io/badge/OpenCode-connected-0F9D6E?style=flat-square" />
   <img alt="Z Code" src="https://img.shields.io/badge/Z%20Code-connected-0F9D6E?style=flat-square" />
   <img alt="Antigravity" src="https://img.shields.io/badge/Antigravity-connected-0F9D6E?style=flat-square" />
-  <img alt="CodeBuddy Code" src="https://img.shields.io/badge/CodeBuddy%20Code-connected-0F9D6E?style=flat-square" />
+  <img alt="WorkBuddy" src="https://img.shields.io/badge/WorkBuddy-connected-0F9D6E?style=flat-square" />
 </p>
 
 **English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
@@ -63,7 +63,8 @@ Orrery reads what the harnesses already write to disk and puts it all on one boa
 | Session hub: OpenCode | ✅ | Read-only `opencode.db` under `$XDG_DATA_HOME/opencode` or `~/.local/share/opencode`; nested subagents folded in; requires session token-summary columns |
 | Session hub: Z Code | ✅ | Read-only `~/.zcode/cli/db/db.sqlite`; size includes each session's model I/O log, artifacts and image cache, which are most of its disk footprint |
 | Session hub: Antigravity CLI | ✅ | Read-only `~/.gemini/antigravity-cli/`: one SQLite per conversation plus `conversation_summaries.db`; usage decoded from each call's protobuf record; resume with `agy --conversation` |
-| Session hub: CodeBuddy Code | ✅ | Read-only `~/.codebuddy/projects/<work-dir>/<sessionId>.jsonl`; the title matches CodeBuddy's own `--resume` list; delete is not offered yet |
+| Session hub: WorkBuddy | ✅ | Read-only `~/.workbuddy/projects/<work-dir>/<sessionId>.jsonl`; the title comes from the session's own `ai-title`; delete is not offered yet |
+| Native session transfer: Claude Code ↔ Codex | ✅ | Copy a transferable conversation into the other tool's own history and resume it there; the source stays in place. Unsupported media stops the transfer, and hidden reasoning is not copied |
 | Session hub: your own OpenCode-style tool | ✅ | Register it in `~/.orrery/harnesses.json` and Orrery reads its SQLite the same way — handy for forks and private builds |
 | Accurate token accounting | ✅ | Deduplicated per API call, split into input / cache write / cache read / output |
 | Disk usage per session and per harness | ✅ | Status page shows totals and a per-harness breakdown |
@@ -89,7 +90,7 @@ Every harness records usage per API call, and none of them can simply be added u
 | **OpenCode** | SQLite `session.tokens_*` | Reasoning is a separate bucket; child sessions have their own totals | Adds reasoning to output and recursively folds children into their root session; API call count is unavailable |
 | **Z Code** | `model_usage`, one row per API call | `input_tokens` already contains cache reads, and `turn_usage` leaves out side calls such as title generation | Sums every call in `model_usage`, and uses each row's `computed_total_tokens` to decide whether caches and reasoning are inside input/output, so the buckets always add up to the provider's total |
 | **Antigravity** | `gen_metadata`, one protobuf row per API call | Output already includes thinking tokens; cache reads are reported separately from input | Sums input, output, cache write and cache read directly; cancelled calls with no usage are not counted |
-| **CodeBuddy Code** | `message.usage` on each history item, with `providerData.usage` as the original record | On save the CLI keeps only `input_tokens` / `output_tokens` / `total_tokens` in `message.usage` and drops the cache buckets; the provider's field names vary | Sums per message id (streamed re-writes of one id count once); the gap between the buckets and `total_tokens` is shown as *unsplit* rather than split by guesswork, and buckets that overshoot `total` are treated as cache already inside input |
+| **WorkBuddy** | `message.usage` on each item, with `providerData.rawUsage` as the original record | One request is split into several items (message / function_call / reasoning) that share one `providerData.messageId` and the same usage; the bucket field names vary by provider | Sums per `providerData.messageId` (a shared id counts once); the gap between the buckets and `total_tokens` is shown as *unsplit* rather than split by guesswork, and buckets that overshoot `total` are treated as cache already inside input |
 | **Registered tool** | `session.tokens_*` when present, otherwise the `tokens` object on each message | Older OpenCode forks have no token columns on the session | Detects which layout the database uses and sums accordingly; reasoning always folds into output |
 
 The session total adds up the main agent and every subagent. How it was checked:
@@ -231,7 +232,7 @@ Every session is just files on disk, so Orrery can remove the ones you no longer
 | Codex | the session's rollouts plus its subagent rollouts | Codex database (via `codex delete`), `session_index.jsonl` |
 | OpenCode | — (all in `opencode.db`) | Session and subagents, via `opencode session delete` |
 | Z Code | Not supported (read-only) | No changes |
-| CodeBuddy Code | Not supported (read-only — the CLI appends to its own session files) | No changes |
+| WorkBuddy | Not supported (read-only — WorkBuddy writes its own session files) | No changes |
 | Antigravity | `conversations/<id>.db` (+ `-wal`/`-shm`), `brain/<id>/`, `annotations/<id>.pbtxt`, and the same for child conversations | — (agy's own history list may still show the title; opening it starts a new conversation) |
 | Registered tool | Not supported (read-only) | No changes |
 

@@ -80,8 +80,6 @@ fn command_for(harness: &str, id: &str) -> Option<(&'static str, Vec<String>)> {
         },
         "opencode" => ("opencode", args(&["--session", id])),
         "antigravity" => ("agy", args(&["--conversation", id])),
-        // CodeBuddy Code CLI：`-r, --resume [sessionId]`（实测 --help，未在真机联调）
-        "codebuddy" => ("codebuddy", args(&["--resume", id])),
         _ => return None,
     })
 }

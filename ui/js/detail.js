@@ -6,7 +6,7 @@
 import { $, copyText, toast } from "./dom.js";
 import { escapeHtml, formatBytes, formatTok, statusLabel, usageSplitHtml } from "./format.js";
 import { t, formatRelative } from "../i18n.js";
-import { canManage, canResume, HARNESS, harnessOf } from "./harness.js";
+import { canManage, HARNESS, harnessOf } from "./harness.js";
 import { invokeTauri } from "./bridge.js";
 import { state } from "./state.js";
 import { findSession, localized, sessionTitle } from "./session.js";
@@ -38,9 +38,9 @@ export function sessionDetailHtml(s) {
     </dl>
     <p class="excerpt">${escapeHtml(localized(s.excerpt))}</p>
     ${log ? `<div class="log">${log}</div>` : ""}
-    ${canManage(s) ? "" : `<p class="detail-note">${escapeHtml(t(canResume(s) ? "detail.noDelete" : "detail.readOnly", { name: h.name }))}</p>`}
+    ${canManage(s) ? "" : `<p class="detail-note">${escapeHtml(t("detail.readOnly", { name: h.name }))}</p>`}
     <div class="btn-row">
-      ${canResume(s) ? `<button type="button" class="btn primary" data-act="resume">${escapeHtml(t("detail.resume"))}</button>` : ""}
+      ${canManage(s) ? `<button type="button" class="btn primary" data-act="resume">${escapeHtml(t("detail.resume"))}</button>` : ""}
       ${canTransfer(s) ? `<button type="button" class="btn" data-act="transfer">${escapeHtml(t("detail.transfer"))}</button>` : ""}
       <button type="button" class="btn" data-act="open-folder">${escapeHtml(t("detail.openFolder"))}</button>
       <button type="button" class="btn" data-act="copy-path">${escapeHtml(t("detail.copyPath"))}</button>

@@ -51,7 +51,8 @@ pub(super) fn cc_is_running(root: &Path, id: &str) -> bool {
     })
 }
 
-fn pid_alive(pid: u64) -> bool {
+/// 进程是否存活。`workbuddy` adapter 要用它判断会话是否正在运行
+pub(crate) fn pid_alive(pid: u64) -> bool {
     if cfg!(windows) {
         let mut cmd = std::process::Command::new("tasklist");
         cmd.args(["/FI", &format!("PID eq {pid}"), "/FO", "CSV", "/NH"]);
