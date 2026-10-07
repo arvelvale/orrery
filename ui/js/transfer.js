@@ -75,6 +75,9 @@ function previewKey(source, target) {
 async function loadPreview(source, target) {
   const key = previewKey(source, target);
   state.transfer.preview = { key, loading: true };
+  // 让发起这次预检的 renderTransfer 先画完，否则它会用旧状态盖掉这里的结果
+  // （浏览器预览没有任何 await，曾因此一直停在“正在检查”）
+  await Promise.resolve();
   let next;
   if (state.runtime !== "tauri") {
     next = { key, images: 0 };
