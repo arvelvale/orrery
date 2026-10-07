@@ -57,7 +57,7 @@ mod guard;
 mod opencode_cli;
 mod targets;
 
-// 会话转换（transfer.rs）复用这两个能力
+// 会话转换（`transfer/`）复用这两个能力
 pub(crate) use execute::codex_bin;
 pub(crate) use guard::no_window;
 pub(crate) use guard::pid_alive;

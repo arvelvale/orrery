@@ -70,7 +70,7 @@ pub(crate) fn pid_alive(pid: u64) -> bool {
         .unwrap_or(false)
 }
 
-/// 子进程不要弹控制台窗口（Windows）。`transfer.rs` 也要用
+/// 子进程不要弹控制台窗口（Windows）。会话转换（`transfer/`）也要用
 #[cfg(windows)]
 pub(crate) fn no_window(cmd: &mut std::process::Command) {
     use std::os::windows::process::CommandExt;
