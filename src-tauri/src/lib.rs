@@ -29,7 +29,12 @@ fn plan_delete(targets: Vec<cleanup::Target>) -> Vec<cleanup::Plan> {
 /// 执行删除；后端会重新规划，不采信前端传来的路径
 #[tauri::command(async)]
 fn delete_sessions(targets: Vec<cleanup::Target>, mode: cleanup::Mode) -> Vec<cleanup::Outcome> {
-    cleanup::delete_all(&targets, mode)
+    let outcomes = cleanup::delete_all(&targets, mode);
+    // 会话转换时存成文件的图片属于目标会话：会话删了，图片用同一种方式跟着走
+    for o in outcomes.iter().filter(|o| o.ok) {
+        transfer::media::release(&o.harness, &o.id, mode == cleanup::Mode::Trash);
+    }
+    outcomes
 }
 
 #[tauri::command]
@@ -114,6 +119,12 @@ fn resume_session(harness: String, id: String, project: String) -> Result<String
 }
 
 /// `target` is optional so an older frontend keeps its Claude Code ⇄ Codex default
+/// What a transfer would do, read-only: how many images become files, or why it cannot run
+#[tauri::command(async)]
+fn preview_transfer(harness: String, id: String, target: String) -> Result<transfer::TransferPreview, String> {
+    transfer::preview(&harness, &id, &target)
+}
+
 #[tauri::command(async)]
 fn convert_session(harness: String, id: String, target: Option<String>) -> Result<transfer::ConvertedSession, String> {
     transfer::convert(&harness, &id, target.as_deref())
@@ -175,7 +186,8 @@ pub fn run() {
             remove_model,
             open_path,
             resume_session,
-            convert_session
+            convert_session,
+            preview_transfer
         ])
         .run(tauri::generate_context!())
         .expect("error while running Orrery");

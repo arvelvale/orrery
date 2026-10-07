@@ -15,15 +15,17 @@
 //! native file directly, and re-rendering it could only lose detail. Every other
 //! source reaches Codex by rendering Claude JSONL into a staging folder first.
 //!
-//! Fidelity bar, kept from the first version: anything that cannot be carried
-//! over faithfully (media the target would drop, unknown record types) stops the
-//! transfer with an error instead of producing a quietly incomplete copy. Hidden
-//! reasoning is never exported. Tool calls and results from another tool become
-//! labelled history text in the target, never live tool records the target
-//! might try to replay.
+//! Fidelity bar: nothing is dropped quietly. Unknown record types and media no
+//! target can hold (PDFs, linked images) stop the transfer with an error.
+//! Images a target cannot hold inline are saved as files with a reference left
+//! in their place (see `media.rs`); the UI says how many before converting.
+//! Hidden reasoning is never exported. Tool calls and results from another tool
+//! become labelled history text in the target, never live tool records the
+//! target might try to replay.
 
 mod claude;
 mod codex;
+pub(crate) mod media;
 mod opencode;
 
 use rusqlite::OptionalExtension;
@@ -53,6 +55,23 @@ pub(crate) enum Role {
     Assistant,
 }
 
+/// A base64 image in a format every writer accepts (png, jpeg, gif, webp)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct Image {
+    pub media_type: String,
+    pub data: String,
+}
+
+/// `data:image/png;base64,…` → an image; any other URL or format → `None`
+pub(crate) fn data_url_image(url: &str) -> Option<Image> {
+    let (header, data) = url.split_once(',')?;
+    let media = header.strip_prefix("data:")?.strip_suffix(";base64")?;
+    let ok = matches!(media, "image/png" | "image/jpeg" | "image/gif" | "image/webp")
+        && !data.is_empty()
+        && data.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'/' || b == b'=');
+    ok.then(|| Image { media_type: media.to_owned(), data: data.to_owned() })
+}
+
 /// One piece of a turn, in the order it appeared
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Part {
@@ -60,7 +79,9 @@ pub(crate) enum Part {
     /// Base64 image; readers only emit the formats every writer accepts
     Image { media_type: String, data: String },
     ToolCall { id: String, name: String, input: String },
-    ToolResult { id: String, output: String },
+    /// `images` are screenshots and the like returned by the tool; they are
+    /// saved as files before any writer sees the transcript
+    ToolResult { id: String, output: String, images: Vec<Image> },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -167,29 +188,72 @@ pub fn convert(harness: &str, id: &str, target: Option<&str>) -> Result<Converte
     convert_to(harness, id, target)
 }
 
-pub(crate) fn convert_to(harness: &str, id: &str, target: &str) -> Result<ConvertedSession, String> {
-    static TRANSFER_LOCK: Mutex<()> = Mutex::new(());
-    let _guard = TRANSFER_LOCK.try_lock().map_err(|_| "transfer_busy")?;
+fn check_pair(harness: &str, id: &str, target: &str) -> Result<(), String> {
     if !HARNESSES.contains(&harness) || !HARNESSES.contains(&target) || harness == target {
         return Err("unsupported_harness".into());
     }
     if !valid_id(harness, id) {
         return Err("invalid_session_id".into());
     }
-    if (harness, target) == ("cc", "codex") {
-        let source = claude::locate(id)?;
+    Ok(())
+}
+
+/// Claude Code → Codex with no media hands Claude's native file to Codex's
+/// importer as-is. With media it takes the transcript path, so the images
+/// become files instead of being dropped by that importer.
+fn claude_passthrough(harness: &str, id: &str, target: &str) -> Result<Option<claude::ClaudeFile>, String> {
+    if (harness, target) != ("cc", "codex") {
+        return Ok(None);
+    }
+    match claude::locate(id) {
+        Ok(file) => Ok(Some(file)),
+        Err(e) if e == "unsupported_source_media" => Ok(None),
+        Err(e) => Err(e),
+    }
+}
+
+pub(crate) fn convert_to(harness: &str, id: &str, target: &str) -> Result<ConvertedSession, String> {
+    static TRANSFER_LOCK: Mutex<()> = Mutex::new(());
+    let _guard = TRANSFER_LOCK.try_lock().map_err(|_| "transfer_busy")?;
+    check_pair(harness, id, target)?;
+    if let Some(source) = claude_passthrough(harness, id, target)? {
         return codex::import_claude_file(&source.path, &source.cwd, &source.title, id);
+    }
+    let mut transcript = read(harness, id)?;
+    if !Path::new(&transcript.cwd).is_dir() {
+        return Err("cwd_missing".into());
+    }
+    let mut media = media::MediaStore::new()?;
+    let result = media::externalize(&mut transcript, target, &mut media).and_then(|()| match target {
+        "cc" => claude::write(&transcript),
+        "codex" => codex::import_transcript(&transcript),
+        "opencode" => opencode::write(&transcript),
+        _ => Err("unsupported_harness".into()),
+    });
+    match &result {
+        Ok(done) => media.finish(&done.harness, &done.id),
+        Err(_) => media.discard(),
+    }
+    result
+}
+
+/// What a transfer would do, without doing it: read-only
+#[derive(Debug, Serialize)]
+pub struct TransferPreview {
+    /// Images that will be saved as files under ~/.orrery/transfer-media
+    pub images_to_files: usize,
+}
+
+pub fn preview(harness: &str, id: &str, target: &str) -> Result<TransferPreview, String> {
+    check_pair(harness, id, target)?;
+    if claude_passthrough(harness, id, target)?.is_some() {
+        return Ok(TransferPreview { images_to_files: 0 });
     }
     let transcript = read(harness, id)?;
     if !Path::new(&transcript.cwd).is_dir() {
         return Err("cwd_missing".into());
     }
-    match target {
-        "cc" => claude::write(&transcript),
-        "codex" => codex::import_transcript(&transcript),
-        "opencode" => opencode::write(&transcript),
-        _ => Err("unsupported_harness".into()),
-    }
+    Ok(TransferPreview { images_to_files: media::count(&transcript, target) })
 }
 
 /// Claude Code and Codex use UUIDs; OpenCode uses `ses_` plus 26 alphanumerics

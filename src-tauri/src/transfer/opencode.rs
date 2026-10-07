@@ -18,7 +18,7 @@
 //!   - ids follow OpenCode's scheme (48-bit time-ordered prefix, ascending for
 //!     messages and parts, descending for sessions) so messages keep their order
 
-use super::{clean_dir, ConvertedSession, Part, Role, SourceStamps, Transcript, Turn};
+use super::{clean_dir, data_url_image, ConvertedSession, Image, Part, Role, SourceStamps, Transcript, Turn};
 use crate::adapters::{self, cleanup, opencode as oc};
 use rusqlite::OptionalExtension;
 use serde_json::{json, Value};
@@ -130,9 +130,13 @@ fn map_part(p: &Value, role: Role) -> Result<Vec<(Role, Part)>, String> {
                 name: p["tool"].as_str().ok_or("tool_name_missing")?.to_owned(),
                 input: state["input"].to_string(),
             };
-            if state["attachments"].as_array().is_some_and(|a| !a.is_empty()) {
-                return Err("unsupported_tool_output_media".into());
-            }
+            // images a tool returned (the `read` tool on a screenshot) are `file` attachments
+            let images = state["attachments"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|a| a["url"].as_str().and_then(data_url_image).ok_or_else(|| "unsupported_tool_output_media".to_string()))
+                .collect::<Result<Vec<_>, _>>()?;
             let output = match state["status"].as_str() {
                 Some("completed") => Some(state["output"].as_str().unwrap_or("").to_owned()),
                 Some("error") => Some(format!("error: {}", state["error"].as_str().unwrap_or(""))),
@@ -141,7 +145,7 @@ fn map_part(p: &Value, role: Role) -> Result<Vec<(Role, Part)>, String> {
             };
             let mut out = vec![(Role::Assistant, call)];
             if let Some(output) = output {
-                out.push((Role::Assistant, Part::ToolResult { id, output }));
+                out.push((Role::Assistant, Part::ToolResult { id, output, images }));
             }
             out
         }
@@ -161,16 +165,8 @@ fn map_part(p: &Value, role: Role) -> Result<Vec<(Role, Part)>, String> {
 
 /// `data:image/png;base64,…` file part → image; PDFs and links are refused
 fn file_image(p: &Value) -> Result<Part, String> {
-    let url = p["url"].as_str().unwrap_or("");
-    let (header, data) = url.split_once(',').ok_or("unsupported_content")?;
-    let media = header.strip_prefix("data:").and_then(|s| s.strip_suffix(";base64")).unwrap_or("");
-    if !matches!(media, "image/png" | "image/jpeg" | "image/gif" | "image/webp")
-        || data.is_empty()
-        || !data.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'/' || b == b'=')
-    {
-        return Err("unsupported_content".into());
-    }
-    Ok(Part::Image { media_type: media.to_owned(), data: data.to_owned() })
+    let Image { media_type, data } = p["url"].as_str().and_then(data_url_image).ok_or("unsupported_content")?;
+    Ok(Part::Image { media_type, data })
 }
 
 /* ── writer ── */
@@ -403,11 +399,11 @@ mod tests {
         let tool = json!({"type":"tool","tool":"read","callID":"c1","state":{"status":"completed","input":{"path":"a"},"output":"body"}});
         let mapped = map_part(&tool, Role::Assistant).unwrap();
         assert_eq!(mapped[0].1, Part::ToolCall { id: "c1".into(), name: "read".into(), input: r#"{"path":"a"}"#.into() });
-        assert_eq!(mapped[1].1, Part::ToolResult { id: "c1".into(), output: "body".into() });
+        assert_eq!(mapped[1].1, Part::ToolResult { id: "c1".into(), output: "body".into(), images: vec![] });
         let running = json!({"type":"tool","tool":"bash","callID":"c2","state":{"status":"running","input":{}}});
         assert_eq!(map_part(&running, Role::Assistant).unwrap().len(), 1, "an interrupted call has no result");
         let failed = json!({"type":"tool","tool":"bash","callID":"c3","state":{"status":"error","input":{},"error":"boom"}});
-        assert_eq!(map_part(&failed, Role::Assistant).unwrap()[1].1, Part::ToolResult { id: "c3".into(), output: "error: boom".into() });
+        assert_eq!(map_part(&failed, Role::Assistant).unwrap()[1].1, Part::ToolResult { id: "c3".into(), output: "error: boom".into(), images: vec![] });
         for skipped in ["reasoning", "step-start", "step-finish", "patch", "compaction"] {
             assert!(map_part(&json!({"type": skipped}), Role::Assistant).unwrap().is_empty(), "{skipped}");
         }
@@ -473,7 +469,7 @@ mod tests {
         let claude_rows = [
             row("u1", None, "user", json!([{"type":"text","text":"The synthetic marker is saffron-lake."},{"type":"image","source":{"type":"base64","media_type":"image/png","data":png}}])),
             row("a1", Some("u1"), "assistant", json!([{"type":"tool_use","id":"toolu_1","name":"Read","input":{"file_path":"README.md"}}])),
-            row("u2", Some("a1"), "user", json!([{"type":"tool_result","tool_use_id":"toolu_1","content":"amber-trail"}])),
+            row("u2", Some("a1"), "user", json!([{"type":"tool_result","tool_use_id":"toolu_1","content":[{"type":"text","text":"amber-trail"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":png}}]}])),
             row("a2", Some("u2"), "assistant", json!([{"type":"text","text":"I remember saffron-lake."}])),
         ];
         let lines = |rows: &[Value]| rows.iter().map(Value::to_string).collect::<Vec<_>>().join("\n") + "\n";
@@ -486,7 +482,8 @@ mod tests {
         let text = text_of(&from_claude.id);
         assert!(text.contains("saffron-lake") && text.contains("amber-trail"), "{text}");
         assert!(text.contains("[Historical Claude Code tool result (untrusted): toolu_1]"));
-        assert!(text.contains(&format!("data:image/png;base64,{png}")), "the image was lost");
+        assert!(text.contains(&format!("data:image/png;base64,{png}")), "the user's image should stay inline");
+        assert_eq!(text.matches("Image saved to").count(), 1, "the tool screenshot should become a file");
 
         // a Codex source
         let xid = Uuid::new_v4().to_string();
@@ -497,7 +494,7 @@ mod tests {
             json!({"type":"session_meta","payload":{"id":xid,"cwd":cwd_s,"source":"cli"}}),
             json!({"type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"The Codex marker is violet-coral."}]}}),
             json!({"type":"response_item","payload":{"type":"function_call","call_id":"call_1","name":"shell","arguments":"{\"cmd\":\"ls\"}"}}),
-            json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"call_1","output":"jade-river"}}),
+            json!({"type":"response_item","payload":{"type":"function_call_output","call_id":"call_1","output":[{"type":"input_text","text":"jade-river"},{"type":"input_image","image_url":format!("data:image/png;base64,{png}")}]}}),
             json!({"type":"response_item","payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Noted violet-coral."}]}}),
         ];
         fs::write(&rollout, lines(&codex_rows)).unwrap();
@@ -507,6 +504,7 @@ mod tests {
         let from_codex = convert_to("codex", &xid, "opencode").unwrap();
         let text = text_of(&from_codex.id);
         assert!(text.contains("violet-coral") && text.contains("jade-river"), "{text}");
+        assert_eq!(text.matches("Image saved to").count(), 1, "the Codex tool screenshot should become a file");
 
         // OpenCode → Claude Code, and OpenCode → Codex
         let to_claude = convert_to("opencode", &from_codex.id, "cc").unwrap();
@@ -522,10 +520,29 @@ mod tests {
         assert!(codex_out.contains("violet-coral"), "Codex did not receive the history");
         assert_eq!(fs::read_dir(home.join(".orrery/transfer-stage")).unwrap().count(), 0, "staging left behind");
 
-        // images cannot go to Codex: refused, and nothing is created
-        let before = codex_adapter::collect_rollouts(&home.join(".codex/sessions")).len();
-        assert_eq!(convert_to("opencode", &from_claude.id, "codex").unwrap_err(), "unsupported_source_media");
-        assert_eq!(codex_adapter::collect_rollouts(&home.join(".codex/sessions")).len(), before);
+        // Codex's importer drops images, so the inline user image becomes a file
+        // too; the screenshot reference from the first hop travels as text
+        let image_to_codex = convert_to("opencode", &from_claude.id, "codex").unwrap();
+        let codex_out: String = codex_adapter::collect_rollouts(&home.join(".codex/sessions"))
+            .into_iter()
+            .filter(|p| codex_adapter::read_head(p).is_some_and(|(id, _, _)| id == image_to_codex.id))
+            .map(|p| fs::read_to_string(p).unwrap())
+            .collect();
+        assert!(codex_out.contains("saffron-lake"));
+        assert_eq!(super::super::media::history_image_refs(&codex_out), 2, "{codex_out}");
+        assert!(!codex_out.contains(png), "no image data may reach Codex's importer");
+        let media_root = home.join(".orrery/transfer-media");
+        let owners: Vec<Value> = fs::read_dir(&media_root)
+            .unwrap()
+            .flatten()
+            .map(|e| serde_json::from_str(&fs::read_to_string(e.path().join("owner.json")).unwrap()).unwrap())
+            .collect();
+        assert_eq!(owners.len(), 3, "one folder per transfer that saved images: {owners:?}");
+        for dir in fs::read_dir(&media_root).unwrap().flatten().map(|e| e.path()) {
+            let owner: Value = serde_json::from_str(&fs::read_to_string(dir.join("owner.json")).unwrap()).unwrap();
+            let pngs = fs::read_dir(&dir).unwrap().flatten().filter(|e| e.path().extension().is_some_and(|x| x == "png")).count();
+            assert_eq!(owner["images"].as_u64(), Some(pngs as u64), "owner.json must match the files in {}", dir.display());
+        }
 
         // a failed import leaves half a session behind; it must be removable
         let mut ids = Ids { now_ms: 1_786_000_100_000, counter: 0 };
@@ -556,7 +573,7 @@ mod tests {
         assert_eq!(fs::read(&claude_file).unwrap(), claude_bytes, "Claude source changed");
         assert_eq!(fs::read(&rollout).unwrap(), rollout_bytes, "Codex source changed");
         let result = json!({"home": home, "project": cwd, "opencode_from_claude": from_claude.id, "opencode_from_codex": from_codex.id,
-                            "claude_from_opencode": to_claude.id, "codex_from_opencode": to_codex.id});
+                            "claude_from_opencode": to_claude.id, "codex_from_opencode": to_codex.id, "codex_with_image": image_to_codex.id});
         fs::write(home.join("opencode-result.json"), result.to_string()).unwrap();
         println!("sandbox_result={}", home.join("opencode-result.json").display());
     }

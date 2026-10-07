@@ -5,7 +5,7 @@
 //!   which accepts Claude Code JSONL. Codex creates the rollout itself; importing
 //!   the same source version again returns the existing target.
 
-use super::{Part, Role, SourceStamps, Transcript, Turn};
+use super::{data_url_image, Image, Part, Role, SourceStamps, Transcript, Turn};
 use crate::adapters::{self, cleanup, codex};
 use serde_json::{json, Value};
 use std::fs::{self, File};
@@ -110,13 +110,13 @@ fn turn(p: &Value) -> Result<Option<Turn>, String> {
                 }],
             }
         }
-        "function_call_output" | "custom_tool_call_output" => Turn {
-            role: Role::Assistant,
-            parts: vec![Part::ToolResult {
-                id: p["call_id"].as_str().ok_or("tool_call_id_missing")?.to_owned(),
-                output: tool_output(&p["output"])?,
-            }],
-        },
+        "function_call_output" | "custom_tool_call_output" => {
+            let (output, images) = tool_output(&p["output"])?;
+            Turn {
+                role: Role::Assistant,
+                parts: vec![Part::ToolResult { id: p["call_id"].as_str().ok_or("tool_call_id_missing")?.to_owned(), output, images }],
+            }
+        }
         "reasoning" => return Ok(None), // hidden reasoning is not exported
         _ => return Err("unsupported_response_item".into()),
     };
@@ -125,37 +125,31 @@ fn turn(p: &Value) -> Result<Option<Turn>, String> {
 
 /// `data:image/png;base64,…` → an image part; anything else is refused
 fn image(part: &Value) -> Result<Part, String> {
-    let url = part["image_url"].as_str().ok_or("unsupported_image")?;
-    let (header, data) = url.split_once(',').ok_or("unsupported_image")?;
-    let media = header
-        .strip_prefix("data:")
-        .and_then(|s| s.strip_suffix(";base64"))
-        .ok_or("unsupported_image")?;
-    if !matches!(media, "image/png" | "image/jpeg" | "image/gif" | "image/webp")
-        || data.is_empty()
-        || !data.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'/' || b == b'=')
-    {
-        return Err("unsupported_image".into());
-    }
-    Ok(Part::Image { media_type: media.to_owned(), data: data.to_owned() })
+    let Image { media_type, data } =
+        part["image_url"].as_str().and_then(data_url_image).ok_or("unsupported_image")?;
+    Ok(Part::Image { media_type, data })
 }
 
-/// Tool output as text; non-text media in a tool result is refused
-pub(super) fn tool_output(output: &Value) -> Result<String, String> {
+/// Tool output: its text, and any images it returned (screenshots), which are
+/// saved as files later; see `media.rs`
+pub(super) fn tool_output(output: &Value) -> Result<(String, Vec<Image>), String> {
     if let Some(text) = output.as_str() {
-        return Ok(text.to_owned());
+        return Ok((text.to_owned(), vec![]));
     }
     let parts = output.as_array().ok_or("unsupported_tool_output")?;
-    let mut texts = Vec::with_capacity(parts.len());
+    let (mut texts, mut images) = (Vec::new(), Vec::new());
     for part in parts {
         match part["type"].as_str().unwrap_or("") {
             "input_text" | "output_text" | "text" => {
                 texts.push(part["text"].as_str().ok_or("unsupported_tool_output")?.to_owned())
             }
+            "input_image" => images.push(
+                part["image_url"].as_str().and_then(data_url_image).ok_or("unsupported_tool_output_media")?,
+            ),
             _ => return Err("unsupported_tool_output_media".into()),
         }
     }
-    Ok(texts.join("\n"))
+    Ok((texts.join("\n"), images))
 }
 
 /* ── writer ── */
@@ -417,7 +411,7 @@ mod tests {
         let result = json!({"type":"function_call_output","call_id":"c1","output":"done"});
         let t = turn(&result).unwrap().unwrap();
         assert_eq!(t.role, Role::Assistant, "a tool result must never become a user turn");
-        assert_eq!(t.parts, vec![Part::ToolResult { id: "c1".into(), output: "done".into() }]);
+        assert_eq!(t.parts, vec![Part::ToolResult { id: "c1".into(), output: "done".into(), images: vec![] }]);
         assert!(turn(&json!({"type":"reasoning","summary":[]})).unwrap().is_none());
         assert!(turn(&json!({"type":"message","role":"developer","content":[]})).unwrap().is_none());
     }

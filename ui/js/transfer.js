@@ -64,6 +64,33 @@ export function transferErrorLabel(error) {
   return t("transfer.error.other", { code });
 }
 
+/**
+ * 预检（只读）：转换前就知道有几张图片要存成文件，或者这条会话为什么迁不了。
+ * 结果按「来源 > 目标」缓存；返回时如果用户已经换了选择，就不覆盖界面。
+ */
+function previewKey(source, target) {
+  return `${sessionKey(source)}>${target}`;
+}
+
+async function loadPreview(source, target) {
+  const key = previewKey(source, target);
+  state.transfer.preview = { key, loading: true };
+  let next;
+  if (state.runtime !== "tauri") {
+    next = { key, images: 0 };
+  } else {
+    try {
+      const r = await invokeTauri("preview_transfer", { harness: source.harness, id: source.id, target });
+      next = { key, images: r.images_to_files };
+    } catch (error) {
+      next = { key, error: String(error) };
+    }
+  }
+  if (state.transfer.preview?.key !== key) return;
+  state.transfer.preview = next;
+  renderTransfer();
+}
+
 export function renderTransfer() {
   const root = $("#transfer-content");
   const sources = state.sessions.filter(canTransfer);
@@ -75,6 +102,9 @@ export function renderTransfer() {
   state.transfer.sourceKey = sessionKey(source);
   const target = targetsFor(source.harness).includes(state.transfer.target) ? state.transfer.target : DEFAULT_TARGET[source.harness];
   state.transfer.target = target;
+  const preview = state.transfer.preview?.key === previewKey(source, target) ? state.transfer.preview : null;
+  if (!preview) loadPreview(source, target);
+  const blocked = Boolean(preview?.error);
   const sourceName = harnessOf(source.harness).name;
   const targetName = harnessOf(target).name;
   const result = state.transfer.result;
@@ -110,14 +140,16 @@ export function renderTransfer() {
           <div><span>${escapeHtml(t("transfer.resume"))}</span><strong>${escapeHtml(t("transfer.nativeHistory", { name: targetName }))}</strong></div>
         </div>
         <p class="transfer-check">✓ ${escapeHtml(t("transfer.checkAtRun"))}</p>
+        ${!preview || preview.loading ? `<p class="transfer-media-note">${escapeHtml(t("transfer.checking"))}</p>` : ""}
+        ${preview?.images ? `<p class="transfer-media-note">${escapeHtml(t("transfer.mediaFiles", { n: preview.images }))}</p>` : ""}
       </section>
     </div>
     <div class="transfer-note">${escapeHtml(t(state.runtime === "tauri" ? "transfer.note" : "transfer.previewNote"))}</div>
-    ${state.transfer.error ? `<div class="transfer-feedback error" role="alert">${escapeHtml(transferErrorLabel(state.transfer.error))}</div>` : ""}
+    ${state.transfer.error || (blocked && !result) ? `<div class="transfer-feedback error" role="alert">${escapeHtml(transferErrorLabel(state.transfer.error || preview.error))}</div>` : ""}
     ${result ? `<div class="transfer-feedback success" role="status"><strong>${escapeHtml(t(result.existing ? "transfer.existing" : "transfer.done", { name: targetName }))}</strong><code>${escapeHtml(result.id)}</code></div>` : ""}
     <div class="transfer-actions">
       <button type="button" class="btn" id="transfer-back">${escapeHtml(t("transfer.back"))}</button>
-      ${result ? `<button type="button" class="btn primary" id="transfer-resume">${escapeHtml(t("transfer.resumeTarget", { name: targetName }))}</button>` : `<button type="button" class="btn primary" id="transfer-submit"${state.transfer.working ? " disabled" : ""}>${escapeHtml(t(state.transfer.working ? "transfer.working" : "transfer.submit", { name: targetName }))}</button>`}
+      ${result ? `<button type="button" class="btn primary" id="transfer-resume">${escapeHtml(t("transfer.resumeTarget", { name: targetName }))}</button>` : `<button type="button" class="btn primary" id="transfer-submit"${state.transfer.working || blocked ? " disabled" : ""}>${escapeHtml(t(state.transfer.working ? "transfer.working" : "transfer.submit", { name: targetName }))}</button>`}
     </div>`;
   root.querySelectorAll("[data-target]").forEach((b) => b.addEventListener("click", () => {
     state.transfer.target = b.dataset.target;

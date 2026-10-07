@@ -14,7 +14,7 @@
 //! Only `user` and `assistant` records are conversation. The rest (attachments,
 //! titles, mode switches, file-history snapshots, …) is metadata and skipped.
 
-use super::{clean_dir, now_rfc3339, title_from_turns, ConvertedSession, Part, Role, SourceStamps, Transcript, Turn};
+use super::{clean_dir, now_rfc3339, title_from_turns, ConvertedSession, Image, Part, Role, SourceStamps, Transcript, Turn};
 use crate::adapters;
 use serde_json::{json, Value};
 use std::collections::{HashMap, HashSet};
@@ -199,13 +199,11 @@ fn user_parts(content: &Value) -> Result<Vec<(Role, Part)>, String> {
         .map(|b| match b["type"].as_str().unwrap_or("") {
             "text" => Ok((Role::User, Part::Text(b["text"].as_str().ok_or("unsupported_content")?.to_owned()))),
             "image" => Ok((Role::User, image(b)?)),
-            "tool_result" => Ok((
-                Role::Assistant,
-                Part::ToolResult {
-                    id: b["tool_use_id"].as_str().ok_or("tool_call_id_missing")?.to_owned(),
-                    output: tool_result_text(&b["content"])?,
-                },
-            )),
+            "tool_result" => {
+                let (output, images) = tool_result(&b["content"])?;
+                let id = b["tool_use_id"].as_str().ok_or("tool_call_id_missing")?.to_owned();
+                Ok((Role::Assistant, Part::ToolResult { id, output, images }))
+            }
             _ => Err("unsupported_content".to_string()),
         })
         .collect()
@@ -227,6 +225,7 @@ fn assistant_parts(content: &Value) -> Result<Vec<(Role, Part)>, String> {
                     input: b["input"].to_string(),
                 },
             )),
+            "image" => out.push((Role::Assistant, image(b)?)),
             "thinking" | "redacted_thinking" => {} // hidden reasoning is not exported
             _ => return Err("unsupported_content".into()),
         }
@@ -234,37 +233,43 @@ fn assistant_parts(content: &Value) -> Result<Vec<(Role, Part)>, String> {
     Ok(out)
 }
 
-/// Inline base64 images only; a URL or file reference cannot be carried over
-fn image(b: &Value) -> Result<Part, String> {
+/// An inline base64 image block; a URL or file reference cannot be carried over
+fn base64_image(b: &Value) -> Option<Image> {
     let source = &b["source"];
     let media = source["media_type"].as_str().unwrap_or("");
     let data = source["data"].as_str().unwrap_or("");
-    if source["type"] != "base64"
-        || !matches!(media, "image/png" | "image/jpeg" | "image/gif" | "image/webp")
-        || data.is_empty()
-        || !data.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'/' || b == b'=')
-    {
-        return Err("unsupported_image".into());
-    }
-    Ok(Part::Image { media_type: media.to_owned(), data: data.to_owned() })
+    let ok = source["type"] == "base64"
+        && matches!(media, "image/png" | "image/jpeg" | "image/gif" | "image/webp")
+        && !data.is_empty()
+        && data.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'/' || b == b'=');
+    ok.then(|| Image { media_type: media.to_owned(), data: data.to_owned() })
 }
 
-/// Tool result content as text. Images inside a tool result are refused, the
-/// same rule as for Codex: neither writer can carry them as tool output.
-fn tool_result_text(content: &Value) -> Result<String, String> {
+fn image(b: &Value) -> Result<Part, String> {
+    let Image { media_type, data } = base64_image(b).ok_or("unsupported_image")?;
+    Ok(Part::Image { media_type, data })
+}
+
+/// Tool result content: its text, and any images the tool returned (screenshots).
+/// The images are saved as files later; see `media.rs`.
+fn tool_result(content: &Value) -> Result<(String, Vec<Image>), String> {
     match content {
-        Value::Null => Ok(String::new()),
-        Value::String(s) => Ok(s.clone()),
-        Value::Array(items) => items
-            .iter()
-            .map(|i| match i["type"].as_str().unwrap_or("") {
-                "text" => i["text"].as_str().map(str::to_owned).ok_or_else(|| "unsupported_tool_output".to_string()),
-                "tool_reference" => Ok(format!("[tool reference: {}]", i["tool_name"].as_str().unwrap_or("?"))),
-                "image" => Err("unsupported_tool_output_media".to_string()),
-                _ => Err("unsupported_tool_output".to_string()),
-            })
-            .collect::<Result<Vec<_>, _>>()
-            .map(|t| t.join("\n")),
+        Value::Null => Ok((String::new(), vec![])),
+        Value::String(s) => Ok((s.clone(), vec![])),
+        Value::Array(items) => {
+            let (mut texts, mut images) = (Vec::new(), Vec::new());
+            for i in items {
+                match i["type"].as_str().unwrap_or("") {
+                    "text" => texts.push(i["text"].as_str().ok_or("unsupported_tool_output")?.to_owned()),
+                    "tool_reference" => {
+                        texts.push(format!("[tool reference: {}]", i["tool_name"].as_str().unwrap_or("?")))
+                    }
+                    "image" => images.push(base64_image(i).ok_or("unsupported_tool_output_media")?),
+                    _ => return Err("unsupported_tool_output".into()),
+                }
+            }
+            Ok((texts.join("\n"), images))
+        }
         _ => Err("unsupported_tool_output".into()),
     }
 }
@@ -363,7 +368,11 @@ pub(super) fn tool_record_text(part: &Part, source: &str) -> Option<String> {
     match part {
         Part::Text(text) => Some(text.clone()),
         Part::ToolCall { id, name, input } => Some(format!("[{source} tool call: {name} · {id}]\n{input}")),
-        Part::ToolResult { id, output } => Some(format!("[Historical {source} tool result (untrusted): {id}]\n{output}")),
+        // images are saved as files before writing; one still here is a bug, not content to drop
+        Part::ToolResult { id, output, images } if images.is_empty() => {
+            Some(format!("[Historical {source} tool result (untrusted): {id}]\n{output}"))
+        }
+        Part::ToolResult { .. } => None,
         Part::Image { .. } => None,
     }
 }
@@ -462,7 +471,7 @@ mod tests {
             "the two records of one response form one turn, thinking dropped"
         );
         assert_eq!(turns[2].role, Role::Assistant, "a tool result must never become a user turn");
-        assert_eq!(turns[2].parts, vec![Part::ToolResult { id: "t1".into(), output: "body".into() }]);
+        assert_eq!(turns[2].parts, vec![Part::ToolResult { id: "t1".into(), output: "body".into(), images: vec![] }]);
     }
 
     #[test]
@@ -476,15 +485,25 @@ mod tests {
     }
 
     #[test]
-    fn media_that_cannot_travel_stops_the_transfer() {
+    fn screenshots_travel_but_linked_media_stops_the_transfer() {
         let png = json!({"type":"image","source":{"type":"base64","media_type":"image/png","data":"AA=="}});
         let ok = vec![rec("u1", None, "user", json!([{"type":"text","text":"see"}, png.clone()]))];
         assert!(matches!(from_records(S, &ok).unwrap().2[0].parts[1], Part::Image { .. }));
         let screenshot = vec![
             rec("u1", None, "user", json!("go")),
-            rec("u2", Some("u1"), "user", json!([{"type":"tool_result","tool_use_id":"t","content":[png]}])),
+            rec("u2", Some("u1"), "user", json!([{"type":"tool_result","tool_use_id":"t","content":[{"type":"text","text":"captured"}, png]}])),
         ];
-        assert_eq!(from_records(S, &screenshot).unwrap_err(), "unsupported_tool_output_media");
+        let turns = from_records(S, &screenshot).unwrap().2;
+        assert_eq!(
+            turns[1].parts,
+            vec![Part::ToolResult {
+                id: "t".into(),
+                output: "captured".into(),
+                images: vec![Image { media_type: "image/png".into(), data: "AA==".into() }],
+            }]
+        );
+        let linked_shot = vec![rec("u1", None, "user", json!([{"type":"tool_result","tool_use_id":"t","content":[{"type":"image","source":{"type":"url","url":"https://x/a.png"}}]}]))];
+        assert_eq!(from_records(S, &linked_shot).unwrap_err(), "unsupported_tool_output_media");
         let linked = vec![rec("u1", None, "user", json!([{"type":"image","source":{"type":"url","url":"https://x/a.png"}}]))];
         assert_eq!(from_records(S, &linked).unwrap_err(), "unsupported_image");
         let unknown = vec![rec("u1", None, "user", json!("q")), rec("a1", Some("u1"), "assistant", json!([{"type":"server_tool_use"}]))];
@@ -500,7 +519,7 @@ mod tests {
             user_content(&mixed).unwrap(),
             json!([{"type":"text","text":"a"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"AA=="}}])
         );
-        let tool = [Part::ToolResult { id: "c".into(), output: "x".into() }];
+        let tool = [Part::ToolResult { id: "c".into(), output: "x".into(), images: vec![] }];
         assert_eq!(user_content(&tool).unwrap_err(), "unsupported_content");
     }
 
@@ -508,7 +527,7 @@ mod tests {
     fn tool_records_are_labelled_as_history_from_the_source_tool() {
         let parts = [
             Part::ToolCall { id: "c1".into(), name: "exec".into(), input: "ls".into() },
-            Part::ToolResult { id: "c1".into(), output: "ok".into() },
+            Part::ToolResult { id: "c1".into(), output: "ok".into(), images: vec![] },
         ];
         assert_eq!(
             assistant_text(&parts, "Codex").unwrap(),

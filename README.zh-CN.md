@@ -60,7 +60,7 @@ Orrery 只读取各工具本来就写在磁盘上的数据，汇总到一块面�
 | 会话中枢：Z Code | ✅ | 只读 `~/.zcode/cli/db/db.sqlite`；体积包含每个会话的模型 I/O 日志、产物和图片缓存——这些才是它磁盘占用的大头 |
 | 会话中枢：Antigravity CLI | ✅ | 只读 `~/.gemini/antigravity-cli/`：每个对话一个 SQLite，外加 `conversation_summaries.db`；用量从每次调用的 protobuf 记录里解出；用 `agy --conversation` 恢复 |
 | 会话中枢：WorkBuddy | ✅ | 只读 `~/.workbuddy/projects/<工作目录>/<sessionId>.jsonl`；标题取会话自己的 `ai-title`；暂不提供删除 |
-| 原生会话转换：Claude Code、Codex、OpenCode 三家互转 | ✅ | 将对话复制进另外两家任一工具的原生历史并从那里恢复；来源保留。目标有官方导入入口的一律走官方入口（Codex app-server、`opencode import`）。工具结果里的图片、要进 Codex 的图片会停止转换而不是被悄悄丢掉；内部隐藏推理不复制 |
+| 原生会话转换：Claude Code、Codex、OpenCode 三家互转 | ✅ | 将对话复制进另外两家任一工具的原生历史并从那里恢复；来源保留。目标有官方导入入口的一律走官方入口（Codex app-server、`opencode import`）。目标放不下的图片（工具结果里的截图、要进 Codex 的任何图片）存成文件放在 `~/.orrery/transfer-media`，原位置留下路径，目标里的模型可以用读文件工具打开；转换前页面会告诉你有几张。内部隐藏推理不复制 |
 | 会话中枢：自己登记的 OpenCode 系工具 | ✅ | 在 `~/.orrery/harnesses.json` 里登记，Orrery 用同一套方式只读它的 SQLite——分支版本和自用版本都能接 |
 | 准确的 token 统计 | ✅ | 按 API 调用去重，拆成输入 / 缓存写 / 缓存读 / 输出 |
 | 单会话与各 harness 的磁盘占用 | ✅ | 状态页显示总计与按 harness 的拆分 |

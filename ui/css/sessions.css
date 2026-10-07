@@ -121,6 +121,8 @@
 .transfer-preserved { margin: 16px 0 0; color: var(--ink-2); font-size: 11px; }
 .transfer-target-picker { margin-top: 20px; }
 .transfer-check { margin: 17px 0 0; color: var(--nav); font-size: 11px; }
+/* 预检结果：图片会存成文件的说明，语气平和，不当成警告 */
+.transfer-media-note { margin: 8px 0 0; color: var(--ink-2); font-size: 11px; line-height: 1.55; }
 .transfer-note, .transfer-feedback { border: 1px solid var(--line); background: var(--surface); border-radius: 7px; padding: 11px 14px; margin-top: 15px; color: var(--ink-2); font-size: 11px; line-height: 1.55; }
 .transfer-feedback { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-size: 12px; }
 .transfer-feedback code { font: 11px var(--mono); overflow-wrap: anywhere; }

@@ -7,13 +7,17 @@ use std::fs;
 use std::path::PathBuf;
 
 #[test]
-fn tool_output_keeps_text_and_rejects_media() {
+fn tool_output_keeps_text_and_screenshots_but_refuses_other_media() {
     let text =
         json!([{"type":"input_text","text":"first"},{"type":"input_text","text":"second"}]);
-    assert_eq!(codex::tool_output(&text).unwrap(), "first\nsecond");
-    let image = json!([{"type":"input_image","image_url":"data:image/png;base64,aGVsbG8="}]);
+    assert_eq!(codex::tool_output(&text).unwrap(), ("first\nsecond".to_string(), vec![]));
+    let screenshot = json!([{"type":"input_text","text":"shot"},{"type":"input_image","image_url":"data:image/png;base64,aGVsbG8="}]);
+    let (output, images) = codex::tool_output(&screenshot).unwrap();
+    assert_eq!(output, "shot");
+    assert_eq!(images, vec![Image { media_type: "image/png".into(), data: "aGVsbG8=".into() }]);
+    let linked = json!([{"type":"input_image","image_url":"https://example.com/a.png"}]);
     assert_eq!(
-        codex::tool_output(&image).unwrap_err(),
+        codex::tool_output(&linked).unwrap_err(),
         "unsupported_tool_output_media"
     );
 }
@@ -108,19 +112,36 @@ fn sandbox_bidirectional() {
             .any(|p| fs::read_to_string(p).unwrap().contains("amber-trail")),
         "Codex import lost a tool result"
     );
-    let bad_id = Uuid::new_v4().to_string();
-    image_user["sessionId"] = json!(bad_id);
+    // A user image and a tool screenshot, bound for Codex whose importer drops
+    // images: both are saved as files and Codex gets a reference to each
+    let media_id = Uuid::new_v4().to_string();
+    image_user["sessionId"] = json!(media_id);
     image_user["parentUuid"] = Value::Null;
-    let bad_source = source.parent().unwrap().join(format!("{bad_id}.jsonl"));
-    fs::write(&bad_source, format!("{image_user}\n")).unwrap();
-    assert_eq!(
-        convert("cc", &bad_id, None).unwrap_err(),
-        "unsupported_source_media"
-    );
-    assert_eq!(
-        codex_adapter::collect_rollouts(&home.join(".codex/sessions")).len(),
-        imported.len()
-    );
+    let mut screenshot = image_user.clone();
+    screenshot["parentUuid"] = image_user["uuid"].clone();
+    screenshot["uuid"] = json!(Uuid::new_v4().to_string());
+    screenshot["message"] = json!({"role":"user","content":[{"type":"tool_result","tool_use_id":"toolu_shot","content":[{"type":"text","text":"captured coral-dune"},{"type":"image","source":{"type":"base64","media_type":"image/png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlXvX8AAAAASUVORK5CYII="}}]}]});
+    let media_source = source.parent().unwrap().join(format!("{media_id}.jsonl"));
+    fs::write(&media_source, format!("{image_user}\n{screenshot}\n")).unwrap();
+    let media_bytes = fs::read(&media_source).unwrap();
+    let with_media = convert("cc", &media_id, None).unwrap();
+    assert_eq!(with_media.harness, "codex");
+    let rollout: String = codex_adapter::collect_rollouts(&home.join(".codex/sessions"))
+        .into_iter()
+        .filter(|p| codex_adapter::read_head(p).is_some_and(|(id, _, _)| id == with_media.id))
+        .map(|p| fs::read_to_string(p).unwrap())
+        .collect();
+    assert!(rollout.contains("coral-dune"), "Codex lost the screenshot's text");
+    assert_eq!(media::history_image_refs(&rollout), 2, "both images need a reference in what Codex's model reads");
+    let owned: Vec<_> = fs::read_dir(home.join(".orrery/transfer-media")).unwrap().flatten().map(|e| e.path()).collect();
+    assert_eq!(owned.len(), 1);
+    let owner: Value = serde_json::from_str(&fs::read_to_string(owned[0].join("owner.json")).unwrap()).unwrap();
+    assert_eq!((owner["harness"].as_str(), owner["id"].as_str()), (Some("codex"), Some(with_media.id.as_str())));
+    assert!(owned[0].join("1.png").is_file() && owned[0].join("2.png").is_file());
+    assert_eq!(fs::read(&media_source).unwrap(), media_bytes, "source changed");
+    // deleting that Codex session through Orrery takes its images along
+    media::release("codex", &with_media.id, false);
+    assert!(!owned[0].exists(), "images outlived their session");
     let claude = convert("codex", &codex.id, None).unwrap();
     assert_eq!(claude.harness, "cc");
     assert!(!claude.existing);
@@ -193,6 +214,7 @@ fn real_sessions_dry_run() {
         let mut ok = 0;
         let mut with_images = 0;
         let mut turns = 0;
+        let mut to_files: BTreeMap<&str, usize> = BTreeMap::new();
         let mut errors: BTreeMap<String, usize> = BTreeMap::new();
         for s in sessions.iter().filter(|s| s.harness == harness && s.kind != "subagent") {
             match read(harness, &s.id) {
@@ -200,10 +222,13 @@ fn real_sessions_dry_run() {
                     ok += 1;
                     turns += t.turns.len();
                     with_images += usize::from(t.has_images());
+                    for target in HARNESSES.iter().filter(|h| **h != harness) {
+                        *to_files.entry(target).or_default() += media::count(&t, target);
+                    }
                 }
                 Err(e) => *errors.entry(e.split(':').next().unwrap_or("").to_owned()).or_default() += 1,
             }
         }
-        println!("{harness}: {ok} readable ({turns} turns, {with_images} with images), refused {errors:?}");
+        println!("{harness}: {ok} readable ({turns} turns, {with_images} with inline images), refused {errors:?}, images saved as files per target {to_files:?}");
     }
 }
