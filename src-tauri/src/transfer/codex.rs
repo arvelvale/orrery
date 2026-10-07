@@ -32,7 +32,7 @@ pub(super) fn read(id: &str) -> Result<Transcript, String> {
     if files.is_empty() {
         return Err("session_not_found".into());
     }
-    let stamps = SourceStamps::take(&files)?;
+    let stamps = SourceStamps::files(&files)?;
 
     let mut cwd: Option<String> = None;
     for file in &files {
@@ -50,6 +50,7 @@ pub(super) fn read(id: &str) -> Result<Transcript, String> {
     let cwd = cwd.ok_or("source_cwd_missing")?;
 
     let mut turns = Vec::new();
+    let mut first_user = None;
     for file in &files {
         for line in BufReader::new(File::open(file).map_err(|e| format!("source_read_failed: {e}"))?).lines() {
             let line = line.map_err(|e| format!("source_read_failed: {e}"))?;
@@ -57,12 +58,20 @@ pub(super) fn read(id: &str) -> Result<Transcript, String> {
             if v["type"] != "response_item" {
                 continue;
             }
+            if first_user.is_none() {
+                // skips the context Codex injects as "user" messages
+                first_user = codex::user_text(&v["payload"]);
+            }
             if let Some(turn) = turn(&v["payload"])? {
                 turns.push(turn);
             }
         }
     }
-    Ok(Transcript { source_name: "Codex", cwd, turns, stamps })
+    let title = codex::thread_names(&codex_home)
+        .remove(id)
+        .or_else(|| first_user.map(|t| t.chars().take(80).collect()))
+        .unwrap_or_else(|| id.to_owned());
+    Ok(Transcript { source_name: "Codex", cwd, title, turns, stamps })
 }
 
 /// One `response_item` payload → a turn, `None` for items that are not conversation
@@ -206,6 +215,39 @@ pub(super) fn import_claude_file(source: &Path, cwd: &str, title: &str, id: &str
     let staged = if default_home { None } else { Some(stage_claude_source(source, id)?) };
     let import_path = staged.as_ref().map_or(source, |s| s.file.as_path());
     let import_home = staged.as_ref().map_or(home.as_path(), |s| s.home.as_path());
+    run_import(source, import_path, import_home, cwd, title)
+}
+
+/// Any other source: render Claude JSONL into a staging HOME, then import that.
+/// Codex's importer drops images from Claude files without a word, so a
+/// transcript that has any is refused rather than silently thinned.
+pub(super) fn import_transcript(t: &Transcript) -> Result<ConvertedSession, String> {
+    if t.has_images() {
+        return Err("unsupported_source_media".into());
+    }
+    let id = Uuid::new_v4().to_string();
+    let home = adapters::data_dir().ok_or("orrery_data_dir_missing")?.join("transfer-stage").join(&id);
+    let file = super::claude::project_dir(&home.join(".claude"), &t.cwd).join(format!("{id}.jsonl"));
+    fs::create_dir_all(file.parent().ok_or("stage_path_invalid")?).map_err(|e| format!("stage_create_failed: {e}"))?;
+    // removes the rendered file and its empty folders whatever happens next
+    let stage = StagedClaudeSource { home, file };
+    let mut output = File::create(&stage.file).map_err(|e| format!("stage_create_failed: {e}"))?;
+    super::claude::render(&mut output, t, &id)?;
+    output.sync_all().map_err(|e| format!("stage_create_failed: {e}"))?;
+    drop(output);
+    t.stamps.verify_unchanged()?;
+    run_import(&stage.file, &stage.file, &stage.home, &super::clean_dir(&t.cwd), &t.title)
+}
+
+/// Drive `codex app-server` through one `externalAgentConfig/import`.
+/// `source` is watched for changes; `import_path` under `import_home` is what Codex reads.
+fn run_import(
+    source: &Path,
+    import_path: &Path,
+    import_home: &Path,
+    cwd: &str,
+    title: &str,
+) -> Result<ConvertedSession, String> {
     let codex_home = adapters::codex_home().ok_or("codex_home_missing")?;
     fs::create_dir_all(&codex_home).map_err(|e| format!("target_create_failed: {e}"))?;
     let exe = cleanup::codex_bin().ok_or("codex_cli_missing")?;

@@ -72,7 +72,7 @@ pub(super) fn opencode_tree(con: &rusqlite::Connection, root: &str) -> Result<Ve
 
 /// 找 opencode 原生可执行文件：`ORRERY_OPENCODE_BIN` → PATH 里的 opencode →
 /// npm 全局包里的二进制（Windows 上 PATH 里只有 `opencode.cmd` 壳，与 codex 同理）
-fn opencode_bin() -> Option<PathBuf> {
+pub(crate) fn opencode_bin() -> Option<PathBuf> {
     if let Some(p) = std::env::var_os("ORRERY_OPENCODE_BIN").map(PathBuf::from).filter(|p| p.is_file()) {
         return Some(p);
     }

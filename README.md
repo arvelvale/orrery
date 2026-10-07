@@ -64,7 +64,7 @@ Orrery reads what the harnesses already write to disk and puts it all on one boa
 | Session hub: Z Code | ✅ | Read-only `~/.zcode/cli/db/db.sqlite`; size includes each session's model I/O log, artifacts and image cache, which are most of its disk footprint |
 | Session hub: Antigravity CLI | ✅ | Read-only `~/.gemini/antigravity-cli/`: one SQLite per conversation plus `conversation_summaries.db`; usage decoded from each call's protobuf record; resume with `agy --conversation` |
 | Session hub: WorkBuddy | ✅ | Read-only `~/.workbuddy/projects/<work-dir>/<sessionId>.jsonl`; the title comes from the session's own `ai-title`; delete is not offered yet |
-| Native session transfer: Claude Code ↔ Codex | ✅ | Copy a transferable conversation into the other tool's own history and resume it there; the source stays in place. Unsupported media stops the transfer, and hidden reasoning is not copied |
+| Native session transfer: Claude Code, Codex and OpenCode | ✅ | Copy a conversation into any of the other two tools' own history and resume it there; the source stays in place. Each target is written through its own importer where one exists (`codex` app-server, `opencode import`). Images in tool results, and images bound for Codex, stop the transfer rather than being dropped; hidden reasoning is not copied |
 | Session hub: your own OpenCode-style tool | ✅ | Register it in `~/.orrery/harnesses.json` and Orrery reads its SQLite the same way — handy for forks and private builds |
 | Accurate token accounting | ✅ | Deduplicated per API call, split into input / cache write / cache read / output |
 | Disk usage per session and per harness | ✅ | Status page shows totals and a per-harness breakdown |

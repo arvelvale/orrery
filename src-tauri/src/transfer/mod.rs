@@ -7,26 +7,35 @@
 //!
 //! | harness | reader | writer |
 //! |---|---|---|
-//! | `cc` | native JSONL is handed to Codex as-is (see below) | writes a new Claude JSONL conversation |
+//! | `cc` | the active branch of the JSONL conversation | a new Claude JSONL conversation |
 //! | `codex` | rollout `response_item`s | Codex's own `externalAgentConfig/import`, which accepts Claude JSONL |
+//! | `opencode` | `message` / `part` rows, read-only | OpenCode's own `opencode import` |
 //!
 //! Claude Code → Codex skips the [`Transcript`]: Codex's importer reads Claude's
-//! native file directly, and re-rendering it could only lose detail.
+//! native file directly, and re-rendering it could only lose detail. Every other
+//! source reaches Codex by rendering Claude JSONL into a staging folder first.
 //!
 //! Fidelity bar, kept from the first version: anything that cannot be carried
 //! over faithfully (media the target would drop, unknown record types) stops the
 //! transfer with an error instead of producing a quietly incomplete copy. Hidden
-//! reasoning is never exported.
+//! reasoning is never exported. Tool calls and results from another tool become
+//! labelled history text in the target, never live tool records the target
+//! might try to replay.
 
 mod claude;
 mod codex;
+mod opencode;
 
+use rusqlite::OptionalExtension;
 use serde::Serialize;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::SystemTime;
 use uuid::Uuid;
+
+/// Harnesses that can take part in a transfer, as source and as target
+pub(crate) const HARNESSES: [&str; 3] = ["cc", "codex", "opencode"];
 
 #[derive(Debug, Serialize)]
 pub struct ConvertedSession {
@@ -66,32 +75,67 @@ pub(crate) struct Transcript {
     /// Shown in the labels of carried-over tool records, e.g. "Codex"
     pub source_name: &'static str,
     pub cwd: String,
+    pub title: String,
     pub turns: Vec<Turn>,
-    /// Source files as they were before reading, re-checked before publishing
+    /// The source as it was before reading, re-checked before publishing
     pub stamps: SourceStamps,
 }
 
-/// Length and mtime of every source file, taken before reading
+impl Transcript {
+    pub fn has_images(&self) -> bool {
+        self.turns.iter().flat_map(|t| &t.parts).any(|p| matches!(p, Part::Image { .. }))
+    }
+}
+
+/// A title from the first thing the user said, when the source has no better one
+pub(crate) fn title_from_turns(turns: &[Turn]) -> Option<String> {
+    turns.iter().filter(|t| t.role == Role::User).flat_map(|t| &t.parts).find_map(|p| match p {
+        Part::Text(text) if !text.trim().is_empty() => Some(text.trim().chars().take(80).collect()),
+        _ => None,
+    })
+}
+
 #[derive(Debug)]
-pub(crate) struct SourceStamps(Vec<(PathBuf, u64, Option<SystemTime>)>);
+enum Check {
+    /// Length and mtime of a source file
+    File { path: PathBuf, len: u64, modified: Option<SystemTime> },
+    /// One OpenCode session. The database file itself changes whenever OpenCode
+    /// writes any session, so only this session's own row and messages count.
+    OpenCodeSession { db: PathBuf, id: String, updated: i64, messages: i64 },
+}
+
+/// What the source looked like before reading
+#[derive(Debug)]
+pub(crate) struct SourceStamps(Vec<Check>);
 
 impl SourceStamps {
-    pub fn take(files: &[PathBuf]) -> Result<Self, String> {
+    pub fn files(files: &[PathBuf]) -> Result<Self, String> {
         files
             .iter()
             .map(|p| {
                 let m = fs::metadata(p).map_err(|e| format!("source_read_failed: {e}"))?;
-                Ok((p.clone(), m.len(), m.modified().ok()))
+                Ok(Check::File { path: p.clone(), len: m.len(), modified: m.modified().ok() })
             })
             .collect::<Result<_, String>>()
             .map(Self)
     }
 
+    pub fn opencode_session(db: &Path, id: &str) -> Result<Self, String> {
+        let (updated, messages) = opencode_session_state(db, id)?.ok_or("session_not_found")?;
+        Ok(Self(vec![Check::OpenCodeSession { db: db.to_owned(), id: id.to_owned(), updated, messages }]))
+    }
+
     /// The source must not have changed while we were copying it
     pub fn verify_unchanged(&self) -> Result<(), String> {
-        for (path, len, modified) in &self.0 {
-            let after = fs::metadata(path).map_err(|_| "source_changed_during_import")?;
-            if after.len() != *len || after.modified().ok() != *modified {
+        for check in &self.0 {
+            let same = match check {
+                Check::File { path, len, modified } => fs::metadata(path)
+                    .is_ok_and(|after| after.len() == *len && after.modified().ok() == *modified),
+                Check::OpenCodeSession { db, id, updated, messages } => {
+                    opencode_session_state(db, id).ok().flatten() == Some((*updated, *messages))
+                }
+            };
+            if !same {
                 return Err("source_changed_during_import".into());
             }
         }
@@ -99,11 +143,25 @@ impl SourceStamps {
     }
 }
 
-/// Convert to the harness's default partner (Claude Code ⇄ Codex)
-pub fn convert(harness: &str, id: &str) -> Result<ConvertedSession, String> {
-    let target = match harness {
-        "cc" => "codex",
-        "codex" => "cc",
+/// `(time_updated, message count)` of one OpenCode session, read-only
+fn opencode_session_state(db: &Path, id: &str) -> Result<Option<(i64, i64)>, String> {
+    let con = crate::adapters::opencode::open(db).ok_or("source_read_failed")?;
+    con.query_row(
+        "SELECT COALESCE(time_updated, time_created, 0), (SELECT COUNT(*) FROM message WHERE session_id = ?1)
+         FROM session WHERE id = ?1",
+        [id],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )
+    .optional()
+    .map_err(|e| format!("source_read_failed: {e}"))
+}
+
+/// Convert to the harness's default partner (Claude Code ⇄ Codex, OpenCode → Claude Code)
+pub fn convert(harness: &str, id: &str, target: Option<&str>) -> Result<ConvertedSession, String> {
+    let target = match (harness, target) {
+        (_, Some(t)) => t,
+        ("cc", None) => "codex",
+        ("codex" | "opencode", None) => "cc",
         _ => return Err("unsupported_harness".into()),
     };
     convert_to(harness, id, target)
@@ -112,35 +170,72 @@ pub fn convert(harness: &str, id: &str) -> Result<ConvertedSession, String> {
 pub(crate) fn convert_to(harness: &str, id: &str, target: &str) -> Result<ConvertedSession, String> {
     static TRANSFER_LOCK: Mutex<()> = Mutex::new(());
     let _guard = TRANSFER_LOCK.try_lock().map_err(|_| "transfer_busy")?;
-    if Uuid::parse_str(id).is_err() {
+    if !HARNESSES.contains(&harness) || !HARNESSES.contains(&target) || harness == target {
+        return Err("unsupported_harness".into());
+    }
+    if !valid_id(harness, id) {
         return Err("invalid_session_id".into());
     }
-    match (harness, target) {
-        ("cc", "codex") => {
-            let source = claude::locate(id)?;
-            codex::import_claude_file(&source.path, &source.cwd, &source.title, id)
-        }
-        (_, "cc") => {
-            let transcript = read(harness, id)?;
-            if !std::path::Path::new(&transcript.cwd).is_dir() {
-                return Err("cwd_missing".into());
-            }
-            claude::write(&transcript)
-        }
+    if (harness, target) == ("cc", "codex") {
+        let source = claude::locate(id)?;
+        return codex::import_claude_file(&source.path, &source.cwd, &source.title, id);
+    }
+    let transcript = read(harness, id)?;
+    if !Path::new(&transcript.cwd).is_dir() {
+        return Err("cwd_missing".into());
+    }
+    match target {
+        "cc" => claude::write(&transcript),
+        "codex" => codex::import_transcript(&transcript),
+        "opencode" => opencode::write(&transcript),
         _ => Err("unsupported_harness".into()),
+    }
+}
+
+/// Claude Code and Codex use UUIDs; OpenCode uses `ses_` plus 26 alphanumerics
+fn valid_id(harness: &str, id: &str) -> bool {
+    match harness {
+        "opencode" => {
+            id.strip_prefix("ses_").is_some_and(|rest| rest.len() == 26 && rest.bytes().all(|b| b.is_ascii_alphanumeric()))
+        }
+        _ => Uuid::parse_str(id).is_ok(),
     }
 }
 
 /// Every reader behind one door, so adding a source is one match arm
 fn read(harness: &str, id: &str) -> Result<Transcript, String> {
     let transcript = match harness {
+        "cc" => claude::read(id)?,
         "codex" => codex::read(id)?,
+        "opencode" => opencode::read(id)?,
         _ => return Err("unsupported_harness".into()),
     };
     if transcript.turns.is_empty() {
         return Err("source_conversation_empty".into());
     }
     Ok(transcript)
+}
+
+/// Remove `.` and `..` from a folder path, the way a shell's working directory
+/// would read. Purely lexical on purpose: `canonicalize` would also resolve
+/// junctions and symlinks, and a harness started inside a linked folder records
+/// the link's path, not its target.
+pub(crate) fn clean_dir(cwd: &str) -> String {
+    use std::path::Component;
+    let mut out = PathBuf::new();
+    for c in Path::new(cwd).components() {
+        match c {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                // never climb above the root or the drive
+                if matches!(out.components().next_back(), Some(Component::Normal(_))) {
+                    out.pop();
+                }
+            }
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out.to_string_lossy().into_owned()
 }
 
 pub(crate) fn now_rfc3339() -> String {

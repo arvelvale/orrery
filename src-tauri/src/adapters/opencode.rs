@@ -26,7 +26,7 @@ use rusqlite::{Connection, OpenFlags};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-pub(super) const DB: &str = "opencode.db";
+pub(crate) const DB: &str = "opencode.db";
 
 /// `$XDG_DATA_HOME/<dir>`，否则 `~/.local/share/<dir>`。
 /// OpenCode 的分支们目录布局相同，所以这里按名字取（`custom.rs` 复用）
@@ -44,12 +44,12 @@ pub(super) fn family_home(dir: &str) -> Option<PathBuf> {
     p.is_dir().then_some(p)
 }
 
-pub(super) fn opencode_home() -> Option<PathBuf> {
+pub(crate) fn opencode_home() -> Option<PathBuf> {
     family_home("opencode")
 }
 
 /// 普通只读连接保留 WAL 一致性；不能对仍在写入的数据库使用 immutable。
-pub(super) fn open(db: &Path) -> Option<Connection> {
+pub(crate) fn open(db: &Path) -> Option<Connection> {
     Connection::open_with_flags(db, OpenFlags::SQLITE_OPEN_READ_ONLY).ok()
 }
 

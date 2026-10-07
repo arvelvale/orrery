@@ -68,10 +68,10 @@ fn sandbox_bidirectional() {
     .unwrap();
     let source_bytes = fs::read(&source).unwrap();
 
-    let codex = convert("cc", &id).unwrap();
+    let codex = convert("cc", &id, None).unwrap();
     assert_eq!(codex.harness, "codex");
     assert!(!codex.existing);
-    let duplicate = convert("cc", &id).unwrap();
+    let duplicate = convert("cc", &id, None).unwrap();
     assert_eq!(duplicate.id, codex.id);
     assert!(duplicate.existing);
     let custom = home
@@ -114,14 +114,14 @@ fn sandbox_bidirectional() {
     let bad_source = source.parent().unwrap().join(format!("{bad_id}.jsonl"));
     fs::write(&bad_source, format!("{image_user}\n")).unwrap();
     assert_eq!(
-        convert("cc", &bad_id).unwrap_err(),
+        convert("cc", &bad_id, None).unwrap_err(),
         "unsupported_source_media"
     );
     assert_eq!(
         codex_adapter::collect_rollouts(&home.join(".codex/sessions")).len(),
         imported.len()
     );
-    let claude = convert("codex", &codex.id).unwrap();
+    let claude = convert("codex", &codex.id, None).unwrap();
     assert_eq!(claude.harness, "cc");
     assert!(!claude.existing);
     assert_ne!(claude.id, id);
@@ -158,7 +158,7 @@ fn sandbox_bidirectional() {
             + "\n",
     )
     .unwrap();
-    let claude_tool = convert("codex", &tool_codex_id).unwrap();
+    let claude_tool = convert("codex", &tool_codex_id, None).unwrap();
     let tool_target = fs::read_dir(&target)
         .unwrap()
         .flatten()
@@ -178,4 +178,32 @@ fn sandbox_bidirectional() {
     let result = json!({"home":home,"project":cwd,"source_id":id,"codex_id":codex.id,"claude_id":claude.id,"claude_tool_id":claude_tool.id,"converted_path":converted});
     fs::write(home.join("result.json"), result.to_string()).unwrap();
     println!("sandbox_result={}", home.join("result.json").display());
+}
+
+/// Runs every reader over this machine's real sessions and prints what would
+/// transfer. Read-only: readers never write, and nothing is converted.
+/// `cargo test --lib real_sessions_dry_run -- --ignored --nocapture`
+#[test]
+#[ignore = "reads the real local sessions"]
+fn real_sessions_dry_run() {
+    use std::collections::BTreeMap;
+    assert!(std::env::var_os("ORRERY_HOME").is_none(), "meant for the real home");
+    let sessions = crate::adapters::list_all_sessions().unwrap();
+    for harness in HARNESSES {
+        let mut ok = 0;
+        let mut with_images = 0;
+        let mut turns = 0;
+        let mut errors: BTreeMap<String, usize> = BTreeMap::new();
+        for s in sessions.iter().filter(|s| s.harness == harness && s.kind != "subagent") {
+            match read(harness, &s.id) {
+                Ok(t) => {
+                    ok += 1;
+                    turns += t.turns.len();
+                    with_images += usize::from(t.has_images());
+                }
+                Err(e) => *errors.entry(e.split(':').next().unwrap_or("").to_owned()).or_default() += 1,
+            }
+        }
+        println!("{harness}: {ok} readable ({turns} turns, {with_images} with images), refused {errors:?}");
+    }
 }

@@ -113,9 +113,10 @@ fn resume_session(harness: String, id: String, project: String) -> Result<String
     resume::resume(&harness, &id, &project)
 }
 
+/// `target` is optional so an older frontend keeps its Claude Code ⇄ Codex default
 #[tauri::command(async)]
-fn convert_session(harness: String, id: String) -> Result<transfer::ConvertedSession, String> {
-    transfer::convert(&harness, &id)
+fn convert_session(harness: String, id: String, target: Option<String>) -> Result<transfer::ConvertedSession, String> {
+    transfer::convert(&harness, &id, target.as_deref())
 }
 
 #[tauri::command]

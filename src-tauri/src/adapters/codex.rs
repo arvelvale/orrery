@@ -220,7 +220,7 @@ pub(crate) fn collect_rollouts(root: &Path) -> Vec<PathBuf> {
 }
 
 /// id → 最新的 thread_name（后写覆盖前写）
-fn thread_names(home: &Path) -> HashMap<String, String> {
+pub(crate) fn thread_names(home: &Path) -> HashMap<String, String> {
     let mut map = HashMap::new();
     let Ok(file) = fs::File::open(home.join("session_index.jsonl")) else {
         return map;
@@ -271,7 +271,7 @@ fn parse_cached(path: &Path) -> Option<Rollout> {
 /// - 整条都是注入：`<environment_context>…`、`# AGENTS.md instructions…`
 /// - 附带图片/时间戳时，真正的输入包在 `<user_query>…</user_query>` 里（前面是图片清单）
 /// - guardian 子 agent 的首条"用户消息"是审查指令，不是用户写的
-fn user_text(payload: &serde_json::Value) -> Option<String> {
+pub(crate) fn user_text(payload: &serde_json::Value) -> Option<String> {
     fn unwrap_query(t: &str) -> &str {
         let Some(start) = t.find("<user_query>") else { return t };
         let rest = &t[start + "<user_query>".len()..];

@@ -9,7 +9,7 @@ mod dsh;
 mod custom;
 mod index;
 mod kimi_code;
-mod opencode;
+pub(crate) mod opencode;
 mod zcode;
 
 use serde::{Deserialize, Serialize};

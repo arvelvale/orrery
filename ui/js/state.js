@@ -31,5 +31,5 @@ export const state = {
   storage: null, // Tauri: storage_stats 结果；浏览器预览按 mock 会话汇总
   selected: new Set(), // 勾选待删除的会话，键为 sessionKey()
   sort: "recent", // recent | size
-  transfer: { sourceKey: null, result: null, error: null, working: false },
+  transfer: { sourceKey: null, target: null, result: null, error: null, working: false },
 };
