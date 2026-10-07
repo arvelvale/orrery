@@ -37,6 +37,9 @@ jobs:
           for f in $(grep -oE '(assets|img)/[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*\.(png|gif|svg|jpg|webp)' _site/index.html | sort -u); do
             test -f "_site/$f" || { echo "missing $f"; exit 1; }
           done
+          for f in logo.svg fonts/geist.woff2 fonts/geist-mono.woff2 fonts/noto-sc.woff2 fonts/noto-jp.woff2; do
+            test -f "_site/$f" || { echo "missing $f"; exit 1; }
+          done
           for lang in en zh-CN ja; do
             for f in assets/demo.$lang.gif img/status.$lang.png img/transfer.$lang.png img/delete.$lang.png img/proxy.$lang.png; do
               test -f "_site/$f" || { echo "missing $f"; exit 1; }
