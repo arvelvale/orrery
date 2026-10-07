@@ -541,7 +541,14 @@ mod tests {
     fn project_folder_matches_claude_code_and_ignores_dot_segments() {
         assert_eq!(project_slug(r"D:\bigproject\orrery"), "D--bigproject-orrery");
         assert_eq!(project_slug("/home/me/my app"), "-home-me-my-app");
+        // paths in this platform's own form: on macOS/Linux `\` is an ordinary
+        // character, not a separator, and no harness there records such a path
         let home = Path::new("H");
-        assert_eq!(project_dir(home, r"D:\a\src-tauri\..\.orrery\p"), project_dir(home, r"D:\a\.orrery\p"));
+        let path = |parts: &[&str]| parts.join(std::path::MAIN_SEPARATOR_STR);
+        assert_eq!(
+            project_dir(home, &path(&["", "work", "a", "src-tauri", "..", ".orrery", "p"])),
+            project_dir(home, &path(&["", "work", "a", ".orrery", "p"]))
+        );
+        assert_eq!(super::clean_dir(&path(&["", "work", ".", "a"])), path(&["", "work", "a"]));
     }
 }
