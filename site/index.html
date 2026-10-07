@@ -122,7 +122,7 @@ section { padding: 120px 0 0; }
 .feature.wide .feature-text { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 16px 56px; align-items: end; }
 .feature.wide .feature-text > :not(.facts) { grid-column: 1; }
 .feature.wide .facts { grid-column: 2; grid-row: 1 / span 3; align-self: end; margin: 0; }
-.feature.wide .shot { margin: 40px auto 0; }
+.feature.wide .shot, .feature.wide .demo { margin: 40px auto 0; }
 /* 截图是从应用里按卡片边界截下的局部，底色与页面一致，不再外套一层框 */
 .shot { border-radius: 12px; overflow: hidden; }
 
@@ -174,13 +174,165 @@ footer { margin-top: 140px; border-top: 1px solid var(--line); padding: 32px 0 4
 .foot a { color: var(--ink-2); }
 .foot a:hover { color: var(--ink); }
 
+/* ── motion ──
+   页面里的动效只做三件事：入场（进入视口时浮现）、状态（指示灯、数字、进度）、可操作的演示。
+   全部尊重 prefers-reduced-motion：减弱时直接给最终状态，演示仍可点。 */
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+@keyframes fade { from { opacity: 0; } }
+@keyframes beat { 0%, 100% { box-shadow: 0 0 0 3px var(--run-soft); } 50% { box-shadow: 0 0 0 6px rgba(15, 157, 110, 0); } }
+@keyframes spin { to { transform: rotate(360deg); } }
+@keyframes ring { from { box-shadow: 0 0 0 0 rgba(11, 107, 203, 0.38); } to { box-shadow: 0 0 0 12px rgba(11, 107, 203, 0); } }
+@keyframes flow { from { transform: translateX(-100%); } to { transform: translateX(270%); } }
+@keyframes blink { 50% { opacity: 0; } }
+@keyframes soft { 50% { opacity: 0.35; } }
+@keyframes pop { from { transform: scale(0); } }
+
+.hero > .lamps, .hero > h1, .hero > .lede, .hero > .cta, .hero > .cta-meta { animation: rise .9s cubic-bezier(.2, .7, .2, 1) both; }
+.hero > h1 { animation-delay: .1s; }
+.hero > .lede { animation-delay: .2s; }
+.hero > .cta { animation-delay: .3s; }
+.hero > .cta-meta { animation-delay: .36s; }
+/* --p 由滚动脚本写入：窗口随着进入视口从略小、略低处落定 */
+.window { animation: fade 1s .45s both; transform: translateY(calc((1 - var(--p, 1)) * 28px)) scale(calc(0.972 + 0.028 * var(--p, 1))); transform-origin: 50% 0; }
+.lamp.on.run i { animation: beat 2.6s ease-in-out infinite; }
+
+.motion .reveal { opacity: 0; transform: translateY(20px); transition: opacity .8s cubic-bezier(.2, .7, .2, 1), transform .8s cubic-bezier(.2, .7, .2, 1); transition-delay: var(--d, 0s); }
+.motion .reveal.in { opacity: 1; transform: none; }
+
+.nav-links a { position: relative; }
+.nav-links a::after { content: ""; position: absolute; left: 0; right: 0; bottom: -19px; height: 2px; background: var(--nav); transform: scaleX(0); transition: transform .25s; }
+.nav-links a.active { color: var(--ink); }
+.nav-links a.active::after { transform: scaleX(1); }
+
+.motion .matrix tbody tr { opacity: 0; transform: translateX(-10px); transition: opacity .5s, transform .5s; transition-delay: calc(var(--i, 0) * 55ms); }
+.motion .matrix.in tbody tr { opacity: 1; transform: none; }
+.motion .matrix.in .yes { animation: pop .4s both; animation-delay: calc(var(--i, 0) * 55ms + 250ms); }
+.matrix tbody tr:hover td { background: #FAFBFC; }
+
+/* ── bench（解析索引：5.5 s → 0.12 s，条的长短按真实时间比例走） ── */
+.facts li.fact-bench { padding-bottom: 16px; }
+.bench { margin-top: 14px; display: grid; gap: 10px; font-family: var(--font); }
+.bench-label { font: 11px/1.3 var(--mono); color: var(--ink-2); }
+.bench-line { margin-top: 5px; display: grid; grid-template-columns: minmax(0, 1fr) 58px; gap: 10px; align-items: center; }
+.bench-track { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; }
+.bench-track i { display: block; height: 100%; border-radius: 4px; background: var(--muted); transform-origin: left; }
+.bench-row.warm .bench-track i { width: 2.2%; min-width: 3px; background: var(--run); }
+.bench-line b { font: 600 12px var(--mono); text-align: right; }
+.motion .bench-track i { transform: scaleX(0); }
+.motion .bench.in .bench-track i { transform: scaleX(1); transition: transform var(--t, 1s) linear; }
+
+/* ── demos ── */
+.demo { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); overflow: hidden; box-shadow: 0 1px 0 rgba(21, 32, 43, 0.03), 0 24px 60px -32px rgba(21, 32, 43, 0.2); }
+.demo-bar { display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 4px 8px 4px 16px; border-bottom: 1px solid var(--line); background: #FAFBFC; font: 10.5px/1.3 var(--mono); letter-spacing: .1em; color: var(--muted); text-transform: uppercase; }
+.demo-bar .seg { margin-left: auto; flex: none; }
+.demo-bar .seg button { padding: 5px 10px; }
+.demo-body { padding: 26px 28px 24px; }
+.demo-foot { margin: 0; padding: 11px 18px; border-top: 1px solid var(--line); background: #FAFBFC; font-size: 12.5px; color: var(--ink-2); }
+.demo-shot { padding: 20px; background: var(--bg); }
+.demo-shot img { margin: 0 auto; border-radius: 8px; }
+.chips { margin-top: 16px; display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 500 13px/1 var(--font); padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink-2); cursor: pointer; transition: border-color .15s, background .15s, color .15s; }
+.chip:hover:not(:disabled) { border-color: #C3CEDB; color: var(--ink); }
+.chip[aria-checked="true"] { border-color: var(--nav); background: var(--nav-soft); color: var(--nav-ink); font-weight: 600; }
+.chip:disabled { cursor: default; opacity: .55; }
+.btn:disabled { opacity: .6; cursor: default; }
+.btn.invite { animation: ring 2.4s ease-out infinite; }
+.over { margin: 0; font: 10.5px/1 var(--mono); letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; }
+
+/* transfer */
+.tr { display: grid; grid-template-columns: minmax(0, 1fr) 84px minmax(0, 1fr); align-items: start; }
+.tr-col h4 { margin: 12px 0 0; font-size: 19px; line-height: 1.25; letter-spacing: -0.018em; font-weight: 650; }
+.tr-sub { margin-top: 8px; font: 12px/1.5 var(--mono); color: var(--ink-2); }
+.tr-keep { margin-top: 16px; font-size: 13px; color: var(--ink-2); }
+.tr-link { margin-top: 34px; padding: 0 14px; display: flex; align-items: center; color: var(--line); transition: color .3s; }
+.tr-link span { position: relative; flex: 1; height: 2px; background: var(--line); border-radius: 2px; overflow: hidden; transition: background .3s; }
+.tr-link span::after { content: ""; position: absolute; inset: 0; width: 38%; background: var(--nav); border-radius: 2px; transform: translateX(-100%); }
+.tr-link svg { width: 10px; height: 14px; margin-left: -2px; flex: none; }
+.tr.busy .tr-link { color: var(--nav); }
+.tr.busy .tr-link span::after { animation: flow 1s linear infinite; }
+.tr.done .tr-link { color: var(--run); }
+.tr.done .tr-link span { background: var(--run); }
+.tr-steps { list-style: none; margin: 24px 0 0; padding: 18px 0 0; border-top: 1px solid var(--line); display: grid; gap: 10px; }
+.tr-steps li { display: flex; align-items: center; gap: 11px; font: 12.5px/1.45 var(--mono); color: var(--muted); transition: color .25s; }
+.tr-steps li i { position: relative; width: 14px; height: 14px; flex: none; border-radius: 50%; border: 1.5px solid var(--line); transition: background .25s, border-color .25s; }
+.tr-steps li.on { color: var(--ink); }
+.tr-steps li.on i { border-color: var(--nav) var(--nav) var(--nav) transparent; animation: spin .8s linear infinite; }
+.tr-steps li.ok { color: var(--ink); }
+.tr-steps li.ok i { background: var(--run); border-color: var(--run); }
+.tr-steps li.ok i::after { content: ""; position: absolute; left: 3.5px; top: 1.5px; width: 3px; height: 6px; border: solid #fff; border-width: 0 1.6px 1.6px 0; transform: rotate(45deg); }
+.tr-actions { margin-top: 22px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; min-height: 40px; }
+.tr-result { margin-right: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 14px; font-weight: 600; }
+.tr-result code, .tr-cmd { font: 400 12px/1.4 var(--mono); background: var(--surface-2); padding: 3px 7px; border-radius: 5px; color: var(--ink); overflow-wrap: anywhere; }
+.tr-cmd { flex-basis: 100%; padding: 9px 12px; border-radius: 8px; }
+
+/* clean up */
+.cl-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.cl-total { font: 600 22px/1 var(--mono); letter-spacing: -0.02em; }
+.cl-bar { margin-top: 12px; display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--surface-2); }
+.cl-bar i { display: block; height: 100%; min-width: 0; background: #B8CCE4; box-shadow: inset -2px 0 0 var(--surface); transition: width .7s cubic-bezier(.2, .7, .2, 1), background .25s; }
+.cl-bar i.sel { background: var(--nav); }
+.cl-bar i.skip { background: var(--warn); opacity: .6; }
+.cl-list { margin-top: 18px; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.cl-row { display: grid; grid-template-columns: 18px 74px minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 0 14px; height: 56px; max-height: 56px; border-bottom: 1px solid var(--line); background: var(--surface); cursor: pointer; transition: background .15s, opacity .4s, transform .4s, max-height .45s .1s, border-width .45s .1s; }
+.cl-row:last-child { border-bottom: 0; }
+.cl-row:hover:not(.locked) { background: #FAFBFC; }
+.cl-row.on { background: var(--nav-soft); }
+.cl-row.locked { cursor: default; }
+.cl-row.gone { opacity: 0; transform: translateX(18px); max-height: 0; border-bottom-width: 0; pointer-events: none; }
+.cl-row input { appearance: none; -webkit-appearance: none; margin: 0; width: 18px; height: 18px; border: 1.5px solid #B7C3D1; border-radius: 5px; background: var(--surface); display: grid; place-content: center; cursor: inherit; transition: background .15s, border-color .15s; }
+.cl-row input:checked { background: var(--nav); border-color: var(--nav); }
+.cl-row input:checked::after { content: ""; width: 4px; height: 8px; border: solid #fff; border-width: 0 2px 2px 0; transform: translateY(-1px) rotate(45deg); }
+.cl-row input:disabled { background: var(--surface-2); border-color: var(--line); }
+.cl-tool { font: 10px/1 var(--mono); letter-spacing: .08em; color: var(--ink-2); border: 1px solid var(--line); border-radius: 5px; padding: 5px 6px; text-align: center; background: var(--surface); }
+.cl-title { min-width: 0; }
+.cl-title b { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 600; }
+.cl-title small { display: block; margin-top: 3px; font: 11.5px/1.3 var(--mono); color: var(--ink-2); }
+.cl-row.locked .cl-title small { color: var(--warn); }
+.cl-size { font: 12.5px var(--mono); color: var(--ink-2); }
+.cl-foot { margin-top: 18px; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; min-height: 40px; }
+.cl-count { margin-right: auto; font: 12.5px var(--mono); color: var(--ink-2); }
+.cl-done { margin-right: auto; display: grid; gap: 4px; font-size: 14px; font-weight: 600; }
+.cl-done small { font: 400 12px/1.4 var(--mono); color: var(--ink-2); }
+
+/* proxy */
+.px-scroll { overflow-x: auto; }
+.px-svg { display: block; width: 100%; min-width: 540px; height: auto; }
+.px-svg.px-v { min-width: 0; max-width: 340px; margin: 0 auto; }
+.px-line { fill: none; stroke: #C3CEDB; stroke-width: 1.5; }
+.px-line.on { stroke: var(--nav); stroke-width: 2; }
+.px-line.off { stroke: var(--line); stroke-dasharray: 3 5; }
+.px-node { fill: var(--surface); stroke: var(--line); stroke-width: 1; transition: stroke .2s, fill .2s; }
+.px-node.active { stroke: var(--nav); fill: #EAF2FB; }
+.px-core { fill: var(--surface); stroke: var(--nav); stroke-width: 1.5; }
+.px-svg g[data-r] { cursor: pointer; }
+.px-svg text { font: 600 13px var(--font); fill: var(--ink); }
+.px-svg text.m { font: 400 10px var(--mono); fill: var(--ink-2); letter-spacing: .08em; }
+.px-svg text.col { fill: var(--muted); }
+.px-pkt { fill: var(--nav); }
+.px-lamp { fill: var(--run); animation: soft 2s ease-in-out infinite; }
+.px-stream { margin-top: 12px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: #FAFBFC; }
+.px-req { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; font: 11.5px/1.3 var(--mono); color: var(--ink-2); }
+.px-pill { padding: 3px 9px; border-radius: 99px; background: var(--run-soft); color: var(--run); font-weight: 600; }
+.px-text { margin-top: 10px; min-height: 3.3em; font-size: 14px; line-height: 1.65; }
+.px-text::after { content: ""; display: inline-block; width: 7px; height: 14px; margin-left: 2px; vertical-align: -2px; background: var(--nav); animation: blink 1s steps(1) infinite; }
+.px-hint { margin-top: 14px; font-size: 13px; color: var(--ink-2); }
+.px-hint + .chips { margin-top: 10px; }
+
+@media (max-width: 700px) {
+  .demo-body { padding: 20px 16px 18px; }
+  .tr { grid-template-columns: 1fr; gap: 22px; }
+  .tr-link { display: none; }
+  .cl-row { grid-template-columns: 18px minmax(0, 1fr) auto; }
+  .cl-tool { display: none; }
+}
+
 @media (max-width: 900px) {
   .nav-links { display: none; }
   .feature, .feature.flip { grid-template-columns: 1fr; gap: 28px; padding-top: 72px; }
   .feature.flip .feature-text { order: 0; }
   .feature.wide .feature-text { grid-template-columns: 1fr; }
   .feature.wide .facts { grid-column: 1; grid-row: auto; margin-top: 8px; }
-  .feature.wide .shot { margin-top: 28px; }
+  .feature.wide .shot, .feature.wide .demo { margin-top: 28px; }
   .pillars { grid-template-columns: 1fr; }
   .pillar, .pillar + .pillar { padding: 20px 0; border-left: 0; border-bottom: 1px solid var(--line); }
   .download { grid-template-columns: 1fr; }
@@ -194,7 +346,7 @@ footer { margin-top: 140px; border-top: 1px solid var(--line); padding: 32px 0 4
 }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
-  * { transition: none !important; }
+  * { transition: none !important; animation: none !important; }
 }
 </style>
 </head>
@@ -248,26 +400,30 @@ footer { margin-top: 140px; border-top: 1px solid var(--line); padding: 32px 0 4
 
   <div class="wrap">
     <section id="features" aria-labelledby="features-title">
-      <div class="section-head">
+      <div class="section-head reveal">
         <p class="eyebrow mono" data-i18n="features.eyebrow">What it does</p>
         <h2 id="features-title" data-i18n="features.title">Eight tools keep sessions in eight different places. Orrery puts them on one board.</h2>
       </div>
 
       <div class="feature wide">
-        <div class="feature-text">
+        <div class="feature-text reveal">
           <p class="eyebrow mono">01 · SESSIONS</p>
           <h3 data-i18n="f1.title">Every session, accounted for.</h3>
           <p data-i18n="f1.body">Title, project, model, tokens and disk size for every session from every tool, searchable in one list. See which tool and which project the gigabytes went to.</p>
           <ul class="facts">
             <li data-i18n="f1.fact1">Tokens counted once per API call: input · cache write · cache read · output</li>
-            <li data-i18n="f1.fact2">Index kept on disk: 188 sessions open in 0.12 s instead of 5.5 s</li>
+            <li class="fact-bench"><span data-i18n="f1.fact2">Index kept on disk: 188 sessions open in 0.12 s instead of 5.5 s</span>
+            <div class="bench" aria-hidden="true">
+              <div class="bench-row"><span class="bench-label" data-i18n="bench.cold">Rescan every file</span><div class="bench-line"><div class="bench-track"><i style="--t:1.65s"></i></div><b data-count="5.5" data-dec="1" data-ms="1650">5.5 s</b></div></div>
+              <div class="bench-row warm"><span class="bench-label" data-i18n="bench.warm">Read the saved index</span><div class="bench-line"><div class="bench-track"><i style="--t:.04s"></i></div><b data-count="0.12" data-dec="2" data-ms="40">0.12 s</b></div></div>
+            </div></li>
           </ul>
         </div>
-        <div class="shot" style="max-width: 1002px"><img data-shot="status" width="2000" height="654" alt="Disk usage per tool, the model proxy and a tool's own card" loading="lazy" /></div>
+        <div class="shot reveal" style="max-width: 1002px"><img data-shot="status" width="2000" height="654" alt="Disk usage per tool, the model proxy and a tool's own card" loading="lazy" /></div>
       </div>
 
       <div class="feature wide">
-        <div class="feature-text">
+        <div class="feature-text reveal">
           <p class="eyebrow mono">02 · TRANSFER</p>
           <h3 data-i18n="f2.title">Move a conversation to another tool.</h3>
           <p data-i18n="f2.body">Started in Claude Code and want to carry on in Codex or OpenCode? Orrery copies the conversation into the other tool's own history, through that tool's own importer where it has one, and you resume it there. The original stays where it was.</p>
@@ -276,11 +432,15 @@ footer { margin-top: 140px; border-top: 1px solid var(--line); padding: 32px 0 4
             <li data-i18n="f2.fact2">Images the target can't hold are saved as files, never silently dropped</li>
           </ul>
         </div>
-        <div class="shot" style="max-width: 1022px"><img data-shot="transfer" width="2040" height="792" alt="Source session and destination tool, side by side" loading="lazy" /></div>
+        <div class="demo reveal" id="demo-transfer" style="max-width: 1022px">
+          <div class="demo-bar"><span>DEMO · SAMPLE DATA</span><div class="seg" role="group" aria-label="View"><button type="button" data-view="live" aria-pressed="true" data-i18n="demo.tab.live">Live demo</button><button type="button" data-view="app" aria-pressed="false" data-i18n="demo.tab.app">In the app</button></div></div>
+          <div data-live><div class="demo-body" data-stage><noscript><img src="img/transfer.en.png" width="2040" height="792" alt="" /></noscript></div><p class="demo-foot" data-i18n="demo.note">Sample data. Nothing on your machine is read or changed.</p></div>
+          <div class="demo-shot" data-app hidden><img data-shot="transfer" width="2040" height="792" alt="Source session and destination tool, side by side" loading="lazy" /></div>
+        </div>
       </div>
 
       <div class="feature">
-        <div class="feature-text">
+        <div class="feature-text reveal">
           <p class="eyebrow mono">03 · CLEAN UP</p>
           <h3 data-i18n="f3.title">Free the disk, safely.</h3>
           <p data-i18n="f3.body">Sort by size, pick what you no longer need, and send it to the Recycle Bin. Each tool's own index is cleaned too, so nothing is left pointing at a missing file.</p>
@@ -289,11 +449,15 @@ footer { margin-top: 140px; border-top: 1px solid var(--line); padding: 32px 0 4
             <li data-i18n="f3.fact2">Index files are backed up to ~/.orrery/backups before any change</li>
           </ul>
         </div>
-        <div class="shot" style="max-width: 562px; justify-self: center"><img data-shot="delete" width="1120" height="964" alt="Delete dialog with the sessions, the skipped one and the index backup note" loading="lazy" /></div>
+        <div class="demo reveal" id="demo-cleanup">
+          <div class="demo-bar"><span>DEMO · SAMPLE DATA</span><div class="seg" role="group" aria-label="View"><button type="button" data-view="live" aria-pressed="true" data-i18n="demo.tab.live">Live demo</button><button type="button" data-view="app" aria-pressed="false" data-i18n="demo.tab.app">In the app</button></div></div>
+          <div data-live><div class="demo-body" data-stage><noscript><img src="img/delete.en.png" width="1120" height="964" alt="" /></noscript></div><p class="demo-foot" data-i18n="demo.note">Sample data. Nothing on your machine is read or changed.</p></div>
+          <div class="demo-shot" data-app hidden><img data-shot="delete" width="1120" height="964" alt="Delete dialog with the sessions, the skipped one and the index backup note" loading="lazy" style="max-width: 520px" /></div>
+        </div>
       </div>
 
       <div class="feature flip">
-        <div class="feature-text">
+        <div class="feature-text reveal">
           <p class="eyebrow mono">04 · PROXY</p>
           <h3 data-i18n="f4.title">One model proxy for every agent.</h3>
           <p data-i18n="f4.body">Point your tools at a single local endpoint and switch models in one place. OpenAI and Anthropic request shapes, with streaming passed straight through.</p>
@@ -302,12 +466,16 @@ footer { margin-top: 140px; border-top: 1px solid var(--line); padding: 32px 0 4
             <li data-i18n="f4.fact2">Start and stop it from the app</li>
           </ul>
         </div>
-        <div class="shot"><img data-shot="proxy" width="1520" height="696" alt="Proxy endpoint card with start, test and copy buttons" loading="lazy" /></div>
+        <div class="demo reveal" id="demo-proxy">
+          <div class="demo-bar"><span>DEMO · SAMPLE DATA</span><div class="seg" role="group" aria-label="View"><button type="button" data-view="live" aria-pressed="true" data-i18n="demo.tab.live">Live demo</button><button type="button" data-view="app" aria-pressed="false" data-i18n="demo.tab.app">In the app</button></div></div>
+          <div data-live><div class="demo-body" data-stage><noscript><img src="img/proxy.en.png" width="1520" height="696" alt="" /></noscript></div><p class="demo-foot" data-i18n="demo.note">Sample data. Nothing on your machine is read or changed.</p></div>
+          <div class="demo-shot" data-app hidden><img data-shot="proxy" width="1520" height="696" alt="Proxy endpoint card with start, test and copy buttons" loading="lazy" /></div>
+        </div>
       </div>
     </section>
 
     <section id="tools" aria-labelledby="tools-title">
-      <div class="section-head">
+      <div class="section-head reveal">
         <p class="eyebrow mono" data-i18n="tools.eyebrow">Supported tools</p>
         <h2 id="tools-title" data-i18n="tools.title">What Orrery can do with each tool.</h2>
       </div>
@@ -325,37 +493,37 @@ footer { margin-top: 140px; border-top: 1px solid var(--line); padding: 32px 0 4
           <tbody id="matrix-body"></tbody>
         </table>
       </div>
-      <p class="matrix-note" data-i18n="tools.note">Read-only tools keep their sessions in their own database or app, which Orrery reads but does not change. Other OpenCode-style tools can be registered in ~/.orrery/harnesses.json.</p>
+      <p class="matrix-note reveal" data-i18n="tools.note">Read-only tools keep their sessions in their own database or app, which Orrery reads but does not change. Other OpenCode-style tools can be registered in ~/.orrery/harnesses.json.</p>
     </section>
 
     <section id="local" aria-labelledby="local-title">
-      <div class="section-head">
+      <div class="section-head reveal">
         <p class="eyebrow mono" data-i18n="local.eyebrow">Local first</p>
         <h2 id="local-title" data-i18n="local.title">Your sessions stay on your machine.</h2>
       </div>
       <div class="pillars">
-        <div class="pillar"><h3 data-i18n="local.p1.title">Reads what's already there</h3><p data-i18n="local.p1.body">Orrery doesn't wrap or replace your agents. It reads the files they already write, and keeps working when you switch tools.</p></div>
-        <div class="pillar"><h3 data-i18n="local.p2.title">No account, no telemetry</h3><p data-i18n="local.p2.body">There is nothing to sign in to and nothing reported home. The only network traffic is the model proxy, when you turn it on.</p></div>
-        <div class="pillar"><h3 data-i18n="local.p3.title">Open source</h3><p data-i18n="local.p3.body">MIT licensed. Every line that touches your sessions is on GitHub.</p></div>
+        <div class="pillar reveal" style="--d:0.0s"><h3 data-i18n="local.p1.title">Reads what's already there</h3><p data-i18n="local.p1.body">Orrery doesn't wrap or replace your agents. It reads the files they already write, and keeps working when you switch tools.</p></div>
+        <div class="pillar reveal" style="--d:0.1s"><h3 data-i18n="local.p2.title">No account, no telemetry</h3><p data-i18n="local.p2.body">There is nothing to sign in to and nothing reported home. The only network traffic is the model proxy, when you turn it on.</p></div>
+        <div class="pillar reveal" style="--d:0.2s"><h3 data-i18n="local.p3.title">Open source</h3><p data-i18n="local.p3.body">MIT licensed. Every line that touches your sessions is on GitHub.</p></div>
       </div>
     </section>
 
     <section id="download" aria-labelledby="download-title">
-      <div class="section-head">
+      <div class="section-head reveal">
         <p class="eyebrow mono" data-i18n="dl.eyebrow">Download</p>
         <h2 id="download-title" data-i18n="dl.title">Get Orrery for your desktop.</h2>
       </div>
       <div class="download">
-        <div class="dl-card">
+        <div class="dl-card reveal">
           <p class="os mono" data-i18n="dl.detected">Recommended for you</p>
           <h3 id="dl-os">Orrery</h3>
           <p class="meta" id="dl-meta"></p>
           <a class="btn primary large" id="dl-button" href="https://github.com/arvelvale/orrery/releases/latest"><span data-i18n="cta.download">Download</span></a>
           <p class="note" id="dl-note"></p>
         </div>
-        <div class="files" id="files"><p class="loading mono" data-i18n="dl.loading">Loading the latest release…</p></div>
+        <div class="files reveal" id="files"><p class="loading mono" data-i18n="dl.loading">Loading the latest release…</p></div>
       </div>
-      <p class="honest" data-i18n="dl.honest">The builds are not code-signed, so each system asks once before the first launch. macOS and Linux packages are built and tested in CI but have not yet been run on those desktops by the author.</p>
+      <p class="honest reveal" data-i18n="dl.honest">The builds are not code-signed, so each system asks once before the first launch. macOS and Linux packages are built and tested in CI but have not yet been run on those desktops by the author.</p>
     </section>
   </div>
 </main>
@@ -374,6 +542,65 @@ footer { margin-top: 140px; border-top: 1px solid var(--line); padding: 32px 0 4
 
 <script>
 const REPO = "arvelvale/orrery";
+
+/* ── 动效：进入视口时浮现、导航高亮、窗口落定、指示灯“活着”、数字滚动 ──
+   单独包在 try 里：这些只是修饰，出错时必须退回完整可读的静态页面 */
+const reduce = matchMedia("(prefers-reduced-motion: reduce)");
+const vio = "IntersectionObserver" in window
+  ? new IntersectionObserver((es) => es.forEach((e) => e.target._vis && e.target._vis(e.isIntersecting)), { threshold: 0.15 })
+  : null;
+
+function tween(el, to, ms, fmt) {
+  const id = (el._tw = (el._tw || 0) + 1);
+  if (reduce.matches || !ms) { el.textContent = fmt(to); return; }
+  const from = el._val || 0, t0 = performance.now();
+  const step = (t) => {
+    if (el._tw !== id) return;
+    const k = Math.min(1, (t - t0) / ms);
+    el._val = from + (to - from) * (1 - Math.pow(1 - k, 3));
+    el.textContent = fmt(el._val);
+    if (k < 1) requestAnimationFrame(step); else el._val = to;
+  };
+  requestAnimationFrame(step);
+}
+
+try {
+  if (!reduce.matches && "IntersectionObserver" in window) {
+    document.documentElement.classList.add("motion");
+    const bench = document.querySelector(".bench");
+    const counts = [...document.querySelectorAll("[data-count]")];
+    counts.forEach((b) => { b.textContent = "0 s"; });
+    const io = new IntersectionObserver((es) => es.forEach((e) => {
+      if (!e.isIntersecting) return;
+      e.target.classList.add("in");
+      io.unobserve(e.target);
+      if (e.target === bench) counts.forEach((b) => tween(b, +b.dataset.count, +b.dataset.ms, (v) => `${v.toFixed(+b.dataset.dec)} s`));
+    }), { threshold: 0.12, rootMargin: "0px 0px -6% 0px" });
+    document.querySelectorAll(".reveal, .matrix, .bench").forEach((el) => io.observe(el));
+  }
+
+  const win = document.querySelector(".window");
+  if (win && !reduce.matches) {
+    let queued = false;
+    const place = () => {
+      queued = false;
+      const r = win.getBoundingClientRect();
+      win.style.setProperty("--p", Math.min(1, Math.max(0, (innerHeight - r.top) / (innerHeight * 0.62))).toFixed(3));
+    };
+    addEventListener("scroll", () => { if (!queued) { queued = true; requestAnimationFrame(place); } }, { passive: true });
+    addEventListener("resize", place);
+    place();
+  }
+
+  const links = new Map([...document.querySelectorAll(".nav-links a")].map((a) => [a.getAttribute("href").slice(1), a]));
+  if ("IntersectionObserver" in window) {
+    const spy = new IntersectionObserver((es) => es.forEach((e) => { const a = links.get(e.target.id); if (a) a.classList.toggle("active", e.isIntersecting); }), { rootMargin: "-40% 0px -55% 0px" });
+    document.querySelectorAll("main section[id]").forEach((s) => spy.observe(s));
+  }
+} catch (err) {
+  console.error(err);
+  document.documentElement.classList.remove("motion");
+}
 
 /* 能力矩阵：与 README「What works today」一致，改这里前先核对代码 */
 const TOOLS = [
@@ -421,6 +648,7 @@ const I18N = {
     "local.p3.title": "开源", "local.p3.body": "MIT 许可。所有会碰到你会话的代码都在 GitHub 上。",
     "dl.eyebrow": "下载", "dl.title": "把 Orrery 装到你的电脑上。", "dl.detected": "为你推荐", "dl.loading": "正在读取最新版本…",
     "dl.honest": "安装包没有代码签名，所以各系统在第一次打开时会提示确认一次。macOS 和 Linux 的安装包在 CI 里构建并通过测试，但作者还没有在这两个系统的桌面上实际运行过。",
+    "demo.tab.live": "交互演示", "demo.tab.app": "应用截图", "demo.note": "示例数据，不会读取或改动你电脑上的任何东西。", "bench.cold": "每次重新扫描所有文件", "bench.warm": "读取已保存的索引",
     "foot.license": "MIT 许可", "foot.releases": "所有版本", "foot.issues": "问题反馈",
   },
   ja: {
@@ -455,6 +683,7 @@ const I18N = {
     "local.p3.title": "オープンソース", "local.p3.body": "MIT ライセンス。セッションに触れるコードはすべて GitHub で読めます。",
     "dl.eyebrow": "ダウンロード", "dl.title": "Orrery をデスクトップに。", "dl.detected": "おすすめ", "dl.loading": "最新リリースを読み込んでいます…",
     "dl.honest": "ビルドはコード署名されていないため、初回起動時に各 OS で一度確認を求められます。macOS と Linux のパッケージは CI でビルドとテストを行っていますが、作者はまだ実機のデスクトップで動かしていません。",
+    "demo.tab.live": "デモ", "demo.tab.app": "アプリの画面", "demo.note": "サンプルデータです。お使いの PC のものを読み取ったり変更したりすることはありません。", "bench.cold": "毎回すべてのファイルを再スキャン", "bench.warm": "保存済みのインデックスから",
     "foot.license": "MIT ライセンス", "foot.releases": "リリース一覧", "foot.issues": "フィードバック",
   },
 };
@@ -514,7 +743,7 @@ const fmtDate = (iso) => new Intl.DateTimeFormat(lang, { year: "numeric", month:
 function renderMatrix() {
   const mark = (v) => (v ? '<span class="yes" role="img" aria-label="yes"></span>' : '<span class="no" aria-label="no">—</span>');
   document.getElementById("matrix-body").innerHTML = TOOLS.map(([name, ...caps]) =>
-    `<tr><td>${name}</td>${caps.map((c) => `<td class="c">${mark(c)}</td>`).join("")}</tr>`).join("");
+    `<tr style="--i:${TOOLS.findIndex((x) => x[0] === name)}"><td>${name}</td>${caps.map((c) => `<td class="c">${mark(c)}</td>`).join("")}</tr>`).join("");
 }
 
 function renderDownloads() {
@@ -560,6 +789,7 @@ function setLang(next) {
   });
   try { localStorage.setItem("orrery.lang", lang); } catch {}
   renderDownloads();
+  demos.forEach((x) => x.render());
 }
 
 document.querySelectorAll("[data-lang]").forEach((b) => b.addEventListener("click", () => setLang(b.dataset.lang)));
@@ -569,6 +799,352 @@ addEventListener("scroll", () => document.getElementById("nav").classList.toggle
 const lamps = [...document.querySelectorAll(".lamp")];
 const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
 lamps.forEach((l, i) => (still ? l.classList.add("on") : setTimeout(() => l.classList.add("on"), 240 + i * 110)));
+
+// 指示灯自检之后保持“活着”：隔一会儿有一盏在 run / idle 之间切换，节奏和应用里会话状态的变化差不多
+let lampsSeen = true;
+const strip = document.querySelector(".lamps");
+if (strip && vio) { strip._vis = (v) => (lampsSeen = v); vio.observe(strip); }
+setInterval(() => {
+  if (document.hidden || reduce.matches || !lampsSeen) return;
+  const lamp = lamps[Math.floor(Math.random() * lamps.length)];
+  const running = lamps.filter((l) => l.classList.contains("run")).length;
+  const toRun = lamp.classList.contains("idle");
+  if ((toRun && running >= 4) || (!toRun && running <= 2)) return;
+  lamp.classList.toggle("run", toRun);
+  lamp.classList.toggle("idle", !toRun);
+}, 2600);
+
+/* ── 交互演示的文案（演示由脚本渲染，所以不走 data-i18n）── */
+const D = {
+  en: {
+    "tr.title": "Fix flaky checkout test", "tr.meta": "38 messages · 3 images",
+    "tr.source": "Source session", "tr.dest": "Destination", "tr.pickSource": "Source tool", "tr.pickDest": "Destination tool",
+    "tr.continueIn": "Continue in {name}", "tr.newNative": "A new session in its own history",
+    "tr.keep": "The original session stays untouched",
+    "tr.s1": "Read the source session (read-only)", "tr.s2": "Save {n} images as files; their paths stay in the conversation",
+    "tr.how.cc": "Write a new Claude Code session file", "tr.how.codex": "Import through Codex's own importer", "tr.how.opencode": "Import with opencode import",
+    "tr.s4": "Rescan so it shows up in the list",
+    "tr.run": "Create the {name} session", "tr.working": "Converting…", "tr.done": "New {name} session", "tr.again": "Start over", "tr.resume": "Resume in {name}",
+    "cl.onDisk": "On disk", "cl.sel": "{n} selected · {size}", "cl.none": "Pick sessions to clean up", "cl.run": "Move {n} to the Recycle Bin",
+    "cl.skipped": "Skipped: written {ago}", "cl.done": "Freed {size} · {n} sessions in the Recycle Bin", "cl.backup": "Index files backed up to ~/.orrery/backups first", "cl.reset": "Reset the demo",
+    "cl.t1": "Migrate the build to Vite", "cl.t2": "Add retry to the sync worker", "cl.t3": "Draft the release notes", "cl.t4": "Profile the slow dashboard query", "cl.t5": "Fix flaky checkout test",
+    "px.hint": "Switch the route. The agents keep calling the same address.", "px.pick": "Route", "px.reply": "Sure. I'll pull the retry logic into its own helper and add a test for it.",
+  },
+  "zh-CN": {
+    "tr.title": "修复结账流程里偶发失败的测试", "tr.meta": "38 条消息 · 3 张图片",
+    "tr.source": "源会话", "tr.dest": "目标", "tr.pickSource": "源工具", "tr.pickDest": "目标工具",
+    "tr.continueIn": "在 {name} 里继续", "tr.newNative": "写入目标工具自己的历史，成为一条新会话",
+    "tr.keep": "原会话保持原样，不会被改动",
+    "tr.s1": "读取源会话（只读）", "tr.s2": "把 {n} 张图片存成文件，路径留在对话里",
+    "tr.how.cc": "写出一份新的 Claude Code 会话文件", "tr.how.codex": "通过 Codex 自己的导入入口导入", "tr.how.opencode": "用 opencode import 导入",
+    "tr.s4": "重新扫描，让它出现在列表里",
+    "tr.run": "创建 {name} 会话", "tr.working": "转换中…", "tr.done": "新的 {name} 会话", "tr.again": "重来一次", "tr.resume": "在 {name} 里恢复",
+    "cl.onDisk": "磁盘占用", "cl.sel": "已选 {n} 条 · {size}", "cl.none": "选择要清理的会话", "cl.run": "把 {n} 条移到回收站",
+    "cl.skipped": "已跳过：{ago}有写入", "cl.done": "腾出 {size} · {n} 条会话在回收站里", "cl.backup": "改动前已把索引文件备份到 ~/.orrery/backups", "cl.reset": "重置演示",
+    "cl.t1": "把构建迁移到 Vite", "cl.t2": "给同步任务加上重试", "cl.t3": "起草发版说明", "cl.t4": "排查仪表盘的慢查询", "cl.t5": "修复结账流程里偶发失败的测试",
+    "px.hint": "切换路由。各个 Agent 调用的仍是同一个地址。", "px.pick": "路由", "px.reply": "好的，我把重试逻辑抽成独立的函数，再补一个测试。",
+  },
+  ja: {
+    "tr.title": "不安定なチェックアウトのテストを直す", "tr.meta": "38 件のメッセージ · 画像 3 枚",
+    "tr.source": "元のセッション", "tr.dest": "引き継ぎ先", "tr.pickSource": "元のツール", "tr.pickDest": "引き継ぎ先のツール",
+    "tr.continueIn": "{name} で続ける", "tr.newNative": "相手ツール自身の履歴に、新しいセッションとして書き込みます",
+    "tr.keep": "元のセッションはそのまま残ります",
+    "tr.s1": "元のセッションを読み取り（読み取り専用）", "tr.s2": "画像 {n} 枚をファイルとして保存し、パスを会話に残す",
+    "tr.how.cc": "Claude Code のセッションファイルを新しく書き出す", "tr.how.codex": "Codex 自身のインポート機能で取り込む", "tr.how.opencode": "opencode import で取り込む",
+    "tr.s4": "再スキャンして一覧に表示する",
+    "tr.run": "{name} のセッションを作成", "tr.working": "変換中…", "tr.done": "新しい {name} セッション", "tr.again": "やり直す", "tr.resume": "{name} で再開",
+    "cl.onDisk": "ディスク使用量", "cl.sel": "{n} 件を選択 · {size}", "cl.none": "整理するセッションを選んでください", "cl.run": "{n} 件をごみ箱へ",
+    "cl.skipped": "スキップ：{ago}に書き込みあり", "cl.done": "{size} を解放 · {n} 件をごみ箱へ", "cl.backup": "変更前にインデックスを ~/.orrery/backups にバックアップ済み", "cl.reset": "デモをリセット",
+    "cl.t1": "ビルドを Vite に移行する", "cl.t2": "同期ワーカーにリトライを追加", "cl.t3": "リリースノートの下書き", "cl.t4": "ダッシュボードの遅いクエリを調べる", "cl.t5": "不安定なチェックアウトのテストを直す",
+    "px.hint": "ルートを切り替えても、エージェントが呼ぶ宛先は同じです。", "px.pick": "ルート", "px.reply": "了解です。再試行のロジックを独立した関数に切り出し、テストも追加します。",
+  },
+};
+const d = (k, v) => {
+  let s = (D[lang] && D[lang][k]) ?? D.en[k] ?? k;
+  if (v) for (const [a, b] of Object.entries(v)) s = s.replaceAll(`{${a}}`, b);
+  return s;
+};
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+const fmtMB = (mb) => (mb >= 1000 ? `${(mb / 1000).toFixed(2)} GB` : `${Math.round(mb)} MB`);
+const hex = (n) => Array.from(crypto.getRandomValues(new Uint8Array(n)), (b) => (b % 16).toString(16)).join("");
+const NAME = { cc: "Claude Code", codex: "Codex", opencode: "OpenCode" };
+
+/* 每个演示卡片可在“交互演示”和“应用里的真实截图”之间切换 */
+document.querySelectorAll(".demo").forEach((root) => root.querySelectorAll("[data-view]").forEach((b) => b.addEventListener("click", () => {
+  const app = b.dataset.view === "app";
+  root.querySelector("[data-live]").hidden = app;
+  root.querySelector("[data-app]").hidden = !app;
+  root.querySelectorAll("[data-view]").forEach((x) => x.setAttribute("aria-pressed", String(x === b)));
+})));
+
+/* ── 演示 02：会话迁移。流程和应用里一致：预检 → 逐步写入 → 在目标里恢复 ── */
+function initTransfer(root) {
+  const stage = root.querySelector("[data-stage]");
+  const IDS = ["cc", "codex", "opencode"];
+  const CMD = { cc: "claude --resume", codex: "codex resume", opencode: "opencode --session" };
+  const st = { src: "cc", dst: "codex", phase: "idle", step: 0, id: "", cmd: false };
+  let timers = [];
+  const stop = () => { timers.forEach(clearTimeout); timers = []; };
+  // 示例会话里有 2 张用户贴的图和 1 张工具截图：进 Codex 的图一律存成文件，其余目标只有工具截图存文件
+  const images = () => (st.dst === "codex" ? 3 : 1);
+  const newId = () => (st.dst === "opencode" ? "ses_" + hex(26) : `${hex(8)}-${hex(4)}-${hex(4)}-${hex(4)}-${hex(12)}`);
+  const steps = () => [d("tr.s1"), d("tr.s2", { n: images() }), d("tr.how." + st.dst), d("tr.s4")];
+
+  const chip = (kind, h) => {
+    const on = (kind === "src" ? st.src : st.dst) === h;
+    return `<button type="button" role="radio" class="chip" aria-checked="${on}" data-k="${kind}" data-h="${h}"${st.phase === "busy" ? " disabled" : ""}>${NAME[h]}</button>`;
+  };
+
+  function paint() {
+    const board = stage.querySelector(".tr");
+    board.className = `tr ${st.phase}`;
+    stage.querySelectorAll(".chip").forEach((b) => (b.disabled = st.phase === "busy"));
+    stage.querySelector(".tr-steps").innerHTML = steps().map((s, i) => {
+      const cls = st.phase === "done" || i < st.step ? "ok" : st.phase === "busy" && i === st.step ? "on" : "";
+      return `<li class="${cls}"><i></i>${esc(s)}</li>`;
+    }).join("");
+    const to = NAME[st.dst];
+    const actions = stage.querySelector(".tr-actions");
+    if (st.phase === "done") {
+      actions.innerHTML = `<div class="tr-result"><span>✓ ${esc(d("tr.done", { name: to }))}</span><code>${esc(st.id)}</code></div>
+        <button type="button" class="btn small" data-act="again">${esc(d("tr.again"))}</button>
+        <button type="button" class="btn small primary" data-act="resume">${esc(d("tr.resume", { name: to }))}</button>
+        ${st.cmd ? `<code class="tr-cmd">$ ${esc(CMD[st.dst])} ${esc(st.id)}</code>` : ""}`;
+    } else {
+      const busy = st.phase === "busy";
+      actions.innerHTML = `<button type="button" class="btn primary${busy ? "" : " invite"}" data-act="run"${busy ? " disabled" : ""}>${esc(d(busy ? "tr.working" : "tr.run", { name: to }))}</button>`;
+    }
+    actions.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => act(b.dataset.act)));
+  }
+
+  function render(focus) {
+    stop();
+    st.phase = "idle"; st.step = 0; st.cmd = false;
+    stage.innerHTML = `
+      <div class="tr idle">
+        <div class="tr-col">
+          <p class="over">${esc(d("tr.source"))}</p>
+          <h4>${esc(d("tr.title"))}</h4>
+          <p class="tr-sub">acme-web · ${esc(d("tr.meta"))}</p>
+          <div class="chips" role="radiogroup" aria-label="${esc(d("tr.pickSource"))}">${IDS.map((h) => chip("src", h)).join("")}</div>
+          <p class="tr-keep">✓ ${esc(d("tr.keep"))}</p>
+        </div>
+        <div class="tr-link" aria-hidden="true"><span></span><svg viewBox="0 0 10 14"><path d="M2 2l6 5-6 5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+        <div class="tr-col">
+          <p class="over">${esc(d("tr.dest"))}</p>
+          <h4>${esc(d("tr.continueIn", { name: NAME[st.dst] }))}</h4>
+          <p class="tr-sub">${esc(d("tr.newNative"))}</p>
+          <div class="chips" role="radiogroup" aria-label="${esc(d("tr.pickDest"))}">${IDS.filter((h) => h !== st.src).map((h) => chip("dst", h)).join("")}</div>
+        </div>
+      </div>
+      <ol class="tr-steps"></ol>
+      <div class="tr-actions"></div>`;
+    paint();
+    stage.querySelectorAll(".chip").forEach((b) => b.addEventListener("click", () => {
+      st[b.dataset.k] = b.dataset.h;
+      if (st.src === st.dst) st.dst = IDS.find((h) => h !== st.src);
+      render(`.chip[data-k="${b.dataset.k}"][data-h="${b.dataset.h}"]`);
+    }));
+    if (focus) stage.querySelector(focus)?.focus();
+  }
+
+  function act(what) {
+    if (what === "again") { render(); return; }
+    if (what === "resume") { st.cmd = !st.cmd; paint(); return; }
+    if (st.phase !== "idle") return;
+    st.phase = "busy"; st.step = 0; st.id = newId();
+    const dur = reduce.matches ? [0, 0, 0, 0] : [650, 750, 950, 600];
+    const next = () => {
+      st.step += 1;
+      if (st.step >= dur.length) st.phase = "done";
+      paint();
+      if (st.phase === "busy") timers.push(setTimeout(next, dur[st.step]));
+    };
+    paint();
+    timers.push(setTimeout(next, dur[0]));
+  }
+
+  return { render: () => render() };
+}
+
+/* ── 演示 03：清理。规则和应用一致：最近 10 分钟写过的会话直接跳过，改动前先备份索引 ── */
+function initCleanup(root) {
+  const stage = root.querySelector("[data-stage]");
+  const ITEMS = [
+    { tool: "CC", mb: 812, days: 9 },
+    { tool: "CODEX", mb: 640, days: 14 },
+    { tool: "OPENCODE", mb: 233, days: 21 },
+    { tool: "KIMI", mb: 97, days: 4 },
+    { tool: "CC", mb: 48, minutes: 3, locked: true },
+  ];
+  const ALL = ITEMS.reduce((n, x) => n + x.mb, 0);
+  const st = { sel: new Set([0, 1, 2]), gone: new Set(), phase: "idle" };
+  let timers = [];
+  const stop = () => { timers.forEach(clearTimeout); timers = []; };
+  const ago = (x) => {
+    const f = new Intl.RelativeTimeFormat(lang, { numeric: "auto" });
+    return x.minutes ? f.format(-x.minutes, "minute") : f.format(-x.days, "day");
+  };
+  const selMB = () => [...st.sel].reduce((n, i) => n + ITEMS[i].mb, 0);
+  const left = () => ALL - [...st.gone].reduce((n, i) => n + ITEMS[i].mb, 0);
+
+  function paint() {
+    const total = stage.querySelector(".cl-total");
+    tween(total, left(), 650, fmtMB);
+    ITEMS.forEach((x, i) => {
+      const row = stage.querySelector(`.cl-row[data-i="${i}"]`);
+      row.classList.toggle("on", st.sel.has(i) && !st.gone.has(i));
+      row.classList.toggle("gone", st.gone.has(i));
+      row.querySelector("input").checked = st.sel.has(i);
+      const seg = stage.querySelector(`.cl-bar i[data-i="${i}"]`);
+      seg.style.width = st.gone.has(i) ? "0%" : `${(x.mb / ALL) * 100}%`;
+      seg.className = x.locked ? "skip" : st.sel.has(i) ? "sel" : "";
+    });
+    const foot = stage.querySelector(".cl-foot");
+    if (st.phase === "done") {
+      const freed = ITEMS.filter((_, i) => st.gone.has(i)).reduce((n, x) => n + x.mb, 0);
+      foot.innerHTML = `<div class="cl-done"><span>✓ ${esc(d("cl.done", { size: fmtMB(freed), n: st.gone.size }))}</span><small>${esc(d("cl.backup"))}</small></div>
+        <button type="button" class="btn small" data-act="reset">${esc(d("cl.reset"))}</button>`;
+    } else {
+      const n = st.sel.size, busy = st.phase === "busy";
+      foot.innerHTML = `<span class="cl-count">${esc(n ? d("cl.sel", { n, size: fmtMB(selMB()) }) : d("cl.none"))}</span>
+        <button type="button" class="btn primary${n && !busy ? " invite" : ""}" data-act="run"${n && !busy ? "" : " disabled"}>${esc(d("cl.run", { n }))}</button>`;
+    }
+    foot.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => act(b.dataset.act)));
+  }
+
+  function render() {
+    stop();
+    if (st.phase === "busy") { st.gone = new Set(st.sel); st.phase = "done"; }
+    stage.innerHTML = `
+      <div class="cl-head"><span class="over">${esc(d("cl.onDisk"))}</span><b class="cl-total"></b></div>
+      <div class="cl-bar" aria-hidden="true">${ITEMS.map((_, i) => `<i data-i="${i}"></i>`).join("")}</div>
+      <div class="cl-list">${ITEMS.map((x, i) => `
+        <label class="cl-row${x.locked ? " locked" : ""}" data-i="${i}">
+          <input type="checkbox"${x.locked ? " disabled" : ""} />
+          <span class="cl-tool">${x.tool}</span>
+          <span class="cl-title"><b>${esc(d("cl.t" + (i + 1)))}</b><small>${esc(x.locked ? d("cl.skipped", { ago: ago(x) }) : ago(x))}</small></span>
+          <span class="cl-size">${fmtMB(x.mb)}</span>
+        </label>`).join("")}
+      </div>
+      <div class="cl-foot"></div>`;
+    stage.querySelector(".cl-total").textContent = fmtMB(left());
+    stage.querySelector(".cl-total")._val = left();
+    stage.querySelectorAll(".cl-row input").forEach((inp) => inp.addEventListener("change", () => {
+      const i = +inp.closest(".cl-row").dataset.i;
+      if (inp.checked) st.sel.add(i); else st.sel.delete(i);
+      paint();
+    }));
+    paint();
+  }
+
+  function act(what) {
+    if (what === "reset") { st.sel = new Set([0, 1, 2]); st.gone = new Set(); st.phase = "idle"; render(); return; }
+    if (st.phase !== "idle" || !st.sel.size) return;
+    st.phase = "busy";
+    const order = [...st.sel].sort((a, b) => a - b);
+    order.forEach((i, k) => timers.push(setTimeout(() => {
+      st.gone.add(i);
+      if (k === order.length - 1) timers.push(setTimeout(() => { st.phase = "done"; paint(); }, reduce.matches ? 0 : 600));
+      paint();
+    }, reduce.matches ? 0 : k * 170)));
+    paint();
+  }
+
+  return { render };
+}
+
+/* ── 演示 04：模型代理。Agent 的地址不变，只切换后面的路由；回复一字一字流出来（SSE 透传） ── */
+function initProxy(root) {
+  const stage = root.querySelector("[data-stage]");
+  const AGENTS = ["Claude Code", "Codex", "OpenCode"];
+  const ROUTES = [["OpenAI", "gpt-4.1"], ["Anthropic", "claude-sonnet-4"], ["OpenAI", "deepseek-chat"]];
+  const YS = [30, 120, 210];
+  const st = { r: 0 };
+  let typer = null, again = null, seen = false;
+  const stopType = () => { clearInterval(typer); clearTimeout(again); typer = again = null; };
+
+  const narrow = matchMedia("(max-width: 700px)");
+  const pkts = (paths) => (reduce.matches ? "" : paths.map((p, i) => {
+    const begin = `${(i * 0.8).toFixed(1)}s`;
+    return `<circle r="3.5" class="px-pkt" opacity="0"><animateMotion dur="2.4s" begin="${begin}" repeatCount="indefinite" path="${p}"/><animate attributeName="opacity" values="0;1;1;0" keyTimes="0;.08;.92;1" dur="2.4s" begin="${begin}" repeatCount="indefinite"/></circle>`;
+  }).join(""));
+  const label = (r) => `aria-label="${esc(AGENTS.join(", "))} → Orrery → ${esc(ROUTES[r].join(" "))}"`;
+
+  /* 窄屏换竖排：横排缩到手机宽度后字只有 6px */
+  const svgNarrow = () => {
+    const r = st.r, AX = [56, 160, 264], PX = [54, 160, 266];
+    let s = `<svg class="px-svg px-v" viewBox="0 0 320 340" role="img" ${label(r)}>`;
+    AGENTS.forEach((_, i) => { s += `<path class="px-line" d="M${AX[i]},58 C${AX[i]},94 160,94 160,130"/>`; });
+    ROUTES.forEach((_, i) => { s += `<path class="px-line ${i === r ? "on" : "off"}" d="M160,200 C160,235 ${PX[i]},235 ${PX[i]},276"/>`; });
+    s += pkts(AGENTS.map((_, i) => `M${AX[i]},58 C${AX[i]},94 160,94 160,130 L160,200 C160,235 ${PX[r]},235 ${PX[r]},276`));
+    AGENTS.forEach((a, i) => { s += `<g><rect class="px-node" x="${AX[i] - 48}" y="24" width="96" height="34" rx="8"/><text style="font-size:12px" x="${AX[i]}" y="46" text-anchor="middle">${a}</text></g>`; });
+    s += `<rect class="px-core" x="50" y="130" width="220" height="70" rx="12"/><text x="160" y="157" text-anchor="middle">Orrery</text><text class="m" x="160" y="174" text-anchor="middle">127.0.0.1:8787</text><circle class="px-lamp" cx="128" cy="189" r="3.5"/><text class="m" x="138" y="192.5">RUNNING</text>`;
+    ROUTES.forEach(([wire, model], i) => {
+      s += `<g data-r="${i}"><rect class="px-node${i === r ? " active" : ""}" x="${PX[i] - 52}" y="276" width="104" height="48" rx="8"/><text class="m" x="${PX[i]}" y="295" text-anchor="middle">${wire.toUpperCase()}</text><text style="font-size:11px" x="${PX[i]}" y="311" text-anchor="middle">${model}</text></g>`;
+    });
+    return s + "</svg>";
+  };
+
+  const svg = () => {
+    if (narrow.matches) return svgNarrow();
+    const r = st.r;
+    let s = `<svg class="px-svg" viewBox="0 0 640 270" role="img" ${label(r)}>`;
+    s += `<text class="m col" x="16" y="14">AGENTS</text><text class="m col" x="320" y="14" text-anchor="middle">PROXY</text><text class="m col" x="624" y="14" text-anchor="end">PROVIDERS</text>`;
+    AGENTS.forEach((_, i) => { s += `<path class="px-line" d="M166,${YS[i] + 22} C206,${YS[i] + 22} 206,140 246,140"/>`; });
+    ROUTES.forEach((_, i) => { s += `<path class="px-line ${i === r ? "on" : "off"}" d="M394,140 C434,140 434,${YS[i] + 22} 474,${YS[i] + 22}"/>`; });
+    s += pkts(AGENTS.map((_, i) => `M166,${YS[i] + 22} C206,${YS[i] + 22} 206,140 246,140 L394,140 C434,140 434,${YS[r] + 22} 474,${YS[r] + 22}`));
+    AGENTS.forEach((a, i) => { s += `<g><rect class="px-node" x="16" y="${YS[i]}" width="150" height="44" rx="9"/><text x="32" y="${YS[i] + 27}">${a}</text></g>`; });
+    s += `<rect class="px-core" x="246" y="86" width="148" height="108" rx="12"/><text x="320" y="122" text-anchor="middle">Orrery</text><text class="m" x="320" y="142" text-anchor="middle">127.0.0.1:8787</text><circle class="px-lamp" cx="288" cy="165" r="3.5"/><text class="m" x="298" y="168.5">RUNNING</text>`;
+    ROUTES.forEach(([wire, model], i) => {
+      s += `<g data-r="${i}"><rect class="px-node${i === r ? " active" : ""}" x="474" y="${YS[i]}" width="150" height="44" rx="9"/><text class="m" x="490" y="${YS[i] + 19}">${wire.toUpperCase()}</text><text x="490" y="${YS[i] + 35}">${model}</text></g>`;
+    });
+    return s + "</svg>";
+  };
+
+  function type() {
+    stopType();
+    const out = stage.querySelector(".px-text");
+    if (!out) return;
+    const chars = Array.from(d("px.reply"));
+    if (reduce.matches) { out.textContent = chars.join(""); return; }
+    let n = 0;
+    out.textContent = "";
+    typer = setInterval(() => {
+      n += 1;
+      out.textContent = chars.slice(0, n).join("");
+      if (n >= chars.length) { stopType(); again = setTimeout(type, 3200); }
+    }, 42);
+  }
+
+  function render() {
+    stage.innerHTML = `
+      <div class="px-scroll">${svg()}</div>
+      <p class="px-hint">${esc(d("px.hint"))}</p>
+      <div class="chips" role="radiogroup" aria-label="${esc(d("px.pick"))}">${ROUTES.map(([w, m], i) => `<button type="button" role="radio" class="chip" aria-checked="${i === st.r}" data-r="${i}">${m}</button>`).join("")}</div>
+      <div class="px-stream"><div class="px-req"><span>127.0.0.1:8787 → ${esc(ROUTES[st.r][1])}</span><span class="px-pill">200 · stream</span></div><p class="px-text"></p></div>`;
+    stage.querySelectorAll("[data-r]").forEach((el) => el.addEventListener("click", () => {
+      st.r = +el.dataset.r;
+      render();
+      stage.querySelector(`.chip[data-r="${st.r}"]`)?.focus();
+    }));
+    if (seen) type();
+  }
+
+  // 只在看得见的时候跑：打字、SVG 里的数据包都暂停在屏幕外
+  root._vis = (on) => {
+    seen = on;
+    const el = stage.querySelector("svg");
+    if (on) { el?.unpauseAnimations?.(); type(); } else { el?.pauseAnimations?.(); stopType(); }
+  };
+  vio && vio.observe(root);
+  if (!vio) seen = true;
+  narrow.addEventListener("change", () => render());
+
+  return { render };
+}
+
+const demos = [initTransfer(document.getElementById("demo-transfer")), initCleanup(document.getElementById("demo-cleanup")), initProxy(document.getElementById("demo-proxy"))];
 
 renderMatrix();
 setLang(window.ORRERY_LANG);
