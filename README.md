@@ -9,6 +9,7 @@
 Every Claude Code, Kimi Code, DSH (DeepSeek), Codex, OpenCode, Z Code, Antigravity and WorkBuddy session on your machine in one window: tokens, disk usage, projects, subagents. Delete what you no longer need (Z Code and WorkBuddy are read-only), and route every harness through one local model proxy. Nothing leaves your computer.
 
 <p>
+  <a href="https://arvelvale.github.io/orrery/"><img alt="Website" src="https://img.shields.io/badge/website-arvelvale.github.io%2Forrery-0B6BCB?style=flat-square" /></a>
   <a href="https://github.com/arvelvale/orrery/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/arvelvale/orrery?style=flat-square&label=download&color=0F9D6E" /></a>
   <a href="https://github.com/arvelvale/orrery/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/arvelvale/orrery?style=flat-square&color=0B6BCB" /></a>
   <a href="https://github.com/arvelvale/orrery/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/arvelvale/orrery?style=flat-square&logo=github&color=15202B" /></a>

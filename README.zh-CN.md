@@ -9,6 +9,7 @@
 把本机所有 Claude Code、Kimi Code、DSH（DeepSeek）、Codex、OpenCode、Z Code、Antigravity、WorkBuddy 会话收进一个窗口：token、磁盘占用、项目、子 agent 一眼看清。不要的会话可以直接删掉（Z Code 和 WorkBuddy 为只读），各个 harness 还能统一走一个本地模型代理。数据不出本机。
 
 <p>
+  <a href="https://arvelvale.github.io/orrery/"><img alt="Website" src="https://img.shields.io/badge/website-arvelvale.github.io%2Forrery-0B6BCB?style=flat-square" /></a>
   <a href="https://github.com/arvelvale/orrery/releases/latest"><img alt="Download" src="https://img.shields.io/github/v/release/arvelvale/orrery?style=flat-square&label=download&color=0F9D6E" /></a>
   <a href="https://github.com/arvelvale/orrery/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/arvelvale/orrery?style=flat-square&color=0B6BCB" /></a>
   <a href="https://github.com/arvelvale/orrery/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/arvelvale/orrery?style=flat-square&logo=github&color=15202B" /></a>

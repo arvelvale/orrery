@@ -1,0 +1,581 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Orrery — every AI coding agent, one cockpit</title>
+<meta name="description" content="A local-first desktop cockpit for AI coding agents. Every Claude Code, Codex, OpenCode, Kimi Code, DSH, Z Code, Antigravity and WorkBuddy session on your machine in one window." />
+<meta property="og:title" content="Orrery — every AI coding agent, one cockpit" />
+<meta property="og:description" content="Sessions, tokens and disk usage from eight agent tools in one local window. Clean up, resume, or move a conversation to another tool. Nothing leaves your computer." />
+<meta property="og:image" content="https://arvelvale.github.io/orrery/assets/screenshot-status.en.png" />
+<meta name="theme-color" content="#F4F6F9" />
+<link rel="icon" href="assets/logo.svg" type="image/svg+xml" />
+<script>
+/* 语言在解析正文前就定下：字体栈立即正确，截图也只按这个语言加载一次 */
+window.ORRERY_LANG = (() => {
+  const ok = ["en", "zh-CN", "ja"];
+  const q = new URLSearchParams(location.search).get("lang");
+  if (ok.includes(q)) return q;
+  try { const s = localStorage.getItem("orrery.lang"); if (ok.includes(s)) return s; } catch {}
+  for (const l of navigator.languages || [navigator.language]) {
+    if (/^zh/i.test(l)) return "zh-CN";
+    if (/^ja/i.test(l)) return "ja";
+    if (/^en/i.test(l)) return "en";
+  }
+  return "en";
+})();
+document.documentElement.lang = window.ORRERY_LANG;
+</script>
+<!--
+  Design source: the app's own DESIGN.md — light worktable, hairlines, monospace
+  metadata, restrained ops blue. One signature element: the annunciator lamp strip.
+  Deliberately no web fonts, analytics or third-party requests: a local-first tool's
+  page should not hand its visitors to anyone. The only request is GitHub's public
+  API for the latest release, so the download buttons never go stale.
+-->
+<style>
+:root {
+  --bg: #F4F6F9; --surface: #FFFFFF; --surface-2: #EDF1F6;
+  --ink: #15202B; --ink-2: #5B6B7C; --line: #D8E0EA; --muted: #9AA8B8;
+  --nav: #0B6BCB; --nav-ink: #0957A6; --nav-soft: rgba(11, 107, 203, 0.08);
+  --run: #0F9D6E; --run-soft: rgba(15, 157, 110, 0.14);
+  --warn: #C47B0A;
+  --font: "Segoe UI Variable Display", "Segoe UI", -apple-system, BlinkMacSystemFont, "SF Pro Display", system-ui, sans-serif;
+  --mono: "Cascadia Code", "SF Mono", ui-monospace, Menlo, Consolas, monospace;
+  --wrap: 1120px;
+}
+/* 中日文共用汉字字形不同：按 <html lang> 切字体栈，和应用一致 */
+:root:lang(zh-CN) { --font: "Segoe UI Variable Display", "Segoe UI", -apple-system, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif; }
+:root:lang(ja) { --font: "Segoe UI Variable Display", "Segoe UI", -apple-system, "Hiragino Sans", "Yu Gothic UI", "Meiryo", system-ui, sans-serif; }
+
+*, *::before, *::after { box-sizing: border-box; }
+/* 组件自己设了 display 时 hidden 属性会失效 */
+[hidden] { display: none !important; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 var(--font); -webkit-font-smoothing: antialiased; }
+a { color: var(--nav); text-decoration: none; }
+a:hover { color: var(--nav-ink); }
+:focus-visible { outline: 2px solid var(--nav); outline-offset: 3px; border-radius: 4px; }
+img { display: block; max-width: 100%; height: auto; }
+.wrap { width: min(var(--wrap), 100% - 48px); margin-inline: auto; }
+.mono { font-family: var(--mono); }
+h1, h2, h3 { margin: 0; font-weight: 650; letter-spacing: -0.025em; text-wrap: balance; }
+p { margin: 0; text-wrap: pretty; }
+/* 日文按词组断行，避免「コーディ / ング」这种拆词 */
+:lang(ja) h1, :lang(ja) h2, :lang(ja) h3 { word-break: auto-phrase; }
+
+/* ── nav ── */
+.nav { position: sticky; top: 0; z-index: 10; background: rgba(244, 246, 249, 0.86); backdrop-filter: saturate(1.4) blur(10px); border-bottom: 1px solid transparent; transition: border-color .2s; }
+.nav.scrolled { border-bottom-color: var(--line); }
+.nav-inner { height: 60px; display: flex; align-items: center; gap: 28px; }
+.brand { display: flex; align-items: center; gap: 10px; color: var(--ink); font-weight: 650; font-size: 16px; letter-spacing: -0.01em; }
+.brand:hover { color: var(--ink); }
+.brand img { width: 26px; height: 26px; }
+.nav-links { display: flex; gap: 24px; font-size: 14px; }
+.nav-links a { color: var(--ink-2); }
+.nav-links a:hover { color: var(--ink); }
+.nav-right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.seg { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); }
+.seg button { font: 12px/1 var(--font); color: var(--ink-2); background: none; border: 0; padding: 6px 9px; border-radius: 6px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--surface-2); color: var(--ink); font-weight: 600; }
+.btn { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: 9px; font: 600 14px/1 var(--font); border: 1px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer; white-space: nowrap; transition: background .15s, border-color .15s, transform .15s; }
+.btn:hover { color: var(--ink); border-color: #C3CEDB; background: #FBFCFD; }
+.btn.small { height: 34px; padding: 0 12px; font-size: 13px; }
+.btn.primary { background: var(--nav); border-color: var(--nav); color: #fff; }
+.btn.primary:hover { background: var(--nav-ink); border-color: var(--nav-ink); color: #fff; }
+.btn.large { height: 48px; padding: 0 22px; font-size: 15px; border-radius: 11px; }
+.btn svg { width: 16px; height: 16px; flex: none; }
+
+/* ── hero ── */
+.hero { padding: 72px 0 0; text-align: center; }
+.lamps { display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; padding: 8px 16px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); }
+.lamp { display: inline-flex; align-items: center; gap: 7px; font: 10.5px/1 var(--mono); letter-spacing: .08em; color: var(--ink-2); }
+.lamp i { width: 7px; height: 7px; border-radius: 50%; background: #C5D0DC; transition: background .25s, box-shadow .25s; }
+.lamp.on.run i { background: var(--run); box-shadow: 0 0 0 3px var(--run-soft); }
+.lamp.on.idle i { background: var(--nav); box-shadow: 0 0 0 3px var(--nav-soft); }
+.lamp.on { color: var(--ink); }
+.hero h1 { margin: 28px auto 0; max-width: 900px; font-size: clamp(40px, 6.4vw, 76px); line-height: 1.02; letter-spacing: -0.042em; }
+.hero .lede { margin: 22px auto 0; max-width: 680px; font-size: clamp(16px, 1.6vw, 19px); color: var(--ink-2); line-height: 1.6; }
+.cta { margin-top: 34px; display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; }
+.cta-meta { margin-top: 14px; font: 12px/1.6 var(--mono); color: var(--ink-2); }
+.cta-meta a { color: var(--ink-2); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--line); }
+
+.window { margin: 56px auto 0; max-width: 1002px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); overflow: hidden; box-shadow: 0 1px 0 rgba(21, 32, 43, 0.03), 0 24px 60px -28px rgba(21, 32, 43, 0.22); }
+.window-bar { height: 34px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--line); background: #FAFBFC; font: 11px/1 var(--mono); color: var(--muted); letter-spacing: .06em; }
+.window img { width: 100%; }
+
+/* ── sections ── */
+section { padding: 120px 0 0; }
+.eyebrow { font: 11px/1 var(--mono); letter-spacing: .12em; color: var(--ink-2); text-transform: uppercase; }
+.section-head { max-width: 720px; }
+.section-head h2 { margin-top: 14px; font-size: clamp(30px, 3.6vw, 44px); line-height: 1.1; }
+.section-head p:not(.eyebrow) { margin-top: 16px; color: var(--ink-2); font-size: 17px; }
+
+.feature { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 56px; align-items: center; padding-top: 96px; }
+.feature.flip { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+.feature.flip .feature-text { order: 2; }
+.feature-text h3 { margin-top: 14px; font-size: clamp(26px, 2.8vw, 34px); line-height: 1.15; }
+.feature-text p { margin-top: 16px; color: var(--ink-2); }
+.facts { list-style: none; margin: 24px 0 0; padding: 0; border-top: 1px solid var(--line); }
+.facts li { padding: 11px 0; border-bottom: 1px solid var(--line); font: 12.5px/1.55 var(--mono); color: var(--ink); }
+.feature.wide { display: block; }
+.feature.wide .feature-text { display: grid; grid-template-columns: minmax(0, 6fr) minmax(0, 5fr); gap: 16px 56px; align-items: end; }
+.feature.wide .feature-text > :not(.facts) { grid-column: 1; }
+.feature.wide .facts { grid-column: 2; grid-row: 1 / span 3; align-self: end; margin: 0; }
+.feature.wide .shot { margin: 40px auto 0; }
+/* 截图是从应用里按卡片边界截下的局部，底色与页面一致，不再外套一层框 */
+.shot { border-radius: 12px; overflow: hidden; }
+
+/* ── matrix ── */
+.matrix { margin-top: 40px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); overflow-x: auto; }
+.matrix table { width: 100%; border-collapse: collapse; min-width: 640px; }
+.matrix th, .matrix td { padding: 14px 18px; text-align: left; border-bottom: 1px solid var(--line); font-size: 14px; }
+.matrix tr:last-child td { border-bottom: 0; }
+.matrix thead th { font: 10.5px/1 var(--mono); letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; background: #FAFBFC; font-weight: 400; }
+.matrix td:first-child { font-weight: 600; }
+.matrix td.c, .matrix th.c { text-align: center; }
+.yes { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--run); box-shadow: 0 0 0 3px var(--run-soft); }
+.no { color: var(--muted); font-family: var(--mono); }
+.matrix-note { margin-top: 14px; font-size: 13px; color: var(--ink-2); }
+
+/* ── local first ── */
+.pillars { margin-top: 40px; display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1px solid var(--ink); }
+.pillar { padding: 22px 28px 0 0; }
+.pillar + .pillar { padding-left: 28px; border-left: 1px solid var(--line); }
+.pillar h3 { font-size: 18px; letter-spacing: -0.015em; }
+.pillar p { margin-top: 10px; color: var(--ink-2); font-size: 15px; }
+
+/* ── download ── */
+.download { margin-top: 40px; display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 24px; align-items: start; }
+.dl-card { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); padding: 28px; }
+.dl-card .os { font: 11px/1 var(--mono); letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; }
+.dl-card h3 { margin-top: 12px; font-size: 26px; }
+.dl-card .meta { margin-top: 8px; font: 12.5px/1.6 var(--mono); color: var(--ink-2); }
+.dl-card .btn { margin-top: 22px; width: 100%; justify-content: center; }
+.dl-card .note { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13.5px; color: var(--ink-2); }
+.dl-card .note code { font: 12px var(--mono); background: var(--surface-2); padding: 2px 6px; border-radius: 5px; color: var(--ink); overflow-wrap: anywhere; }
+.files { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); overflow: hidden; }
+.files a { display: grid; grid-template-columns: 110px minmax(0, 1fr) auto; gap: 16px; align-items: center; padding: 15px 20px; border-bottom: 1px solid var(--line); color: var(--ink); transition: background .15s; }
+.files a:last-child { border-bottom: 0; }
+.files a:hover { background: #FAFBFC; color: var(--ink); }
+.files .plat { font: 10.5px/1 var(--mono); letter-spacing: .1em; color: var(--ink-2); text-transform: uppercase; }
+.files .name { font: 13px/1.4 var(--mono); overflow-wrap: anywhere; }
+.files .name small { display: block; margin-top: 3px; font: 12.5px/1.4 var(--font); color: var(--ink-2); }
+.files .size { font: 12px var(--mono); color: var(--ink-2); }
+.files .loading { padding: 20px; font: 12.5px var(--mono); color: var(--ink-2); }
+.honest { margin-top: 18px; font-size: 13px; color: var(--ink-2); max-width: 760px; }
+
+/* ── footer ── */
+footer { margin-top: 140px; border-top: 1px solid var(--line); padding: 32px 0 48px; font-size: 13px; color: var(--ink-2); }
+.foot { display: flex; flex-wrap: wrap; gap: 16px 28px; align-items: center; }
+.foot .brand { font-size: 14px; }
+.foot .brand img { width: 20px; height: 20px; }
+.foot nav { display: flex; gap: 22px; margin-left: auto; }
+.foot a { color: var(--ink-2); }
+.foot a:hover { color: var(--ink); }
+
+@media (max-width: 900px) {
+  .nav-links { display: none; }
+  .feature, .feature.flip { grid-template-columns: 1fr; gap: 28px; padding-top: 72px; }
+  .feature.flip .feature-text { order: 0; }
+  .feature.wide .feature-text { grid-template-columns: 1fr; }
+  .feature.wide .facts { grid-column: 1; grid-row: auto; margin-top: 8px; }
+  .feature.wide .shot { margin-top: 28px; }
+  .pillars { grid-template-columns: 1fr; }
+  .pillar, .pillar + .pillar { padding: 20px 0; border-left: 0; border-bottom: 1px solid var(--line); }
+  .download { grid-template-columns: 1fr; }
+  section { padding-top: 88px; }
+}
+@media (max-width: 560px) {
+  .hero { padding-top: 48px; }
+  .nav-right .btn { display: none; }
+  .files a { grid-template-columns: minmax(0, 1fr) auto; }
+  .files .plat { grid-column: 1 / -1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<header class="nav" id="nav">
+  <div class="wrap nav-inner">
+    <a class="brand" href="#top" aria-label="Orrery"><img src="assets/logo.svg" alt="" />Orrery</a>
+    <nav class="nav-links" aria-label="Sections">
+      <a href="#features" data-i18n="nav.features">Features</a>
+      <a href="#tools" data-i18n="nav.tools">Tools</a>
+      <a href="#local" data-i18n="nav.privacy">Privacy</a>
+      <a href="#download" data-i18n="nav.download">Download</a>
+    </nav>
+    <div class="nav-right">
+      <div class="seg" role="group" aria-label="Language">
+        <button type="button" data-lang="en">EN</button>
+        <button type="button" data-lang="zh-CN">中</button>
+        <button type="button" data-lang="ja">日</button>
+      </div>
+      <a class="btn small" href="https://github.com/arvelvale/orrery">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+  <div class="wrap hero">
+    <div class="lamps" aria-hidden="true">
+      <span class="lamp run"><i></i>CC</span><span class="lamp idle"><i></i>KIMI</span><span class="lamp idle"><i></i>DSH</span><span class="lamp run"><i></i>CODEX</span><span class="lamp idle"><i></i>OPENCODE</span><span class="lamp idle"><i></i>ZCODE</span><span class="lamp idle"><i></i>ANTIGRAVITY</span><span class="lamp idle"><i></i>WBUDDY</span>
+    </div>
+    <h1 data-i18n="hero.title">Every AI coding agent, one cockpit.</h1>
+    <p class="lede" data-i18n="hero.lede">Orrery reads the sessions your agent tools already keep on disk — tokens, disk usage, projects — and lets you clean up, resume, or move a conversation to another tool. Nothing leaves your computer.</p>
+    <div class="cta">
+      <a class="btn primary large" id="hero-download" href="https://github.com/arvelvale/orrery/releases/latest">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" d="M8 2v8.5M4.5 7 8 10.5 11.5 7M3 13.5h10"/></svg>
+        <span id="hero-download-label" data-i18n="cta.download">Download</span>
+      </a>
+      <a class="btn large" id="hero-all" href="#download" data-i18n="cta.all">All downloads</a>
+    </div>
+    <p class="cta-meta" id="hero-meta"><span data-i18n="cta.free">Free and open source · MIT</span> · <span id="hero-version"></span></p>
+
+    <div class="window">
+      <div class="window-bar">ORRERY · COCKPIT</div>
+      <img id="demo" width="1000" height="620" alt="Filtering sessions by tool, opening one, and the delete dialog" />
+      <noscript><img src="assets/demo.en.gif" width="1000" height="620" alt="" /></noscript>
+    </div>
+  </div>
+
+  <div class="wrap">
+    <section id="features" aria-labelledby="features-title">
+      <div class="section-head">
+        <p class="eyebrow mono" data-i18n="features.eyebrow">What it does</p>
+        <h2 id="features-title" data-i18n="features.title">Eight tools keep sessions in eight different places. Orrery puts them on one board.</h2>
+      </div>
+
+      <div class="feature wide">
+        <div class="feature-text">
+          <p class="eyebrow mono">01 · SESSIONS</p>
+          <h3 data-i18n="f1.title">Every session, accounted for.</h3>
+          <p data-i18n="f1.body">Title, project, model, tokens and disk size for every session from every tool, searchable in one list. See which tool and which project the gigabytes went to.</p>
+          <ul class="facts">
+            <li data-i18n="f1.fact1">Tokens counted once per API call: input · cache write · cache read · output</li>
+            <li data-i18n="f1.fact2">Index kept on disk: 188 sessions open in 0.12 s instead of 5.5 s</li>
+          </ul>
+        </div>
+        <div class="shot" style="max-width: 1002px"><img data-shot="status" width="2000" height="654" alt="Disk usage per tool, the model proxy and a tool's own card" loading="lazy" /></div>
+      </div>
+
+      <div class="feature wide">
+        <div class="feature-text">
+          <p class="eyebrow mono">02 · TRANSFER</p>
+          <h3 data-i18n="f2.title">Move a conversation to another tool.</h3>
+          <p data-i18n="f2.body">Started in Claude Code and want to carry on in Codex or OpenCode? Orrery copies the conversation into the other tool's own history, through that tool's own importer where it has one, and you resume it there. The original stays where it was.</p>
+          <ul class="facts">
+            <li data-i18n="f2.fact1">Claude Code ⇄ Codex ⇄ OpenCode, all six directions</li>
+            <li data-i18n="f2.fact2">Images the target can't hold are saved as files, never silently dropped</li>
+          </ul>
+        </div>
+        <div class="shot" style="max-width: 1022px"><img data-shot="transfer" width="2040" height="792" alt="Source session and destination tool, side by side" loading="lazy" /></div>
+      </div>
+
+      <div class="feature">
+        <div class="feature-text">
+          <p class="eyebrow mono">03 · CLEAN UP</p>
+          <h3 data-i18n="f3.title">Free the disk, safely.</h3>
+          <p data-i18n="f3.body">Sort by size, pick what you no longer need, and send it to the Recycle Bin. Each tool's own index is cleaned too, so nothing is left pointing at a missing file.</p>
+          <ul class="facts">
+            <li data-i18n="f3.fact1">Sessions written in the last 10 minutes, or still open in Claude Code or Antigravity, are skipped</li>
+            <li data-i18n="f3.fact2">Index files are backed up to ~/.orrery/backups before any change</li>
+          </ul>
+        </div>
+        <div class="shot" style="max-width: 562px; justify-self: center"><img data-shot="delete" width="1120" height="964" alt="Delete dialog with the sessions, the skipped one and the index backup note" loading="lazy" /></div>
+      </div>
+
+      <div class="feature flip">
+        <div class="feature-text">
+          <p class="eyebrow mono">04 · PROXY</p>
+          <h3 data-i18n="f4.title">One model proxy for every agent.</h3>
+          <p data-i18n="f4.body">Point your tools at a single local endpoint and switch models in one place. OpenAI and Anthropic request shapes, with streaming passed straight through.</p>
+          <ul class="facts">
+            <li data-i18n="f4.fact1">Listens on 127.0.0.1:8787 only, never on your network</li>
+            <li data-i18n="f4.fact2">Start and stop it from the app</li>
+          </ul>
+        </div>
+        <div class="shot"><img data-shot="proxy" width="1520" height="696" alt="Proxy endpoint card with start, test and copy buttons" loading="lazy" /></div>
+      </div>
+    </section>
+
+    <section id="tools" aria-labelledby="tools-title">
+      <div class="section-head">
+        <p class="eyebrow mono" data-i18n="tools.eyebrow">Supported tools</p>
+        <h2 id="tools-title" data-i18n="tools.title">What Orrery can do with each tool.</h2>
+      </div>
+      <div class="matrix">
+        <table>
+          <thead>
+            <tr>
+              <th data-i18n="tools.col.tool">Tool</th>
+              <th class="c" data-i18n="tools.col.read">Sessions & tokens</th>
+              <th class="c" data-i18n="tools.col.resume">Resume in terminal</th>
+              <th class="c" data-i18n="tools.col.delete">Delete</th>
+              <th class="c" data-i18n="tools.col.transfer">Transfer</th>
+            </tr>
+          </thead>
+          <tbody id="matrix-body"></tbody>
+        </table>
+      </div>
+      <p class="matrix-note" data-i18n="tools.note">Read-only tools keep their sessions in their own database or app, which Orrery reads but does not change. Other OpenCode-style tools can be registered in ~/.orrery/harnesses.json.</p>
+    </section>
+
+    <section id="local" aria-labelledby="local-title">
+      <div class="section-head">
+        <p class="eyebrow mono" data-i18n="local.eyebrow">Local first</p>
+        <h2 id="local-title" data-i18n="local.title">Your sessions stay on your machine.</h2>
+      </div>
+      <div class="pillars">
+        <div class="pillar"><h3 data-i18n="local.p1.title">Reads what's already there</h3><p data-i18n="local.p1.body">Orrery doesn't wrap or replace your agents. It reads the files they already write, and keeps working when you switch tools.</p></div>
+        <div class="pillar"><h3 data-i18n="local.p2.title">No account, no telemetry</h3><p data-i18n="local.p2.body">There is nothing to sign in to and nothing reported home. The only network traffic is the model proxy, when you turn it on.</p></div>
+        <div class="pillar"><h3 data-i18n="local.p3.title">Open source</h3><p data-i18n="local.p3.body">MIT licensed. Every line that touches your sessions is on GitHub.</p></div>
+      </div>
+    </section>
+
+    <section id="download" aria-labelledby="download-title">
+      <div class="section-head">
+        <p class="eyebrow mono" data-i18n="dl.eyebrow">Download</p>
+        <h2 id="download-title" data-i18n="dl.title">Get Orrery for your desktop.</h2>
+      </div>
+      <div class="download">
+        <div class="dl-card">
+          <p class="os mono" data-i18n="dl.detected">Recommended for you</p>
+          <h3 id="dl-os">Orrery</h3>
+          <p class="meta" id="dl-meta"></p>
+          <a class="btn primary large" id="dl-button" href="https://github.com/arvelvale/orrery/releases/latest"><span data-i18n="cta.download">Download</span></a>
+          <p class="note" id="dl-note"></p>
+        </div>
+        <div class="files" id="files"><p class="loading mono" data-i18n="dl.loading">Loading the latest release…</p></div>
+      </div>
+      <p class="honest" data-i18n="dl.honest">The builds are not code-signed, so each system asks once before the first launch. macOS and Linux packages are built and tested in CI but have not yet been run on those desktops by the author.</p>
+    </section>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap foot">
+    <a class="brand" href="#top"><img src="assets/logo.svg" alt="" />Orrery</a>
+    <span data-i18n="foot.license">MIT License</span>
+    <nav aria-label="Links">
+      <a href="https://github.com/arvelvale/orrery">GitHub</a>
+      <a href="https://github.com/arvelvale/orrery/releases" data-i18n="foot.releases">Releases</a>
+      <a href="https://github.com/arvelvale/orrery/issues" data-i18n="foot.issues">Issues</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+const REPO = "arvelvale/orrery";
+
+/* 能力矩阵：与 README「What works today」一致，改这里前先核对代码 */
+const TOOLS = [
+  ["Claude Code", 1, 1, 1, 1],
+  ["Codex", 1, 1, 1, 1],
+  ["OpenCode", 1, 1, 1, 1],
+  ["Kimi Code", 1, 1, 1, 0],
+  ["DSH (DeepSeek)", 1, 1, 1, 0],
+  ["Antigravity CLI", 1, 1, 1, 0],
+  ["Z Code", 1, 0, 0, 0],
+  ["WorkBuddy", 1, 0, 0, 0],
+];
+
+const I18N = {
+  en: {},
+  "zh-CN": {
+    "nav.features": "功能", "nav.tools": "支持的工具", "nav.privacy": "隐私", "nav.download": "下载",
+    "hero.title": "所有 AI 编程 Agent，一个驾驶舱。",
+    "hero.lede": "Orrery 读取各家 Agent 工具本来就存在你磁盘上的会话：token、磁盘占用、项目一目了然，还能清理、在终端恢复，或把一段对话迁到另一个工具接着聊。数据不出本机。",
+    "cta.download": "下载", "cta.all": "全部下载", "cta.free": "免费开源 · MIT",
+    "features.eyebrow": "能做什么",
+    "features.title": "八个工具把会话存在八个地方，Orrery 把它们放到一块看板上。",
+    "f1.title": "每一条会话，都算得清。",
+    "f1.body": "所有工具的所有会话，标题、项目、模型、token、磁盘占用都在同一个列表里，可以一起搜索。磁盘空间花在了哪个工具、哪个项目上，一眼就能看到。",
+    "f1.fact1": "token 按 API 调用去重计数：输入 · 缓存写入 · 缓存读取 · 输出",
+    "f1.fact2": "解析索引存在磁盘上：188 条会话打开只要 0.12 秒，原来要 5.5 秒",
+    "f2.title": "把对话搬到另一个工具里接着聊。",
+    "f2.body": "在 Claude Code 里开了头，想去 Codex 或 OpenCode 接着做？Orrery 会把对话复制进目标工具自己的历史里，目标有官方导入入口的就走官方入口，然后直接在那边恢复。原来的会话原样保留。",
+    "f2.fact1": "Claude Code ⇄ Codex ⇄ OpenCode，6 个方向都能迁",
+    "f2.fact2": "目标放不下的图片存成文件，绝不悄悄丢掉",
+    "f3.title": "腾出磁盘空间，删得放心。",
+    "f3.body": "按大小排序，勾选不再需要的会话，移到回收站。各工具自己的索引也会一起清理，不会留下指向已删除文件的条目。",
+    "f3.fact1": "10 分钟内有写入、或者正开在 Claude Code、Antigravity 里的会话会自动跳过",
+    "f3.fact2": "改动前先把索引文件备份到 ~/.orrery/backups",
+    "f4.title": "所有 Agent 共用一个模型代理。",
+    "f4.body": "让各个工具都连到同一个本地地址，在一个地方切换模型。支持 OpenAI 和 Anthropic 两种请求格式，流式输出原样透传。",
+    "f4.fact1": "只监听 127.0.0.1:8787，不对局域网开放",
+    "f4.fact2": "在应用里一键启停",
+    "tools.eyebrow": "支持的工具", "tools.title": "Orrery 对每个工具能做什么。",
+    "tools.col.tool": "工具", "tools.col.read": "会话与 token", "tools.col.resume": "在终端恢复", "tools.col.delete": "删除", "tools.col.transfer": "会话迁移",
+    "tools.note": "只读的工具把会话存在它自己的数据库或应用里，Orrery 只读不改。其他 OpenCode 系工具可以在 ~/.orrery/harnesses.json 里自行登记。",
+    "local.eyebrow": "本地优先", "local.title": "你的会话留在你自己的电脑上。",
+    "local.p1.title": "只读本来就有的东西", "local.p1.body": "Orrery 不包装、不替代你的 Agent，只读取它们本来就会写下的文件，换工具也照样能用。",
+    "local.p2.title": "不用账号，没有遥测", "local.p2.body": "没有要登录的地方，也不往外上报任何数据。唯一的网络流量来自你自己开启的模型代理。",
+    "local.p3.title": "开源", "local.p3.body": "MIT 许可。所有会碰到你会话的代码都在 GitHub 上。",
+    "dl.eyebrow": "下载", "dl.title": "把 Orrery 装到你的电脑上。", "dl.detected": "为你推荐", "dl.loading": "正在读取最新版本…",
+    "dl.honest": "安装包没有代码签名，所以各系统在第一次打开时会提示确认一次。macOS 和 Linux 的安装包在 CI 里构建并通过测试，但作者还没有在这两个系统的桌面上实际运行过。",
+    "foot.license": "MIT 许可", "foot.releases": "所有版本", "foot.issues": "问题反馈",
+  },
+  ja: {
+    "nav.features": "機能", "nav.tools": "対応ツール", "nav.privacy": "プライバシー", "nav.download": "ダウンロード",
+    "hero.title": "すべての AI コーディングエージェントを、ひとつのコックピットに。",
+    "hero.lede": "Orrery は、各エージェントツールがもともとディスクに残しているセッションを読み取ります。トークン、ディスク使用量、プロジェクトをひと目で把握し、整理、ターミナルでの再開、別のツールへの会話の引き継ぎができます。データは PC の外に出ません。",
+    "cta.download": "ダウンロード", "cta.all": "すべてのダウンロード", "cta.free": "無料・オープンソース · MIT",
+    "features.eyebrow": "できること",
+    "features.title": "8 つのツールが 8 つの場所に残すセッションを、ひとつのボードに。",
+    "f1.title": "すべてのセッションを、正確に。",
+    "f1.body": "すべてのツールのすべてのセッションについて、タイトル、プロジェクト、モデル、トークン、ディスク使用量をひとつのリストで検索できます。容量をどのツールのどのプロジェクトが使っているか、すぐに分かります。",
+    "f1.fact1": "トークンは API 呼び出しごとに 1 回だけ計上：入力 · キャッシュ書き込み · キャッシュ読み取り · 出力",
+    "f1.fact2": "インデックスをディスクに保持：188 セッションを 5.5 秒ではなく 0.12 秒で表示",
+    "f2.title": "会話を別のツールへ引き継ぐ。",
+    "f2.body": "Claude Code で始めた作業を Codex や OpenCode で続けたいときに。Orrery は会話を相手ツール自身の履歴にコピーし、公式のインポート手段があればそれを使います。あとは相手側で再開するだけ。元のセッションはそのまま残ります。",
+    "f2.fact1": "Claude Code ⇄ Codex ⇄ OpenCode、6 方向すべてに対応",
+    "f2.fact2": "相手に入らない画像はファイルとして保存し、黙って捨てることはありません",
+    "f3.title": "安全に、ディスクを空ける。",
+    "f3.body": "サイズ順に並べ、不要なセッションを選んでごみ箱へ。各ツール自身のインデックスも整理するので、消えたファイルを指す項目は残りません。",
+    "f3.fact1": "10 分以内に書き込みがあるセッションや、Claude Code・Antigravity で開いているセッションはスキップ",
+    "f3.fact2": "変更前にインデックスファイルを ~/.orrery/backups にバックアップ",
+    "f4.title": "すべてのエージェントに、ひとつのモデルプロキシ。",
+    "f4.body": "各ツールの接続先をひとつのローカルエンドポイントにまとめ、モデルを一か所で切り替えられます。OpenAI と Anthropic の両形式に対応し、ストリーミングはそのまま中継します。",
+    "f4.fact1": "127.0.0.1:8787 だけで待ち受け、ネットワークには公開しません",
+    "f4.fact2": "アプリから起動・停止",
+    "tools.eyebrow": "対応ツール", "tools.title": "ツールごとに Orrery ができること。",
+    "tools.col.tool": "ツール", "tools.col.read": "セッションとトークン", "tools.col.resume": "ターミナルで再開", "tools.col.delete": "削除", "tools.col.transfer": "引き継ぎ",
+    "tools.note": "読み取り専用のツールは、セッションを自身のデータベースやアプリ内に保存しています。Orrery は読み取るだけで変更しません。その他の OpenCode 系ツールは ~/.orrery/harnesses.json に登録できます。",
+    "local.eyebrow": "ローカルファースト", "local.title": "セッションはあなたの PC にとどまります。",
+    "local.p1.title": "すでにあるものを読むだけ", "local.p1.body": "Orrery はエージェントを包んだり置き換えたりしません。各ツールがもともと書き出すファイルを読むので、ツールを替えても使えます。",
+    "local.p2.title": "アカウント不要、テレメトリなし", "local.p2.body": "サインインするものも、外部に送るデータもありません。ネットワーク通信は、あなたが起動したモデルプロキシだけです。",
+    "local.p3.title": "オープンソース", "local.p3.body": "MIT ライセンス。セッションに触れるコードはすべて GitHub で読めます。",
+    "dl.eyebrow": "ダウンロード", "dl.title": "Orrery をデスクトップに。", "dl.detected": "おすすめ", "dl.loading": "最新リリースを読み込んでいます…",
+    "dl.honest": "ビルドはコード署名されていないため、初回起動時に各 OS で一度確認を求められます。macOS と Linux のパッケージは CI でビルドとテストを行っていますが、作者はまだ実機のデスクトップで動かしていません。",
+    "foot.license": "MIT ライセンス", "foot.releases": "リリース一覧", "foot.issues": "フィードバック",
+  },
+};
+
+/* 下载区里随系统和语言变化的文案 */
+const OS_TEXT = {
+  en: {
+    windows: ["Windows", "Download for Windows", "Windows 10/11, x64", "SmartScreen may warn on first launch: choose <b>More info → Run anyway</b>."],
+    mac: ["macOS", "Download for macOS", "One universal app for Apple silicon and Intel", "Gatekeeper may block the first launch: right-click the app and choose <b>Open</b>, or run <code>xattr -cr /Applications/Orrery.app</code>."],
+    linux: ["Linux", "Download for Linux", "AppImage, portable · .deb and .rpm also available", "Make the AppImage executable before running it: <code>chmod +x Orrery_*.AppImage</code>."],
+    other: ["Windows · macOS · Linux", "See all downloads", "Orrery is a desktop app", "Open this page on your computer to download."],
+    files: { "setup.exe": ["Windows", "Installer (recommended)"], msi: ["Windows", "MSI package"], dmg: ["macOS", "Universal: Apple silicon and Intel"], AppImage: ["Linux", "Portable, no install"], deb: ["Linux", "Debian, Ubuntu"], rpm: ["Linux", "Fedora, openSUSE"] },
+    version: (v, d) => `Latest ${v} · released ${d}`,
+    failed: "Couldn't reach GitHub just now. All files are on the Releases page.",
+  },
+  "zh-CN": {
+    windows: ["Windows", "下载 Windows 版", "Windows 10/11，x64", "首次打开时 SmartScreen 可能会提示：点<b>更多信息 → 仍要运行</b>。"],
+    mac: ["macOS", "下载 macOS 版", "一个通用安装包，同时支持 Apple 芯片和 Intel", "首次打开可能被 Gatekeeper 拦下：右键点应用选<b>打开</b>，或运行 <code>xattr -cr /Applications/Orrery.app</code>。"],
+    linux: ["Linux", "下载 Linux 版", "AppImage 免安装 · 另有 .deb 和 .rpm", "运行前先给 AppImage 加上执行权限：<code>chmod +x Orrery_*.AppImage</code>。"],
+    other: ["Windows · macOS · Linux", "查看全部下载", "Orrery 是桌面应用", "请在电脑上打开这个页面下载。"],
+    files: { "setup.exe": ["Windows", "安装程序（推荐）"], msi: ["Windows", "MSI 安装包"], dmg: ["macOS", "通用版：Apple 芯片和 Intel"], AppImage: ["Linux", "免安装，直接运行"], deb: ["Linux", "Debian、Ubuntu"], rpm: ["Linux", "Fedora、openSUSE"] },
+    version: (v, d) => `最新版 ${v} · 发布于 ${d}`,
+    failed: "暂时连不上 GitHub。所有安装包都在 Releases 页面。",
+  },
+  ja: {
+    windows: ["Windows", "Windows 版をダウンロード", "Windows 10/11、x64", "初回起動時に SmartScreen の警告が出たら <b>詳細情報 → 実行</b> を選んでください。"],
+    mac: ["macOS", "macOS 版をダウンロード", "Apple シリコンと Intel の両方に対応したユニバーサル版", "初回起動が Gatekeeper に止められたら、アプリを右クリックして <b>開く</b> を選ぶか、<code>xattr -cr /Applications/Orrery.app</code> を実行してください。"],
+    linux: ["Linux", "Linux 版をダウンロード", "AppImage（インストール不要）· .deb と .rpm もあります", "実行前に AppImage に実行権限を付けてください：<code>chmod +x Orrery_*.AppImage</code>。"],
+    other: ["Windows · macOS · Linux", "すべてのダウンロード", "Orrery はデスクトップアプリです", "PC でこのページを開いてダウンロードしてください。"],
+    files: { "setup.exe": ["Windows", "インストーラー（おすすめ）"], msi: ["Windows", "MSI パッケージ"], dmg: ["macOS", "ユニバーサル：Apple シリコンと Intel"], AppImage: ["Linux", "インストール不要"], deb: ["Linux", "Debian、Ubuntu"], rpm: ["Linux", "Fedora、openSUSE"] },
+    version: (v, d) => `最新 ${v} · ${d} 公開`,
+    failed: "GitHub に接続できませんでした。すべてのファイルは Releases ページにあります。",
+  },
+};
+
+const FILE_ORDER = [["setup.exe", /_x64-setup\.exe$/], ["msi", /\.msi$/], ["dmg", /\.dmg$/], ["AppImage", /\.AppImage$/], ["deb", /\.deb$/], ["rpm", /\.rpm$/]];
+const PICK = { windows: /_x64-setup\.exe$/, mac: /\.dmg$/, linux: /\.AppImage$/ };
+const EN = {};
+document.querySelectorAll("[data-i18n]").forEach((el) => (EN[el.dataset.i18n] = el.textContent));
+let lang = "en";
+let release = null; // null = loading, false = failed
+
+function detectOS() {
+  const ua = navigator.userAgent;
+  const p = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
+  if (/Android|iPhone|iPad|iPod/i.test(ua) || (navigator.userAgentData && navigator.userAgentData.mobile)) return "other";
+  if (/Win/i.test(p) || /Windows/i.test(ua)) return "windows";
+  if (/Mac/i.test(p) || /Mac OS X/i.test(ua)) return "mac";
+  if (/Linux|X11/i.test(p) || /Linux/i.test(ua)) return "linux";
+  return "other";
+}
+const OS = detectOS();
+
+const fmtSize = (b) => (b >= 1e6 ? `${(b / 1e6).toFixed(1)} MB` : `${Math.round(b / 1e3)} KB`);
+const fmtDate = (iso) => new Intl.DateTimeFormat(lang, { year: "numeric", month: "short", day: "numeric" }).format(new Date(iso));
+
+function renderMatrix() {
+  const mark = (v) => (v ? '<span class="yes" role="img" aria-label="yes"></span>' : '<span class="no" aria-label="no">—</span>');
+  document.getElementById("matrix-body").innerHTML = TOOLS.map(([name, ...caps]) =>
+    `<tr><td>${name}</td>${caps.map((c) => `<td class="c">${mark(c)}</td>`).join("")}</tr>`).join("");
+}
+
+function renderDownloads() {
+  const T = OS_TEXT[lang];
+  const [osName, label, meta, note] = T[OS];
+  const asset = release && OS !== "other" ? release.assets.find((a) => PICK[OS].test(a.name)) : null;
+  document.getElementById("dl-os").textContent = osName;
+  document.getElementById("dl-meta").textContent = asset ? `${meta} · ${fmtSize(asset.size)}` : meta;
+  document.getElementById("dl-note").innerHTML = note;
+  for (const [btn, text] of [[document.getElementById("dl-button"), label], [document.getElementById("hero-download"), label]]) {
+    btn.href = asset ? asset.browser_download_url : OS === "other" ? "#download" : `https://github.com/${REPO}/releases/latest`;
+    btn.querySelector("span").textContent = text;
+  }
+  // 手机上主按钮已经是“全部下载”，次按钮会重复
+  document.getElementById("hero-all").hidden = OS === "other";
+  document.getElementById("hero-version").textContent = release ? T.version(release.tag_name, fmtDate(release.published_at)) : "";
+
+  const files = document.getElementById("files");
+  if (release === null) return;
+  if (release === false) {
+    files.innerHTML = `<a href="https://github.com/${REPO}/releases/latest"><span class="plat">GitHub</span><span class="name">Releases<small>${T.failed}</small></span><span class="size">→</span></a>`;
+    return;
+  }
+  files.innerHTML = FILE_ORDER.map(([key, re]) => {
+    const a = release.assets.find((x) => re.test(x.name));
+    if (!a) return "";
+    const [plat, desc] = T.files[key];
+    return `<a href="${a.browser_download_url}"><span class="plat">${plat}</span><span class="name">${a.name}<small>${desc}</small></span><span class="size">${fmtSize(a.size)}</span></a>`;
+  }).join("");
+}
+
+function setLang(next) {
+  lang = I18N[next] ? next : "en";
+  document.documentElement.lang = lang;
+  const dict = I18N[lang];
+  document.querySelectorAll("[data-i18n]").forEach((el) => (el.textContent = dict[el.dataset.i18n] || EN[el.dataset.i18n]));
+  document.querySelectorAll("[data-lang]").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.lang === lang)));
+  // 产品截图跟着语言换：应用本身就是三语的
+  document.getElementById("demo").src = `assets/demo.${lang}.gif`;
+  document.querySelectorAll("[data-shot]").forEach((img) => {
+    const k = img.dataset.shot;
+    img.src = `img/${k}.${lang}.png`;
+  });
+  try { localStorage.setItem("orrery.lang", lang); } catch {}
+  renderDownloads();
+}
+
+document.querySelectorAll("[data-lang]").forEach((b) => b.addEventListener("click", () => setLang(b.dataset.lang)));
+addEventListener("scroll", () => document.getElementById("nav").classList.toggle("scrolled", scrollY > 8), { passive: true });
+
+// 指示灯自检：和应用启动时一样逐个亮起
+const lamps = [...document.querySelectorAll(".lamp")];
+const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+lamps.forEach((l, i) => (still ? l.classList.add("on") : setTimeout(() => l.classList.add("on"), 240 + i * 110)));
+
+renderMatrix();
+setLang(window.ORRERY_LANG);
+fetch(`https://api.github.com/repos/${REPO}/releases/latest`, { headers: { Accept: "application/vnd.github+json" } })
+  .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+  .then((data) => { release = data; renderDownloads(); })
+  .catch(() => { release = false; renderDownloads(); });
+</script>
+</body>
+</html>

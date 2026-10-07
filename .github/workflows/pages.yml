@@ -1,0 +1,51 @@
+name: Pages
+
+# 落地页：site/ + .github/assets/（README 也在用的 logo、演示动图、截图）拼成站点后发布。
+# 素材不在 site/ 里重复存一份；改了截图或页面，推到 main 就自动更新。
+on:
+  push:
+    branches: [main]
+    paths: ["site/**", ".github/assets/**", ".github/workflows/pages.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一时间只部署一次，新推送顶掉还在排队的旧部署
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble site
+        run: |
+          mkdir -p _site/assets
+          cp -r site/. _site/
+          cp .github/assets/* _site/assets/
+          # 页面引用到的文件必须都在，缺一个就别发布
+          # 只取写死的完整文件名；按语言拼出来的（demo.${lang}.gif 等）由下面逐个检查
+          for f in $(grep -oE '(assets|img)/[A-Za-z0-9_-]+(\.[A-Za-z0-9_-]+)*\.(png|gif|svg|jpg|webp)' _site/index.html | sort -u); do
+            test -f "_site/$f" || { echo "missing $f"; exit 1; }
+          done
+          for lang in en zh-CN ja; do
+            for f in assets/demo.$lang.gif img/status.$lang.png img/transfer.$lang.png img/delete.$lang.png img/proxy.$lang.png; do
+              test -f "_site/$f" || { echo "missing $f"; exit 1; }
+            done
+          done
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+      - id: deployment
+        uses: actions/deploy-pages@v4

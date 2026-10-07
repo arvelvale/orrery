@@ -13,6 +13,7 @@
 - 会话转换：`src-tauri/src/transfer/`，每家一个读取器 + 每个目标一个写入器，中间是 `Transcript`；现开放 Claude Code、Codex、OpenCode 三家互转。保真标准：不悄悄丢内容。未知记录类型、PDF、链接形式的图片一律拒绝；目标放不下的图片（工具结果里的截图、要进 Codex 的图片）由 `transfer/media.rs` 存成 `~/.orrery/transfer-media/<转换>/` 下的文件、原位置留路径（`owner.json` 记归属，经 Orrery 删除目标会话时一并处理），转换前经只读的 `preview_transfer` 告知张数；工具记录在目标里是带来源标记的历史文本。新增来源/目标前必须：真实会话只读试跑（`real_sessions_dry_run`）+ 沙盒端到端测试 + 目标工具实际恢复并把历史送进回环假供应商（`scripts/verify-*-transfer.mjs`；存成文件的图片由 `scripts/verify-transfer-media.mjs` 验证目标工具能按路径打开并把图片送回模型）。细节见 `docs/01-架构与技术路线.md`
 - 解析索引：`~/.orrery/index.json` 落盘，冷启动 188 个会话 5.5s → 0.12s
 - 在终端恢复：`src-tauri/src/resume.rs`，五家各自的恢复命令见该文件头部表格；Windows 上找可执行文件必须 `.exe`/`.cmd` 优先于无扩展名（npm 的 bash shim 会假装启动成功）
+- 落地页：`site/index.html`（单文件，三语，无第三方字体/统计脚本；下载按钮运行时读 GitHub 最新 release 并按系统推荐），`.github/workflows/pages.yml` 把 `site/` 与 `.github/assets/` 拼成站点发布到 https://arvelvale.github.io/orrery/ 。页面上的能力说法（含工具能力矩阵 `TOOLS`）必须与 README「What works today」一致，改功能时一并改。功能截图 `site/img/*.{en,zh-CN,ja}.png` 是按界面元素边界截的局部（mock 数据，截图时隐藏外框与相邻元素）
 - 发版：打 `v*` tag → GitHub Actions 三平台出包（Windows msi/nsis、macOS universal dmg、Linux deb/rpm/AppImage）→ 进**草稿** release，人工确认再公开。改版本号要同时改 `package.json` / `tauri.conf.json` / `Cargo.toml` + `Cargo.lock`，再打 tag
 - macOS / Linux 的包只有 CI 验证过（clippy + 测试），没有人在真机上跑过应用，README 里如实标注了这点
 - token 口径：主 agent + 子 agent，按 API 调用去重求和（CC 按 message.id 保留最后一行；Kimi 每条 usage.record 即一次调用；DSH 只读 v3 日志；Codex 以 token_usage_record 为准、之前时段累加去重后的 token_count.last，输入要减缓存命中）。每接一个新 harness 都要用独立脚本逐会话对账后再宣布完成。字段对照写在 `src-tauri/src/adapters/mod.rs` 的 `TokenUsage` 注释里，改口径先改那张表
