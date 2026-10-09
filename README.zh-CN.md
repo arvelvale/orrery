@@ -191,7 +191,7 @@ set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 {
   "listen": "127.0.0.1:8787",
   "auto_start": false,
-  "routes": { "cc": "claude-opus-5" },
+  "routes": { "cc": "claude-sonnet-5.5", "kimi": "kimi-k3" },
   "providers": {
     "anthropic": {
       "base_url": "https://api.anthropic.com/v1",
