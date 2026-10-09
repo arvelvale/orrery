@@ -239,7 +239,7 @@ function renderModelEditor() {
     <div class="field-row">
       <div class="field">
         <label for="mf-id">${escapeHtml(t("models.fieldModelId"))}</label>
-        <input id="mf-id" placeholder="claude-sonnet-4.6" />
+        <input id="mf-id" placeholder="claude-sonnet-5.5" />
       </div>
       <div class="field">
         <label for="mf-provider">${escapeHtml(t("models.fieldProvider"))}</label>

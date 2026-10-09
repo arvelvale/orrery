@@ -4,13 +4,13 @@
  * 标题/摘要是"用户输入的内容"，按语言各写一份，让三语截图各自自然。
  */
 const MODELS = [
-  { id: "claude-opus-4.7", vendor: "anthropic", note: "models.note.flagship" },
-  { id: "claude-sonnet-4.6", vendor: "anthropic", note: "models.note.balanced" },
+  { id: "claude-opus-5.5", vendor: "anthropic", note: "models.note.flagship" },
+  { id: "claude-sonnet-5.5", vendor: "anthropic", note: "models.note.balanced" },
   { id: "kimi-k3", vendor: "moonshot", note: "models.note.kimi" },
-  { id: "gpt-5.2", vendor: "openai", note: "models.note.openai" },
-  { id: "gpt-5.3-codex", vendor: "openai", note: "models.note.codex" },
-  { id: "deepseek-v3.2", vendor: "deepseek", note: "models.note.value" },
-  { id: "mimo-v2.5-pro", vendor: "xiaomi", note: "models.note.mimo" },
+  { id: "gpt-6-astra", vendor: "openai", note: "models.note.openai" },
+  { id: "gpt-6-sol", vendor: "openai", note: "models.note.codex" },
+  { id: "deepseek-v4.1-flash", vendor: "deepseek", note: "models.note.value" },
+  { id: "mimo-v2.6-pro", vendor: "xiaomi", note: "models.note.mimo" },
 ];
 
 /*
@@ -34,7 +34,7 @@ const SEED_SESSIONS = [
       ja: "セッション Cookie のフローを PKCE に置き換え、既存ユーザーのログイン状態を維持する。",
     },
     project: "~/code/acme-web",
-    model: "claude-sonnet-4.6",
+    model: "claude-sonnet-5.5",
     status: "running",
     ago: 2 * MIN,
     usage: { input: 3200, cache_write: 5100, cache_read: 31400, output: 2400, calls: 18 },
@@ -86,7 +86,7 @@ const SEED_SESSIONS = [
       ja: "同じエラーが 2 回目。コードを触る前にスタックトレースに戻る。",
     },
     project: "~/code/pixel-notes",
-    model: "deepseek-v3.2",
+    model: "deepseek-v4.1-flash",
     status: "error",
     ago: 60 * MIN,
     usage: { input: 1200, cache_write: 1800, cache_read: 5600, output: 800, calls: 6 },
@@ -112,7 +112,7 @@ const SEED_SESSIONS = [
       ja: "14 個のエンドポイントをすべて記述し、例はテストから生成。",
     },
     project: "~/code/todo-api",
-    model: "gpt-5.3-codex",
+    model: "gpt-6-sol",
     status: "done",
     ago: 26 * 60 * MIN,
     usage: { input: 2600, cache_write: 3900, cache_read: 23300, output: 1900, calls: 14 },
@@ -137,7 +137,7 @@ const SEED_SESSIONS = [
       ja: "まず計測：Markdown の解析がビルド時間の 70% を占める。",
     },
     project: "~/code/blog-engine",
-    model: "claude-opus-4.7",
+    model: "claude-opus-5.5",
     status: "idle",
     ago: 3 * 60 * MIN,
     usage: { input: 4100, cache_write: 6300, cache_read: 42900, output: 2900, calls: 22 },
@@ -162,7 +162,7 @@ const SEED_SESSIONS = [
       ja: "定跡データで探索深度 6 と 7 を比較中。",
     },
     project: "~/code/chess-bot",
-    model: "gpt-5.3-codex",
+    model: "gpt-6-sol",
     status: "running",
     ago: 20_000,
     usage: { input: 900, cache_write: 1400, cache_read: 5300, output: 600, calls: 5 },
@@ -187,7 +187,7 @@ const SEED_SESSIONS = [
       ja: "2 回の取り込みで同じ行ができた。金額ではなく外部 ID で重複を排除する。",
     },
     project: "~/code/ledger-sync",
-    model: "claude-sonnet-4.6",
+    model: "claude-sonnet-5.5",
     status: "idle",
     ago: 9 * 60 * MIN,
     usage: { input: 6400, cache_write: 900, cache_read: 88200, output: 5100, calls: 27 },
@@ -278,11 +278,11 @@ const SEED_SESSIONS = [
 ];
 
 const DEFAULT_ROUTES = {
-  cc: "claude-sonnet-4.6",
+  cc: "claude-sonnet-5.5",
   kimi: "kimi-k3",
-  dsh: "deepseek-v3.2",
-  codex: "gpt-5.3-codex",
-  opencode: "claude-sonnet-4.6",
+  dsh: "deepseek-v4.1-flash",
+  codex: "gpt-6-sol",
+  opencode: "claude-sonnet-5.5",
 };
 
 export { MODELS, MIN, SEED_SESSIONS, DEFAULT_ROUTES };

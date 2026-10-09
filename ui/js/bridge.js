@@ -152,11 +152,11 @@ export function mockProxy() {
     { name: "deepseek", base_url: "https://api.deepseek.com/v1", wire: "openai", key_env: "DEEPSEEK_API_KEY", key_present: false, key_source: "none", model_prefixes: ["deepseek"] },
   ];
   const models = [
-    { id: "claude-opus-4.7", provider: "anthropic" },
-    { id: "claude-sonnet-4.6", provider: "anthropic" },
+    { id: "claude-opus-5.5", provider: "anthropic" },
+    { id: "claude-sonnet-5.5", provider: "anthropic" },
     { id: "kimi-k3", provider: "moonshot" },
-    { id: "gpt-5.2", provider: "openai" },
-    { id: "deepseek-v3.2", provider: "deepseek" },
+    { id: "gpt-6-astra", provider: "openai" },
+    { id: "deepseek-v4.1-flash", provider: "deepseek" },
   ];
   return {
     running: false, online: false, endpoint: "http://127.0.0.1:8787/v1", listen: "127.0.0.1:8787",
