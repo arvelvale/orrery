@@ -7,8 +7,8 @@ pub mod config;
 mod server;
 mod state;
 
-use config::{Provider, ProxyConfig};
 pub use config::Wire;
+use config::{Provider, ProxyConfig};
 use serde::Serialize;
 use server::AppState;
 use state::{LastRequest, Metrics};
@@ -98,7 +98,9 @@ fn resolve_loopback(listen: &str) -> Result<SocketAddr, String> {
         .next()
         .ok_or_else(|| format!("invalid listen address {listen}"))?;
     if !addr.ip().is_loopback() {
-        return Err(format!("refusing to listen on {addr}: only loopback addresses are allowed"));
+        return Err(format!(
+            "refusing to listen on {addr}: only loopback addresses are allowed"
+        ));
     }
     Ok(addr)
 }
@@ -135,7 +137,11 @@ pub fn start() -> Result<ProxyStatus, String> {
     std::thread::Builder::new()
         .name("orrery-proxy".into())
         .spawn(move || {
-            let rt = match tokio::runtime::Builder::new_multi_thread().worker_threads(2).enable_all().build() {
+            let rt = match tokio::runtime::Builder::new_multi_thread()
+                .worker_threads(2)
+                .enable_all()
+                .build()
+            {
                 Ok(rt) => rt,
                 Err(e) => {
                     let _ = ready_tx.send(Err(e.to_string()));
@@ -172,7 +178,12 @@ pub fn start() -> Result<ProxyStatus, String> {
         Err(_) => return Err("proxy did not start within 5s".into()),
     };
 
-    *slot().lock().unwrap() = Some(Running { listen: bound.to_string(), shutdown, state: app_state, metrics });
+    *slot().lock().unwrap() = Some(Running {
+        listen: bound.to_string(),
+        shutdown,
+        state: app_state,
+        metrics,
+    });
     eprintln!("[orrery] proxy listening on {bound}");
     Ok(status())
 }
@@ -203,7 +214,10 @@ pub fn status() -> ProxyStatus {
         Some(r) => r.state.config.read().unwrap().clone(),
         None => config::load(),
     };
-    let listen = guard.as_ref().map(|r| r.listen.clone()).unwrap_or_else(|| cfg.listen.clone());
+    let listen = guard
+        .as_ref()
+        .map(|r| r.listen.clone())
+        .unwrap_or_else(|| cfg.listen.clone());
     let (online, latency_ms) = probe(&listen);
     let running = guard.is_some();
     let metrics = guard.as_ref().map(|r| r.metrics.clone());
@@ -226,7 +240,10 @@ pub fn status() -> ProxyStatus {
     let models = cfg
         .models
         .iter()
-        .map(|m| ModelStatus { id: m.id.clone(), provider: m.provider.clone() })
+        .map(|m| ModelStatus {
+            id: m.id.clone(),
+            provider: m.provider.clone(),
+        })
         .collect();
 
     ProxyStatus {
@@ -244,7 +261,9 @@ pub fn status() -> ProxyStatus {
         providers,
         models,
         routes: cfg.routes.clone(),
-        config_path: config::config_path().map(|p| p.to_string_lossy().to_string()).unwrap_or_default(),
+        config_path: config::config_path()
+            .map(|p| p.to_string_lossy().to_string())
+            .unwrap_or_default(),
         message: if running {
             "running".into()
         } else if online {
@@ -286,7 +305,11 @@ pub fn save_provider(
         return Err("base_url must start with http:// or https://".into());
     }
     let mut cfg = config::load();
-    let mut existing_key = cfg.providers.get(name).map(|p| p.api_key.clone()).unwrap_or_default();
+    let mut existing_key = cfg
+        .providers
+        .get(name)
+        .map(|p| p.api_key.clone())
+        .unwrap_or_default();
     if let Some(k) = api_key {
         existing_key = k.to_string();
     }
@@ -316,7 +339,9 @@ pub fn remove_provider(name: &str) -> Result<(), String> {
         return Err(format!("provider {name} does not exist"));
     }
     if cfg.models.iter().any(|m| m.provider == name) {
-        return Err(format!("provider {name} is still used by models; remove those models first"));
+        return Err(format!(
+            "provider {name} is still used by models; remove those models first"
+        ));
     }
     cfg.providers.remove(name);
     config::save(&cfg)?;

@@ -2,19 +2,28 @@
 //! 以及 Codex 只能经官方 CLI 清理的那部分数据库。
 
 use super::super::data_dir;
-use super::{harness_root, no_window, strip_verbatim, Mode, Plan, Outcome};
+use super::{harness_root, no_window, strip_verbatim, Mode, Outcome, Plan};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 /// 返回是否实际改动。写前重读；只移除引用这些 id 的条目
-pub(super) fn rewrite_index(path: &Path, ids: &[&str], backup_root: Option<&Path>, rel: &str) -> Result<bool, String> {
-    let Ok(raw) = fs::read_to_string(path) else { return Ok(false) };
+pub(super) fn rewrite_index(
+    path: &Path,
+    ids: &[&str],
+    backup_root: Option<&Path>,
+    rel: &str,
+) -> Result<bool, String> {
+    let Ok(raw) = fs::read_to_string(path) else {
+        return Ok(false);
+    };
     let updated = if path.extension().and_then(|e| e.to_str()) == Some("jsonl") {
         filter_jsonl(&raw, ids)
     } else {
         filter_json(&raw, ids)?
     };
-    let Some(updated) = updated else { return Ok(false) };
+    let Some(updated) = updated else {
+        return Ok(false);
+    };
 
     if let Some(b) = backup_root {
         let dst = b.join(rel);
@@ -46,7 +55,11 @@ fn filter_jsonl(raw: &str, ids: &[&str]) -> Option<String> {
             .is_some_and(|obj| {
                 ["id", "sessionId", "session_id", "thread_id"]
                     .iter()
-                    .any(|k| obj.get(*k).and_then(|x| x.as_str()).is_some_and(|s| ids.contains(&s)))
+                    .any(|k| {
+                        obj.get(*k)
+                            .and_then(|x| x.as_str())
+                            .is_some_and(|s| ids.contains(&s))
+                    })
             });
         if hit {
             changed = true;
@@ -64,8 +77,12 @@ fn filter_json(raw: &str, ids: &[&str]) -> Result<Option<String>, String> {
         return Ok(None);
     }
     let pretty = raw.contains("\n ");
-    let mut s = if pretty { serde_json::to_string_pretty(&v) } else { serde_json::to_string(&v) }
-        .map_err(|e| e.to_string())?;
+    let mut s = if pretty {
+        serde_json::to_string_pretty(&v)
+    } else {
+        serde_json::to_string(&v)
+    }
+    .map_err(|e| e.to_string())?;
     if raw.ends_with('\n') {
         s.push('\n');
     }
@@ -79,7 +96,10 @@ fn prune(v: &mut serde_json::Value, ids: &[&str]) -> bool {
             let before = items.len();
             items.retain(|item| match item {
                 serde_json::Value::String(s) => !ids.contains(&s.as_str()),
-                serde_json::Value::Object(o) => !o.get("id").and_then(|x| x.as_str()).is_some_and(|s| ids.contains(&s)),
+                serde_json::Value::Object(o) => !o
+                    .get("id")
+                    .and_then(|x| x.as_str())
+                    .is_some_and(|s| ids.contains(&s)),
                 _ => true,
             });
             changed |= items.len() != before;
@@ -99,7 +119,9 @@ fn prune(v: &mut serde_json::Value, ids: &[&str]) -> bool {
 
 /// 返回成功删除的 thread id
 fn run_codex_delete(root: &Path, threads: &[String]) -> Vec<String> {
-    let Some(bin) = codex_bin() else { return vec![] };
+    let Some(bin) = codex_bin() else {
+        return vec![];
+    };
     threads
         .iter()
         .filter(|id| is_uuid(id))
@@ -119,7 +141,13 @@ fn run_codex_delete(root: &Path, threads: &[String]) -> Vec<String> {
 
 fn is_uuid(s: &str) -> bool {
     s.len() == 36
-        && s.chars().enumerate().all(|(i, c)| if [8, 13, 18, 23].contains(&i) { c == '-' } else { c.is_ascii_hexdigit() })
+        && s.chars().enumerate().all(|(i, c)| {
+            if [8, 13, 18, 23].contains(&i) {
+                c == '-'
+            } else {
+                c.is_ascii_hexdigit()
+            }
+        })
 }
 
 /// 找 codex 原生可执行文件：`ORRERY_CODEX_BIN` → PATH 里的 codex → npm 全局包里的 vendor 二进制
@@ -127,7 +155,10 @@ fn is_uuid(s: &str) -> bool {
 /// npm 装的 codex 在 Windows 上是 `codex.cmd` 批处理壳，直接调它会弹窗且拿不到退出码，
 /// 所以要顺着 npm 的目录结构找到真正的二进制
 pub(crate) fn codex_bin() -> Option<PathBuf> {
-    if let Some(p) = std::env::var_os("ORRERY_CODEX_BIN").map(PathBuf::from).filter(|p| p.is_file()) {
+    if let Some(p) = std::env::var_os("ORRERY_CODEX_BIN")
+        .map(PathBuf::from)
+        .filter(|p| p.is_file())
+    {
         return Some(p);
     }
     let exe_name = if cfg!(windows) { "codex.exe" } else { "codex" };
@@ -154,7 +185,12 @@ pub(super) fn execute(p: &Plan, mode: Mode, stamp: &str) -> Outcome {
     let mut o = Outcome {
         harness: p.harness.clone(),
         id: p.id.clone(),
-        mode: if mode == Mode::Trash { "trash" } else { "permanent" }.into(),
+        mode: if mode == Mode::Trash {
+            "trash"
+        } else {
+            "permanent"
+        }
+        .into(),
         bytes: p.bytes,
         ..Default::default()
     };
@@ -207,7 +243,9 @@ pub(super) fn execute(p: &Plan, mode: Mode, stamp: &str) -> Outcome {
 
     // 2. 索引（Codex 的 session_index 若 CLI 已处理，这里重读后无需改动）
     let backup_root = data_dir().map(|h| h.join("backups").join(stamp).join(&p.harness));
-    let ids: Vec<&str> = std::iter::once(p.id.as_str()).chain(p.codex_threads.iter().map(|s| s.as_str())).collect();
+    let ids: Vec<&str> = std::iter::once(p.id.as_str())
+        .chain(p.codex_threads.iter().map(|s| s.as_str()))
+        .collect();
     for rel in &p.index_files {
         let path = root.join(rel);
         match rewrite_index(&path, &ids, backup_root.as_deref(), rel) {
@@ -237,7 +275,11 @@ fn move_to_trash(paths: &[PathBuf]) -> Result<(), String> {
 
 fn remove_permanently(paths: &[PathBuf]) -> Result<(), String> {
     for p in paths {
-        let r = if p.is_dir() { fs::remove_dir_all(p) } else { fs::remove_file(p) };
+        let r = if p.is_dir() {
+            fs::remove_dir_all(p)
+        } else {
+            fs::remove_file(p)
+        };
         r.map_err(|e| format!("{}: {e}", p.display()))?;
     }
     Ok(())
@@ -260,12 +302,22 @@ mod tests {
         let raw = "{\n  \"unit\": {\"name\": \"workspace\"},\n  \"global\": {\"archivedSessionIds\": [\"s1\", \"s2\"]},\n  \"tables\": {\"workspaces\": {\"w\": {\"path\": \"D:\\\\x\", \"sessionIds\": [\"s1\", \"s3\"]}}}\n}\n";
         let out = filter_json(raw, &["s1"]).unwrap().unwrap();
         let v: serde_json::Value = serde_json::from_str(&out).unwrap();
-        assert_eq!(v.pointer("/global/archivedSessionIds").unwrap(), &serde_json::json!(["s2"]));
-        assert_eq!(v.pointer("/tables/workspaces/w/sessionIds").unwrap(), &serde_json::json!(["s3"]));
-        assert!(out.find("unit").unwrap() < out.find("global").unwrap(), "key order kept");
+        assert_eq!(
+            v.pointer("/global/archivedSessionIds").unwrap(),
+            &serde_json::json!(["s2"])
+        );
+        assert_eq!(
+            v.pointer("/tables/workspaces/w/sessionIds").unwrap(),
+            &serde_json::json!(["s3"])
+        );
+        assert!(
+            out.find("unit").unwrap() < out.find("global").unwrap(),
+            "key order kept"
+        );
         assert!(out.ends_with('\n'));
 
-        let compact = "{\"sessions\":[{\"id\":\"s1\",\"touchedAt\":1},{\"id\":\"s9\",\"touchedAt\":2}]}";
+        let compact =
+            "{\"sessions\":[{\"id\":\"s1\",\"touchedAt\":1},{\"id\":\"s9\",\"touchedAt\":2}]}";
         let out = filter_json(compact, &["s1"]).unwrap().unwrap();
         assert_eq!(out, "{\"sessions\":[{\"id\":\"s9\",\"touchedAt\":2}]}");
     }

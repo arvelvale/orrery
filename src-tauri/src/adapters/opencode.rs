@@ -21,7 +21,10 @@
 //!
 //! 数据库只以只读方式打开。删除走官方 `opencode session delete`，见 `cleanup.rs`。
 
-use super::{dir_size, format_tokens, storage_absent, store, truncate, HarnessStorage, SessionSummary, TokenUsage};
+use super::{
+    dir_size, format_tokens, storage_absent, store, truncate, HarnessStorage, SessionSummary,
+    TokenUsage,
+};
 use rusqlite::{Connection, OpenFlags};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -95,7 +98,8 @@ fn read_rows(con: &Connection) -> Result<Vec<Row>, String> {
             })
         })
         .map_err(|e| e.to_string())?;
-    rows.collect::<Result<Vec<_>, _>>().map_err(|e| e.to_string())
+    rows.collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.to_string())
 }
 
 /// `{"id":"glm-5.3-flash","providerID":"opencode-go",…}` → `glm-5.3-flash`
@@ -104,7 +108,13 @@ pub(super) fn model_id(raw: &str) -> String {
         .ok()
         .and_then(|v| v.get("id").and_then(|s| s.as_str()).map(String::from))
         .filter(|s| !s.is_empty())
-        .unwrap_or_else(|| if raw.is_empty() { "—".into() } else { raw.to_string() })
+        .unwrap_or_else(|| {
+            if raw.is_empty() {
+                "—".into()
+            } else {
+                raw.to_string()
+            }
+        })
 }
 
 /// 单个会话在库里占的字节（三张表的 data 长度之和）
@@ -146,7 +156,9 @@ pub fn list_sessions() -> Result<Vec<SessionSummary>, String> {
     };
     // 同一轮的会话元数据与体积来自同一个 SQLite 读快照。
     con.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-    summarize("opencode", read_rows(&con)?, &db, |id, updated| cached_size(&con, id, updated))
+    summarize("opencode", read_rows(&con)?, &db, |id, updated| {
+        cached_size(&con, id, updated)
+    })
 }
 
 /// 把一批会话行整理成界面用的列表：递归把子 agent 并入根会话，
@@ -157,14 +169,21 @@ pub(super) fn summarize(
     db: &Path,
     mut size: impl FnMut(&str, u64) -> u64,
 ) -> Result<Vec<SessionSummary>, String> {
-
     // 子 agent 并入父会话：用量相加、计数 +1、体积一起算进父会话
-    let parents: HashMap<&str, Option<&str>> = rows.iter().map(|r| (r.id.as_str(), r.parent.as_deref())).collect();
+    let parents: HashMap<&str, Option<&str>> = rows
+        .iter()
+        .map(|r| (r.id.as_str(), r.parent.as_deref()))
+        .collect();
     let mut roots = HashMap::new();
     for r in &rows {
         let mut root = r.id.as_str();
         let mut seen = std::collections::HashSet::new();
-        while let Some(parent) = parents.get(root).copied().flatten().filter(|p| parents.contains_key(p)) {
+        while let Some(parent) = parents
+            .get(root)
+            .copied()
+            .flatten()
+            .filter(|p| parents.contains_key(p))
+        {
             if !seen.insert(root) {
                 return Err("opencode: cyclic parent_id".into());
             }
@@ -175,8 +194,12 @@ pub(super) fn summarize(
     let mut extra: HashMap<String, (TokenUsage, u32, u64)> = HashMap::new();
     for r in &rows {
         let root = &roots[&r.id];
-        if root == &r.id { continue; }
-        let e = extra.entry(root.clone()).or_insert((TokenUsage::default(), 0, 0));
+        if root == &r.id {
+            continue;
+        }
+        let e = extra
+            .entry(root.clone())
+            .or_insert((TokenUsage::default(), 0, 0));
         e.0.add(&r.usage);
         e.1 += 1;
         e.2 += size(&r.id, r.updated_ms);
@@ -211,7 +234,11 @@ pub(super) fn summarize(
             size_bytes: bytes,
             subagents,
             // 父会话不在库里的子 agent（实测没有，留着以防版本变化）
-            kind: if r.parent.is_some() { "subagent".into() } else { String::new() },
+            kind: if r.parent.is_some() {
+                "subagent".into()
+            } else {
+                String::new()
+            },
             id: r.id,
         });
     }
@@ -238,16 +265,30 @@ mod tests {
     use super::*;
 
     fn row(id: &str, parent: Option<&str>) -> Row {
-        Row { id: id.into(), parent: parent.map(String::from), title: String::new(),
-            directory: String::new(), model: String::new(), updated_ms: 1,
-            usage: TokenUsage { input: 10, output: 2, ..Default::default() } }
+        Row {
+            id: id.into(),
+            parent: parent.map(String::from),
+            title: String::new(),
+            directory: String::new(),
+            model: String::new(),
+            updated_ms: 1,
+            usage: TokenUsage {
+                input: 10,
+                output: 2,
+                ..Default::default()
+            },
+        }
     }
 
     #[test]
     fn nested_and_orphan_agents_keep_all_usage_and_bytes() {
-        let rows = vec![row("root", None), row("child", Some("root")),
-            row("grandchild", Some("child")), row("orphan", Some("missing")),
-            row("orphan-child", Some("orphan"))];
+        let rows = vec![
+            row("root", None),
+            row("child", Some("root")),
+            row("grandchild", Some("child")),
+            row("orphan", Some("missing")),
+            row("orphan-child", Some("orphan")),
+        ];
         let sessions = summarize("opencode", rows, Path::new("opencode.db"), |_, _| 7).unwrap();
         assert_eq!(sessions.len(), 2);
         assert_eq!(sessions.iter().map(|s| s.usage.total()).sum::<u64>(), 60);
@@ -260,25 +301,36 @@ mod tests {
 
     #[test]
     fn cyclic_parents_fail_instead_of_silently_dropping_sessions() {
-        assert!(summarize("opencode", vec![row("a", Some("b")), row("b", Some("a"))],
-            Path::new("opencode.db"), |_, _| 0).is_err());
+        assert!(summarize(
+            "opencode",
+            vec![row("a", Some("b")), row("b", Some("a"))],
+            Path::new("opencode.db"),
+            |_, _| 0
+        )
+        .is_err());
     }
 
     #[test]
     fn sqlite_text_is_measured_in_utf8_bytes() {
         let con = Connection::open_in_memory().unwrap();
-        con.execute_batch("CREATE TABLE message(session_id TEXT, data TEXT);
+        con.execute_batch(
+            "CREATE TABLE message(session_id TEXT, data TEXT);
             CREATE TABLE part(session_id TEXT, data TEXT);
             CREATE TABLE event(aggregate_id TEXT, data TEXT);
             INSERT INTO message VALUES ('s', '中文');
             INSERT INTO part VALUES ('s', 'abc');
-            INSERT INTO event VALUES ('s', '日');").unwrap();
+            INSERT INTO event VALUES ('s', '日');",
+        )
+        .unwrap();
         assert_eq!(measure(&con, "s"), 12);
     }
 
     #[test]
     fn model_id_takes_the_id_field() {
-        assert_eq!(model_id(r#"{"id":"glm-5.3-flash","providerID":"opencode-go"}"#), "glm-5.3-flash");
+        assert_eq!(
+            model_id(r#"{"id":"glm-5.3-flash","providerID":"opencode-go"}"#),
+            "glm-5.3-flash"
+        );
         // 不是 JSON 就原样用，空的才退化成占位符
         assert_eq!(model_id("claude-opus-5"), "claude-opus-5");
         assert_eq!(model_id(""), "—");

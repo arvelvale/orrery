@@ -125,31 +125,69 @@ fn default_providers() -> BTreeMap<String, Provider> {
     BTreeMap::from([
         (
             "anthropic".into(),
-            empty_provider("https://api.anthropic.com/v1", "ANTHROPIC_API_KEY", Wire::Anthropic, &["claude"]),
+            empty_provider(
+                "https://api.anthropic.com/v1",
+                "ANTHROPIC_API_KEY",
+                Wire::Anthropic,
+                &["claude"],
+            ),
         ),
         (
             "openai".into(),
-            empty_provider("https://api.openai.com/v1", "OPENAI_API_KEY", Wire::Openai, &["gpt", "o3", "o4"]),
+            empty_provider(
+                "https://api.openai.com/v1",
+                "OPENAI_API_KEY",
+                Wire::Openai,
+                &["gpt", "o3", "o4"],
+            ),
         ),
         (
             "moonshot".into(),
-            empty_provider("https://api.moonshot.cn/v1", "MOONSHOT_API_KEY", Wire::Openai, &["kimi", "moonshot"]),
+            empty_provider(
+                "https://api.moonshot.cn/v1",
+                "MOONSHOT_API_KEY",
+                Wire::Openai,
+                &["kimi", "moonshot"],
+            ),
         ),
         (
             "deepseek".into(),
-            empty_provider("https://api.deepseek.com/v1", "DEEPSEEK_API_KEY", Wire::Openai, &["deepseek"]),
+            empty_provider(
+                "https://api.deepseek.com/v1",
+                "DEEPSEEK_API_KEY",
+                Wire::Openai,
+                &["deepseek"],
+            ),
         ),
     ])
 }
 
 fn default_models() -> Vec<ModelEntry> {
     vec![
-        ModelEntry { id: "claude-opus-4.7".into(), provider: "anthropic".into() },
-        ModelEntry { id: "claude-sonnet-4.6".into(), provider: "anthropic".into() },
-        ModelEntry { id: "kimi-k3".into(), provider: "moonshot".into() },
-        ModelEntry { id: "gpt-5.2".into(), provider: "openai".into() },
-        ModelEntry { id: "gpt-5.3-codex".into(), provider: "openai".into() },
-        ModelEntry { id: "deepseek-v3.2".into(), provider: "deepseek".into() },
+        ModelEntry {
+            id: "claude-opus-4.7".into(),
+            provider: "anthropic".into(),
+        },
+        ModelEntry {
+            id: "claude-sonnet-4.6".into(),
+            provider: "anthropic".into(),
+        },
+        ModelEntry {
+            id: "kimi-k3".into(),
+            provider: "moonshot".into(),
+        },
+        ModelEntry {
+            id: "gpt-5.2".into(),
+            provider: "openai".into(),
+        },
+        ModelEntry {
+            id: "gpt-5.3-codex".into(),
+            provider: "openai".into(),
+        },
+        ModelEntry {
+            id: "deepseek-v3.2".into(),
+            provider: "deepseek".into(),
+        },
     ]
 }
 
@@ -172,7 +210,11 @@ impl ProxyConfig {
         if lower.is_empty() {
             return None;
         }
-        if let Some(entry) = self.models.iter().find(|m| m.id.to_ascii_lowercase() == lower) {
+        if let Some(entry) = self
+            .models
+            .iter()
+            .find(|m| m.id.to_ascii_lowercase() == lower)
+        {
             if let Some((name, p)) = self.providers.get_key_value(&entry.provider) {
                 if p.wire == wire {
                     return Some((name.as_str(), p));
@@ -184,8 +226,7 @@ impl ProxyConfig {
             .iter()
             .find(|(_, p)| {
                 p.wire == wire
-                    && p
-                        .model_prefixes
+                    && p.model_prefixes
                         .iter()
                         .any(|pre| lower.starts_with(&pre.to_ascii_lowercase()))
             })
@@ -195,12 +236,20 @@ impl ProxyConfig {
     /// 模型归属（不限 wire），用于 /v1/models 的 owned_by
     pub fn owner_of(&self, model: &str) -> Option<&str> {
         let lower = model.trim().to_ascii_lowercase();
-        if let Some(entry) = self.models.iter().find(|m| m.id.to_ascii_lowercase() == lower) {
+        if let Some(entry) = self
+            .models
+            .iter()
+            .find(|m| m.id.to_ascii_lowercase() == lower)
+        {
             return Some(entry.provider.as_str());
         }
         self.providers
             .iter()
-            .find(|(_, p)| p.model_prefixes.iter().any(|pre| lower.starts_with(&pre.to_ascii_lowercase())))
+            .find(|(_, p)| {
+                p.model_prefixes
+                    .iter()
+                    .any(|pre| lower.starts_with(&pre.to_ascii_lowercase()))
+            })
             .map(|(name, _)| name.as_str())
     }
 
@@ -228,7 +277,10 @@ impl ProxyConfig {
         if let Some(m) = self.models.iter_mut().find(|m| m.id == id) {
             m.provider = provider.to_string();
         } else {
-            self.models.push(ModelEntry { id: id.into(), provider: provider.into() });
+            self.models.push(ModelEntry {
+                id: id.into(),
+                provider: provider.into(),
+            });
         }
         Ok(())
     }
@@ -255,7 +307,8 @@ pub fn load() -> ProxyConfig {
     if cfg.models.is_empty() {
         cfg.models = default_models();
         // 只保留 providers 里真实存在的
-        cfg.models.retain(|m| cfg.providers.contains_key(&m.provider));
+        cfg.models
+            .retain(|m| cfg.providers.contains_key(&m.provider));
     }
     cfg
 }
@@ -321,19 +374,36 @@ mod tests {
         let mut cfg = ProxyConfig::default();
         // 把 kimi-k3 登记到 anthropic（错误 wire）→ Openai 形状应走前缀 moonshot
         cfg.upsert_model("kimi-k3", "anthropic").unwrap();
-        assert_eq!(cfg.provider_for("kimi-k3", Wire::Openai).unwrap().0, "moonshot");
-        assert_eq!(cfg.provider_for("kimi-k3", Wire::Anthropic).unwrap().0, "anthropic");
+        assert_eq!(
+            cfg.provider_for("kimi-k3", Wire::Openai).unwrap().0,
+            "moonshot"
+        );
+        assert_eq!(
+            cfg.provider_for("kimi-k3", Wire::Anthropic).unwrap().0,
+            "anthropic"
+        );
 
         cfg.upsert_model("my-custom", "deepseek").unwrap();
-        assert_eq!(cfg.provider_for("my-custom", Wire::Openai).unwrap().0, "deepseek");
+        assert_eq!(
+            cfg.provider_for("my-custom", Wire::Openai).unwrap().0,
+            "deepseek"
+        );
         assert!(cfg.provider_for("my-custom", Wire::Anthropic).is_none());
     }
 
     #[test]
     fn unknown_model_uses_prefix_or_fails() {
         let cfg = ProxyConfig::default();
-        assert_eq!(cfg.provider_for("claude-sonnet-4.6", Wire::Anthropic).unwrap().0, "anthropic");
-        assert_eq!(cfg.provider_for("deepseek-v3.2", Wire::Openai).unwrap().0, "deepseek");
+        assert_eq!(
+            cfg.provider_for("claude-sonnet-4.6", Wire::Anthropic)
+                .unwrap()
+                .0,
+            "anthropic"
+        );
+        assert_eq!(
+            cfg.provider_for("deepseek-v3.2", Wire::Openai).unwrap().0,
+            "deepseek"
+        );
         assert!(cfg.provider_for("llama-3", Wire::Openai).is_none());
         assert_eq!(cfg.owner_of("gpt-5.2"), Some("openai"));
     }
@@ -352,7 +422,8 @@ mod tests {
     #[test]
     fn route_lookup_prefers_harness_then_default() {
         let mut cfg = ProxyConfig::default();
-        cfg.routes.insert("default".into(), "claude-sonnet-4.6".into());
+        cfg.routes
+            .insert("default".into(), "claude-sonnet-4.6".into());
         cfg.routes.insert("kimi".into(), "kimi-k3".into());
         assert_eq!(cfg.route_model(Some("kimi")), Some("kimi-k3"));
         assert_eq!(cfg.route_model(Some("dsh")), Some("claude-sonnet-4.6"));

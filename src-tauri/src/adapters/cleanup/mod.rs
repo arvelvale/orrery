@@ -59,12 +59,13 @@ mod targets;
 
 // 会话转换（`transfer/`）复用这两个能力
 pub(crate) use execute::codex_bin;
-pub(crate) use opencode_cli::opencode_bin;
 pub(crate) use guard::no_window;
 pub(crate) use guard::pid_alive;
+pub(crate) use opencode_cli::opencode_bin;
 
 use super::{
-    antigravity, claude_home, codex, codex_home, dir_size, dsh_home, forget_memo, kimi_home, system_time_ms,
+    antigravity, claude_home, codex, codex_home, dir_size, dsh_home, forget_memo, kimi_home,
+    system_time_ms,
 };
 use agy::{agy_open, agy_targets};
 use opencode_cli::plan_opencode;
@@ -151,7 +152,10 @@ impl Ctx {
     }
 
     pub(super) fn with_running(running: HashSet<String>) -> Self {
-        Self { running, codex_heads: std::cell::OnceCell::new() }
+        Self {
+            running,
+            codex_heads: std::cell::OnceCell::new(),
+        }
     }
 
     pub(super) fn codex_heads(&self, root: &Path) -> &[CodexHead] {
@@ -188,7 +192,11 @@ pub fn delete_all(targets: &[Target], mode: Mode) -> Vec<Outcome> {
 /* ── 规划 ── */
 
 fn plan(t: &Target, ctx: &Ctx) -> Plan {
-    let mut p = Plan { harness: t.harness.clone(), id: t.id.clone(), ..Default::default() };
+    let mut p = Plan {
+        harness: t.harness.clone(),
+        id: t.id.clone(),
+        ..Default::default()
+    };
     if !valid_id(&t.id) {
         p.blocked = Some("invalid".into());
         return p;
@@ -223,7 +231,10 @@ fn plan(t: &Target, ctx: &Ctx) -> Plan {
         p.blocked = Some("not_found".into());
         return p;
     };
-    if files.iter().any(|f| !canonical(f).is_some_and(|c| c.starts_with(&canon_root))) {
+    if files
+        .iter()
+        .any(|f| !canonical(f).is_some_and(|c| c.starts_with(&canon_root)))
+    {
         p.blocked = Some("invalid".into());
         return p;
     }
@@ -233,7 +244,10 @@ fn plan(t: &Target, ctx: &Ctx) -> Plan {
     }
 
     p.bytes = files.iter().map(|f| path_size(f)).sum();
-    p.files = files.iter().map(|f| f.to_string_lossy().to_string()).collect();
+    p.files = files
+        .iter()
+        .map(|f| f.to_string_lossy().to_string())
+        .collect();
     p.index_files = index_files;
     p.codex_threads = codex_threads;
 
@@ -289,7 +303,10 @@ fn harness_root(harness: &str) -> Option<PathBuf> {
 
 /// 会话 id 只允许字母数字、`-`、`_`；拒绝任何可能构成路径的字符
 pub(super) fn valid_id(id: &str) -> bool {
-    (8..=80).contains(&id.len()) && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    (8..=80).contains(&id.len())
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 /* ── 小工具（ targets / execute 共用）── */
@@ -304,18 +321,32 @@ pub(super) fn strip_verbatim(p: &Path) -> PathBuf {
 }
 
 pub(super) fn path_size(p: &Path) -> u64 {
-    if p.is_dir() { dir_size(p) } else { fs::metadata(p).map(|m| m.len()).unwrap_or(0) }
+    if p.is_dir() {
+        dir_size(p)
+    } else {
+        fs::metadata(p).map(|m| m.len()).unwrap_or(0)
+    }
 }
 
 /// 文件或目录内最新的修改时间（目录只看两层，足够覆盖会话写入）
 pub(super) fn latest_mtime(p: &Path) -> u64 {
     fn walk(p: &Path, depth: u32) -> u64 {
-        let own = fs::metadata(p).and_then(|m| m.modified()).map(system_time_ms).unwrap_or(0);
+        let own = fs::metadata(p)
+            .and_then(|m| m.modified())
+            .map(system_time_ms)
+            .unwrap_or(0);
         if depth == 0 || !p.is_dir() {
             return own;
         }
-        let Ok(entries) = fs::read_dir(p) else { return own };
-        entries.flatten().map(|e| walk(&e.path(), depth - 1)).max().unwrap_or(0).max(own)
+        let Ok(entries) = fs::read_dir(p) else {
+            return own;
+        };
+        entries
+            .flatten()
+            .map(|e| walk(&e.path(), depth - 1))
+            .max()
+            .unwrap_or(0)
+            .max(own)
     }
     walk(p, 3)
 }
@@ -335,7 +366,13 @@ mod tests {
 
     #[test]
     fn zcode_plan_is_read_only_without_resolving_files() {
-        let p = plan(&Target { harness: "zcode".into(), id: "ses_sandbox_only".into() }, &Ctx::with_running(HashSet::new()));
+        let p = plan(
+            &Target {
+                harness: "zcode".into(),
+                id: "ses_sandbox_only".into(),
+            },
+            &Ctx::with_running(HashSet::new()),
+        );
         assert_eq!(p.blocked.as_deref(), Some("read_only"));
         assert!(p.files.is_empty());
         assert!(p.index_files.is_empty());
@@ -349,9 +386,16 @@ mod tests {
     #[ignore]
     fn agy_sandbox_trash() {
         let home = std::env::var_os("ORRERY_HOME").expect("ORRERY_HOME 必须指向沙盒");
-        assert_ne!(Some(PathBuf::from(&home)), dirs::home_dir(), "不能对真实主目录跑");
+        assert_ne!(
+            Some(PathBuf::from(&home)),
+            dirs::home_dir(),
+            "不能对真实主目录跑"
+        );
         let id = std::env::var("ORRERY_AGY_ID").expect("ORRERY_AGY_ID");
-        let target = Target { harness: "antigravity".into(), id };
+        let target = Target {
+            harness: "antigravity".into(),
+            id,
+        };
         let plan = plan_all(std::slice::from_ref(&target)).remove(0);
         println!("{plan:?}");
         assert!(plan.blocked.is_none(), "{:?}", plan.blocked);
@@ -370,9 +414,16 @@ mod tests {
     #[ignore]
     fn opencode_sandbox_trash_roundtrip() {
         let home = std::env::var_os("ORRERY_HOME").expect("ORRERY_HOME 必须指向沙盒");
-        assert_ne!(Some(PathBuf::from(&home)), dirs::home_dir(), "不能对真实主目录跑");
+        assert_ne!(
+            Some(PathBuf::from(&home)),
+            dirs::home_dir(),
+            "不能对真实主目录跑"
+        );
         let id = std::env::var("ORRERY_OC_ID").expect("ORRERY_OC_ID");
-        let target = Target { harness: "opencode".into(), id };
+        let target = Target {
+            harness: "opencode".into(),
+            id,
+        };
         let plan = plan_all(std::slice::from_ref(&target)).remove(0);
         println!("{plan:?}");
         assert!(plan.blocked.is_none(), "{:?}", plan.blocked);
@@ -390,7 +441,14 @@ mod tests {
     fn id_validation_rejects_paths() {
         assert!(valid_id("session_0ed9be17-001b-4642-8b8a-2f71a7df757c"));
         assert!(valid_id("983ae63c-4c5e-483e-8269-d7510506ee68"));
-        for bad in ["../../etc", "a/b/c/d/e/f", r"..\..\x", "short", "abc def ghij", "C:secretsxx"] {
+        for bad in [
+            "../../etc",
+            "a/b/c/d/e/f",
+            r"..\..\x",
+            "short",
+            "abc def ghij",
+            "C:secretsxx",
+        ] {
             assert!(!valid_id(bad), "{bad}");
         }
     }

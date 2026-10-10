@@ -41,7 +41,9 @@ pub(super) fn read(id: &str) -> Result<Transcript, String> {
             .read_line(&mut head)
             .map_err(|e| format!("source_read_failed: {e}"))?;
         let meta: Value = serde_json::from_str(&head).map_err(|_| "source_json_invalid")?;
-        let this_cwd = meta["payload"]["cwd"].as_str().ok_or("source_cwd_missing")?;
+        let this_cwd = meta["payload"]["cwd"]
+            .as_str()
+            .ok_or("source_cwd_missing")?;
         if cwd.as_deref().is_some_and(|old| old != this_cwd) {
             return Err("multiple_project_dirs_unsupported".into());
         }
@@ -52,7 +54,10 @@ pub(super) fn read(id: &str) -> Result<Transcript, String> {
     let mut turns = Vec::new();
     let mut first_user = None;
     for file in &files {
-        for line in BufReader::new(File::open(file).map_err(|e| format!("source_read_failed: {e}"))?).lines() {
+        for line in
+            BufReader::new(File::open(file).map_err(|e| format!("source_read_failed: {e}"))?)
+                .lines()
+        {
             let line = line.map_err(|e| format!("source_read_failed: {e}"))?;
             let v: Value = serde_json::from_str(&line).map_err(|_| "source_json_invalid")?;
             if v["type"] != "response_item" {
@@ -71,7 +76,13 @@ pub(super) fn read(id: &str) -> Result<Transcript, String> {
         .remove(id)
         .or_else(|| first_user.map(|t| t.chars().take(80).collect()))
         .unwrap_or_else(|| id.to_owned());
-    Ok(Transcript { source_name: "Codex", cwd, title, turns, stamps })
+    Ok(Transcript {
+        source_name: "Codex",
+        cwd,
+        title,
+        turns,
+        stamps,
+    })
 }
 
 /// One `response_item` payload → a turn, `None` for items that are not conversation
@@ -88,7 +99,12 @@ fn turn(p: &Value) -> Result<Option<Turn>, String> {
             for part in items {
                 match part["type"].as_str().unwrap_or("") {
                     "input_text" | "output_text" | "text" => {
-                        parts.push(Part::Text(part["text"].as_str().ok_or("unsupported_content")?.to_owned()));
+                        parts.push(Part::Text(
+                            part["text"]
+                                .as_str()
+                                .ok_or("unsupported_content")?
+                                .to_owned(),
+                        ));
                     }
                     "input_image" if role == Role::User => parts.push(image(part)?),
                     _ => return Err("unsupported_content".into()),
@@ -100,11 +116,17 @@ fn turn(p: &Value) -> Result<Option<Turn>, String> {
             Turn { role, parts }
         }
         "function_call" | "custom_tool_call" => {
-            let input = p["arguments"].as_str().or_else(|| p["input"].as_str()).ok_or("tool_input_missing")?;
+            let input = p["arguments"]
+                .as_str()
+                .or_else(|| p["input"].as_str())
+                .ok_or("tool_input_missing")?;
             Turn {
                 role: Role::Assistant,
                 parts: vec![Part::ToolCall {
-                    id: p["call_id"].as_str().ok_or("tool_call_id_missing")?.to_owned(),
+                    id: p["call_id"]
+                        .as_str()
+                        .ok_or("tool_call_id_missing")?
+                        .to_owned(),
                     name: p["name"].as_str().ok_or("tool_name_missing")?.to_owned(),
                     input: input.to_owned(),
                 }],
@@ -114,7 +136,14 @@ fn turn(p: &Value) -> Result<Option<Turn>, String> {
             let (output, images) = tool_output(&p["output"])?;
             Turn {
                 role: Role::Assistant,
-                parts: vec![Part::ToolResult { id: p["call_id"].as_str().ok_or("tool_call_id_missing")?.to_owned(), output, images }],
+                parts: vec![Part::ToolResult {
+                    id: p["call_id"]
+                        .as_str()
+                        .ok_or("tool_call_id_missing")?
+                        .to_owned(),
+                    output,
+                    images,
+                }],
             }
         }
         "reasoning" => return Ok(None), // hidden reasoning is not exported
@@ -125,8 +154,10 @@ fn turn(p: &Value) -> Result<Option<Turn>, String> {
 
 /// `data:image/png;base64,…` → an image part; anything else is refused
 fn image(part: &Value) -> Result<Part, String> {
-    let Image { media_type, data } =
-        part["image_url"].as_str().and_then(data_url_image).ok_or("unsupported_image")?;
+    let Image { media_type, data } = part["image_url"]
+        .as_str()
+        .and_then(data_url_image)
+        .ok_or("unsupported_image")?;
     Ok(Part::Image { media_type, data })
 }
 
@@ -140,11 +171,17 @@ pub(super) fn tool_output(output: &Value) -> Result<(String, Vec<Image>), String
     let (mut texts, mut images) = (Vec::new(), Vec::new());
     for part in parts {
         match part["type"].as_str().unwrap_or("") {
-            "input_text" | "output_text" | "text" => {
-                texts.push(part["text"].as_str().ok_or("unsupported_tool_output")?.to_owned())
-            }
+            "input_text" | "output_text" | "text" => texts.push(
+                part["text"]
+                    .as_str()
+                    .ok_or("unsupported_tool_output")?
+                    .to_owned(),
+            ),
             "input_image" => images.push(
-                part["image_url"].as_str().and_then(data_url_image).ok_or("unsupported_tool_output_media")?,
+                part["image_url"]
+                    .as_str()
+                    .and_then(data_url_image)
+                    .ok_or("unsupported_tool_output_media")?,
             ),
             _ => return Err("unsupported_tool_output_media".into()),
         }
@@ -182,8 +219,14 @@ fn stage_claude_source(source: &Path, id: &str) -> Result<StagedClaudeSource, St
         // Codex deduplicates by source path. Keep this path stable across
         // attempts, even though Drop removes its contents after each import.
         .join(id);
-    let project = source.parent().and_then(Path::file_name).ok_or("source_project_missing")?;
-    let file = home.join(".claude/projects").join(project).join(format!("{id}.jsonl"));
+    let project = source
+        .parent()
+        .and_then(Path::file_name)
+        .ok_or("source_project_missing")?;
+    let file = home
+        .join(".claude/projects")
+        .join(project)
+        .join(format!("{id}.jsonl"));
     fs::create_dir_all(file.parent().ok_or("stage_path_invalid")?)
         .map_err(|e| format!("stage_create_failed: {e}"))?;
     if file.exists() {
@@ -197,16 +240,29 @@ fn stage_claude_source(source: &Path, id: &str) -> Result<StagedClaudeSource, St
 }
 
 /// Import one Claude Code JSONL file into Codex through Codex's own importer
-pub(super) fn import_claude_file(source: &Path, cwd: &str, title: &str, id: &str) -> Result<ConvertedSession, String> {
+pub(super) fn import_claude_file(
+    source: &Path,
+    cwd: &str,
+    title: &str,
+    id: &str,
+) -> Result<ConvertedSession, String> {
     if !Path::new(cwd).is_dir() {
         return Err("cwd_missing".into());
     }
     let home = adapters::home_dir().ok_or("home_missing")?;
     // Codex currently discovers Claude sessions only under HOME/.claude/projects.
     let default_projects = home.join(".claude/projects");
-    let source_projects = source.parent().and_then(Path::parent).ok_or("source_path_invalid")?;
-    let default_home = fs::canonicalize(source_projects).ok() == fs::canonicalize(&default_projects).ok();
-    let staged = if default_home { None } else { Some(stage_claude_source(source, id)?) };
+    let source_projects = source
+        .parent()
+        .and_then(Path::parent)
+        .ok_or("source_path_invalid")?;
+    let default_home =
+        fs::canonicalize(source_projects).ok() == fs::canonicalize(&default_projects).ok();
+    let staged = if default_home {
+        None
+    } else {
+        Some(stage_claude_source(source, id)?)
+    };
     let import_path = staged.as_ref().map_or(source, |s| s.file.as_path());
     let import_home = staged.as_ref().map_or(home.as_path(), |s| s.home.as_path());
     run_import(source, import_path, import_home, cwd, title)
@@ -220,17 +276,30 @@ pub(super) fn import_transcript(t: &Transcript) -> Result<ConvertedSession, Stri
         return Err("unsupported_source_media".into());
     }
     let id = Uuid::new_v4().to_string();
-    let home = adapters::data_dir().ok_or("orrery_data_dir_missing")?.join("transfer-stage").join(&id);
-    let file = super::claude::project_dir(&home.join(".claude"), &t.cwd).join(format!("{id}.jsonl"));
-    fs::create_dir_all(file.parent().ok_or("stage_path_invalid")?).map_err(|e| format!("stage_create_failed: {e}"))?;
+    let home = adapters::data_dir()
+        .ok_or("orrery_data_dir_missing")?
+        .join("transfer-stage")
+        .join(&id);
+    let file =
+        super::claude::project_dir(&home.join(".claude"), &t.cwd).join(format!("{id}.jsonl"));
+    fs::create_dir_all(file.parent().ok_or("stage_path_invalid")?)
+        .map_err(|e| format!("stage_create_failed: {e}"))?;
     // removes the rendered file and its empty folders whatever happens next
     let stage = StagedClaudeSource { home, file };
     let mut output = File::create(&stage.file).map_err(|e| format!("stage_create_failed: {e}"))?;
     super::claude::render(&mut output, t, &id)?;
-    output.sync_all().map_err(|e| format!("stage_create_failed: {e}"))?;
+    output
+        .sync_all()
+        .map_err(|e| format!("stage_create_failed: {e}"))?;
     drop(output);
     t.stamps.verify_unchanged()?;
-    run_import(&stage.file, &stage.file, &stage.home, &super::clean_dir(&t.cwd), &t.title)
+    run_import(
+        &stage.file,
+        &stage.file,
+        &stage.home,
+        &super::clean_dir(&t.cwd),
+        &t.title,
+    )
 }
 
 /// Drive `codex app-server` through one `externalAgentConfig/import`.
@@ -256,7 +325,9 @@ fn run_import(
         .stdout(Stdio::piped())
         .stderr(Stdio::null());
     cleanup::no_window(&mut cmd);
-    let mut child = cmd.spawn().map_err(|e| format!("codex_start_failed: {e}"))?;
+    let mut child = cmd
+        .spawn()
+        .map_err(|e| format!("codex_start_failed: {e}"))?;
     let stdout = child.stdout.take().ok_or("codex_stdout_missing")?;
     let (tx, rx) = mpsc::channel();
     thread::spawn(move || {
@@ -287,14 +358,18 @@ fn run_import(
             &json!({"id":2,"method":"externalAgentConfig/import","params":{"migrationItems":[{"itemType":"SESSIONS","description":"Orrery session transfer","cwd":null,"details":{"sessions":[{"path":import_path,"cwd":cwd,"title":title}]}}],"source":"orrery","providerId":"orrery","migrationSource":"claude"}}),
         )?;
         loop {
-            let line = rx.recv_timeout(Duration::from_secs(120)).map_err(|_| "codex_import_timeout")?;
+            let line = rx
+                .recv_timeout(Duration::from_secs(120))
+                .map_err(|_| "codex_import_timeout")?;
             let Ok(msg) = serde_json::from_str::<Value>(&line) else {
                 continue;
             };
             if msg.get("id").and_then(Value::as_i64) == Some(2) && msg.get("error").is_some() {
                 return Err("codex_import_rejected".into());
             }
-            if msg.get("method").and_then(Value::as_str) != Some("externalAgentConfig/import/completed") {
+            if msg.get("method").and_then(Value::as_str)
+                != Some("externalAgentConfig/import/completed")
+            {
                 continue;
             }
             let result = &msg["params"]["itemTypeResults"][0];
@@ -306,15 +381,24 @@ fn run_import(
                 return Err("source_changed_during_import".into());
             }
             if let Some(target) = result["successes"][0]["target"].as_str() {
-                let target = Uuid::parse_str(target).map_err(|_| "codex_import_bad_target")?.to_string();
+                let target = Uuid::parse_str(target)
+                    .map_err(|_| "codex_import_bad_target")?
+                    .to_string();
                 if !codex_target_exists(&codex_home, &target) {
                     return Err("codex_target_not_found".into());
                 }
-                return Ok(ConvertedSession { harness: "codex".into(), id: target, existing: false });
+                return Ok(ConvertedSession {
+                    harness: "codex".into(),
+                    id: target,
+                    existing: false,
+                });
             }
             // An empty success/failure pair means a prior import was skipped. Resolve
             // it only when the source has not changed since that completed import.
-            send(&mut stdin, &json!({"id":3,"method":"externalAgentConfig/import/readHistories"}))?;
+            send(
+                &mut stdin,
+                &json!({"id":3,"method":"externalAgentConfig/import/readHistories"}),
+            )?;
             let histories = recv_id(&rx, 3)?;
             if histories.get("error").is_some() {
                 return Err("codex_history_failed".into());
@@ -330,7 +414,11 @@ fn run_import(
                 .as_array()
                 .into_iter()
                 .flatten()
-                .filter(|history| history["completedAtMs"].as_u64().is_some_and(|ms| ms >= source_ms))
+                .filter(|history| {
+                    history["completedAtMs"]
+                        .as_u64()
+                        .is_some_and(|ms| ms >= source_ms)
+                })
                 .flat_map(|history| history["successes"].as_array().into_iter().flatten())
                 .filter_map(|entry| {
                     let path = entry["source"].as_str()?;
@@ -342,7 +430,11 @@ fn run_import(
                 })
                 .next_back();
             return prior
-                .map(|id| ConvertedSession { harness: "codex".into(), id, existing: true })
+                .map(|id| ConvertedSession {
+                    harness: "codex".into(),
+                    id,
+                    existing: true,
+                })
                 .ok_or("codex_import_no_target".into());
         }
     })();
@@ -359,12 +451,16 @@ fn codex_target_exists(home: &Path, id: &str) -> bool {
 
 fn send(w: &mut impl Write, v: &Value) -> Result<(), String> {
     serde_json::to_writer(&mut *w, v).map_err(|e| format!("codex_ipc_failed: {e}"))?;
-    w.write_all(b"\n").and_then(|_| w.flush()).map_err(|e| format!("codex_ipc_failed: {e}"))
+    w.write_all(b"\n")
+        .and_then(|_| w.flush())
+        .map_err(|e| format!("codex_ipc_failed: {e}"))
 }
 
 fn recv_id(rx: &mpsc::Receiver<String>, id: i64) -> Result<Value, String> {
     loop {
-        let line = rx.recv_timeout(Duration::from_secs(30)).map_err(|_| "codex_initialize_timeout")?;
+        let line = rx
+            .recv_timeout(Duration::from_secs(30))
+            .map_err(|_| "codex_initialize_timeout")?;
         let Ok(v) = serde_json::from_str::<Value>(&line) else {
             continue;
         };
@@ -392,7 +488,10 @@ mod tests {
             t.parts,
             vec![
                 Part::Text("look".into()),
-                Part::Image { media_type: "image/png".into(), data: PNG.into() },
+                Part::Image {
+                    media_type: "image/png".into(),
+                    data: PNG.into()
+                },
                 Part::Text("here".into()),
             ]
         );
@@ -403,23 +502,55 @@ mod tests {
 
     #[test]
     fn tool_records_are_assistant_side_and_reasoning_is_dropped() {
-        let call = json!({"type":"custom_tool_call","call_id":"c1","name":"functions.exec","input":"ls"});
+        let call =
+            json!({"type":"custom_tool_call","call_id":"c1","name":"functions.exec","input":"ls"});
         assert_eq!(
             turn(&call).unwrap().unwrap(),
-            Turn { role: Role::Assistant, parts: vec![Part::ToolCall { id: "c1".into(), name: "functions.exec".into(), input: "ls".into() }] }
+            Turn {
+                role: Role::Assistant,
+                parts: vec![Part::ToolCall {
+                    id: "c1".into(),
+                    name: "functions.exec".into(),
+                    input: "ls".into()
+                }]
+            }
         );
         let result = json!({"type":"function_call_output","call_id":"c1","output":"done"});
         let t = turn(&result).unwrap().unwrap();
-        assert_eq!(t.role, Role::Assistant, "a tool result must never become a user turn");
-        assert_eq!(t.parts, vec![Part::ToolResult { id: "c1".into(), output: "done".into(), images: vec![] }]);
-        assert!(turn(&json!({"type":"reasoning","summary":[]})).unwrap().is_none());
-        assert!(turn(&json!({"type":"message","role":"developer","content":[]})).unwrap().is_none());
+        assert_eq!(
+            t.role,
+            Role::Assistant,
+            "a tool result must never become a user turn"
+        );
+        assert_eq!(
+            t.parts,
+            vec![Part::ToolResult {
+                id: "c1".into(),
+                output: "done".into(),
+                images: vec![]
+            }]
+        );
+        assert!(turn(&json!({"type":"reasoning","summary":[]}))
+            .unwrap()
+            .is_none());
+        assert!(
+            turn(&json!({"type":"message","role":"developer","content":[]}))
+                .unwrap()
+                .is_none()
+        );
     }
 
     #[test]
     fn unknown_items_and_odd_images_stop_the_transfer() {
-        assert_eq!(turn(&json!({"type":"web_search_call"})).unwrap_err(), "unsupported_response_item");
-        for url in ["https://example.com/a.png", "data:image/svg+xml;base64,PHN2Zz4=", "data:image/png;base64,"] {
+        assert_eq!(
+            turn(&json!({"type":"web_search_call"})).unwrap_err(),
+            "unsupported_response_item"
+        );
+        for url in [
+            "https://example.com/a.png",
+            "data:image/svg+xml;base64,PHN2Zz4=",
+            "data:image/png;base64,",
+        ] {
             let bad = json!({"type":"message","role":"user","content":[{"type":"input_image","image_url":url}]});
             assert_eq!(turn(&bad).unwrap_err(), "unsupported_image", "{url}");
         }

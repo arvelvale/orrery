@@ -53,8 +53,13 @@ pub(super) struct MediaStore {
 
 impl MediaStore {
     pub fn new() -> Result<Self, String> {
-        let root = adapters::data_dir().ok_or("orrery_data_dir_missing")?.join(FOLDER);
-        Ok(Self { dir: root.join(Uuid::new_v4().to_string()), saved: 0 })
+        let root = adapters::data_dir()
+            .ok_or("orrery_data_dir_missing")?
+            .join(FOLDER);
+        Ok(Self {
+            dir: root.join(Uuid::new_v4().to_string()),
+            saved: 0,
+        })
     }
 
     fn save(&mut self, image: &Image) -> Result<PathBuf, String> {
@@ -93,16 +98,26 @@ impl MediaStore {
 
 /// The line that stands in for a saved image
 fn reference(path: &Path) -> String {
-    format!("[Image saved to {} - open it with a file-reading tool if you need to see it]", path.display())
+    format!(
+        "[Image saved to {} - open it with a file-reading tool if you need to see it]",
+        path.display()
+    )
 }
 
 /// Save every image the target cannot hold inline, and leave a reference in its place
-pub(super) fn externalize(t: &mut Transcript, target: &str, store: &mut MediaStore) -> Result<(), String> {
+pub(super) fn externalize(
+    t: &mut Transcript,
+    target: &str,
+    store: &mut MediaStore,
+) -> Result<(), String> {
     for turn in &mut t.turns {
         for part in &mut turn.parts {
             match part {
                 Part::Image { media_type, data } if needs_file(target, turn.role) => {
-                    let path = store.save(&Image { media_type: media_type.clone(), data: data.clone() })?;
+                    let path = store.save(&Image {
+                        media_type: media_type.clone(),
+                        data: data.clone(),
+                    })?;
                     *part = Part::Text(reference(&path));
                 }
                 Part::ToolResult { output, images, .. } if !images.is_empty() => {
@@ -126,14 +141,22 @@ pub(super) fn externalize(t: &mut Transcript, target: &str, store: &mut MediaSto
 /// leftover folder only costs disk space, never correctness.
 pub fn release(harness: &str, id: &str, to_trash: bool) {
     for dir in folders_owned_by(harness, id) {
-        let _ = if to_trash { trash::delete(&dir).map_err(|e| e.to_string()) } else { fs::remove_dir_all(&dir).map_err(|e| e.to_string()) };
+        let _ = if to_trash {
+            trash::delete(&dir).map_err(|e| e.to_string())
+        } else {
+            fs::remove_dir_all(&dir).map_err(|e| e.to_string())
+        };
     }
 }
 
 /// Media folders owned by a session
 fn folders_owned_by(harness: &str, id: &str) -> Vec<PathBuf> {
-    let Some(root) = adapters::data_dir().map(|d| d.join(FOLDER)) else { return vec![] };
-    let Ok(entries) = fs::read_dir(root) else { return vec![] };
+    let Some(root) = adapters::data_dir().map(|d| d.join(FOLDER)) else {
+        return vec![];
+    };
+    let Ok(entries) = fs::read_dir(root) else {
+        return vec![];
+    };
     entries
         .flatten()
         .map(|e| e.path())
@@ -167,7 +190,10 @@ mod tests {
     const PNG: &str = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WlXvX8AAAAASUVORK5CYII=";
 
     fn image() -> Image {
-        Image { media_type: "image/png".into(), data: PNG.into() }
+        Image {
+            media_type: "image/png".into(),
+            data: PNG.into(),
+        }
     }
 
     fn sample() -> Transcript {
@@ -176,10 +202,23 @@ mod tests {
             cwd: "D:/code/acme-web".into(),
             title: "t".into(),
             turns: vec![
-                Turn { role: Role::User, parts: vec![Part::Text("look".into()), Part::Image { media_type: "image/png".into(), data: PNG.into() }] },
+                Turn {
+                    role: Role::User,
+                    parts: vec![
+                        Part::Text("look".into()),
+                        Part::Image {
+                            media_type: "image/png".into(),
+                            data: PNG.into(),
+                        },
+                    ],
+                },
                 Turn {
                     role: Role::Assistant,
-                    parts: vec![Part::ToolResult { id: "t1".into(), output: "screenshot taken".into(), images: vec![image(), image()] }],
+                    parts: vec![Part::ToolResult {
+                        id: "t1".into(),
+                        output: "screenshot taken".into(),
+                        images: vec![image(), image()],
+                    }],
                 },
             ],
             stamps: SourceStamps::files(&[]).unwrap(),
@@ -196,26 +235,50 @@ mod tests {
     #[test]
     fn saved_images_are_real_files_referenced_in_place() {
         let dir = std::env::temp_dir().join(format!("orrery-media-{}", Uuid::new_v4()));
-        let mut store = MediaStore { dir: dir.clone(), saved: 0 };
+        let mut store = MediaStore {
+            dir: dir.clone(),
+            saved: 0,
+        };
         let mut t = sample();
         externalize(&mut t, "codex", &mut store).unwrap();
-        assert!(!t.has_images(), "nothing image-shaped may reach the Codex writer");
-        let Part::Text(user_ref) = &t.turns[0].parts[1] else { panic!("user image not replaced") };
+        assert!(
+            !t.has_images(),
+            "nothing image-shaped may reach the Codex writer"
+        );
+        let Part::Text(user_ref) = &t.turns[0].parts[1] else {
+            panic!("user image not replaced")
+        };
         assert!(user_ref.contains("1.png"));
-        let Part::ToolResult { output, images, .. } = &t.turns[1].parts[0] else { panic!() };
+        let Part::ToolResult { output, images, .. } = &t.turns[1].parts[0] else {
+            panic!()
+        };
         assert!(images.is_empty());
         assert!(output.starts_with("screenshot taken\n[Image saved to "));
         assert!(output.contains("2.png") && output.contains("3.png"));
-        assert_eq!(fs::read(dir.join("2.png")).unwrap(), base64::engine::general_purpose::STANDARD.decode(PNG).unwrap());
+        assert_eq!(
+            fs::read(dir.join("2.png")).unwrap(),
+            base64::engine::general_purpose::STANDARD
+                .decode(PNG)
+                .unwrap()
+        );
         store.discard();
-        assert!(!dir.exists(), "a failed transfer must not leave its images behind");
+        assert!(
+            !dir.exists(),
+            "a failed transfer must not leave its images behind"
+        );
     }
 
     #[test]
     fn broken_base64_is_refused_not_written() {
         let dir = std::env::temp_dir().join(format!("orrery-media-{}", Uuid::new_v4()));
-        let mut store = MediaStore { dir: dir.clone(), saved: 0 };
-        let bad = Image { media_type: "image/png".into(), data: "not base64!".into() };
+        let mut store = MediaStore {
+            dir: dir.clone(),
+            saved: 0,
+        };
+        let bad = Image {
+            media_type: "image/png".into(),
+            data: "not base64!".into(),
+        };
         assert_eq!(store.save(&bad).unwrap_err(), "unsupported_image");
         assert!(!dir.exists());
     }

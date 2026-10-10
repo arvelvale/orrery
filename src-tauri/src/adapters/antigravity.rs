@@ -92,7 +92,10 @@ fn sub(b: &[u8], field: u64) -> Option<&[u8]> {
 /// 一行 `gen_metadata.data` → (用量, 模型名)
 fn call_usage(blob: &[u8]) -> Option<(TokenUsage, String)> {
     let meta = sub(blob, 1)?;
-    let model = sub(meta, 19).and_then(|s| std::str::from_utf8(s).ok()).unwrap_or("").to_string();
+    let model = sub(meta, 19)
+        .and_then(|s| std::str::from_utf8(s).ok())
+        .unwrap_or("")
+        .to_string();
     let mut n: HashMap<u64, u64> = HashMap::new();
     for (f, v) in fields(sub(meta, 4).unwrap_or(&[]))? {
         if let Val::Int(x) = v {
@@ -102,7 +105,11 @@ fn call_usage(blob: &[u8]) -> Option<(TokenUsage, String)> {
     let get = |f| n.get(&f).copied().unwrap_or(0);
     let (thinking, reply) = (get(9), get(10));
     // 实测 f3 = 思考 + 回复；若哪天改成 f3 只含回复，就把思考补进来
-    let output = if thinking > 0 && get(3) == reply { reply + thinking } else { get(3) };
+    let output = if thinking > 0 && get(3) == reply {
+        reply + thinking
+    } else {
+        get(3)
+    };
     let usage = TokenUsage {
         input: get(2),
         output,
@@ -118,11 +125,19 @@ fn call_usage(blob: &[u8]) -> Option<(TokenUsage, String)> {
 fn conversation_usage(db: &Path) -> (TokenUsage, String) {
     let mut total = TokenUsage::default();
     let mut model = String::new();
-    let Some(con) = open(db) else { return (total, model) };
-    let Ok(mut stmt) = con.prepare("SELECT data FROM gen_metadata ORDER BY idx") else { return (total, model) };
-    let Ok(rows) = stmt.query_map([], |r| r.get::<_, Vec<u8>>(0)) else { return (total, model) };
+    let Some(con) = open(db) else {
+        return (total, model);
+    };
+    let Ok(mut stmt) = con.prepare("SELECT data FROM gen_metadata ORDER BY idx") else {
+        return (total, model);
+    };
+    let Ok(rows) = stmt.query_map([], |r| r.get::<_, Vec<u8>>(0)) else {
+        return (total, model);
+    };
     for blob in rows.flatten() {
-        let Some((mut u, m)) = call_usage(&blob) else { continue };
+        let Some((mut u, m)) = call_usage(&blob) else {
+            continue;
+        };
         if u.total() == 0 {
             continue; // 被取消的调用：全零、没有模型名
         }
@@ -146,7 +161,9 @@ struct Meta {
 
 fn read_summaries(home: &Path) -> HashMap<String, Meta> {
     let mut out = HashMap::new();
-    let Some(con) = open(&home.join("conversation_summaries.db")) else { return out };
+    let Some(con) = open(&home.join("conversation_summaries.db")) else {
+        return out;
+    };
     let Ok(mut stmt) = con.prepare(
         "SELECT conversation_id, title, preview, workspace_uris, CAST(last_modified_time AS TEXT), parent_conversation_id
          FROM conversation_summaries",
@@ -166,7 +183,11 @@ fn read_summaries(home: &Path) -> HashMap<String, Meta> {
     let Ok(rows) = rows else { return out };
     for (id, title, preview, uris, modified, parent) in rows.flatten() {
         // 标题还没生成的对话，preview 是第一句用户输入
-        let title = if title.trim().is_empty() { preview } else { title };
+        let title = if title.trim().is_empty() {
+            preview
+        } else {
+            title
+        };
         let directory = serde_json::from_str::<Vec<String>>(&uris)
             .ok()
             .and_then(|v| v.into_iter().next())
@@ -217,7 +238,14 @@ fn file_uri_to_path(uri: &str) -> String {
 fn parse_time_ms(s: &str) -> Option<u64> {
     let s = s.trim();
     let num = |a: usize, b: usize| s.get(a..b)?.parse::<i64>().ok();
-    let (y, mo, d, h, mi, sec) = (num(0, 4)?, num(5, 7)?, num(8, 10)?, num(11, 13)?, num(14, 16)?, num(17, 19)?);
+    let (y, mo, d, h, mi, sec) = (
+        num(0, 4)?,
+        num(5, 7)?,
+        num(8, 10)?,
+        num(11, 13)?,
+        num(14, 16)?,
+        num(17, 19)?,
+    );
     let rest = s.get(19..).unwrap_or("");
     let (frac, tz) = match rest.find(['+', '-', 'Z']) {
         Some(i) => (&rest[..i], &rest[i..]),
@@ -231,7 +259,10 @@ fn parse_time_ms(s: &str) -> Option<u64> {
         Some(b'+') | Some(b'-') => {
             let sign = if tz.starts_with('-') { -1 } else { 1 };
             let hh = tz.get(1..3)?.parse::<i64>().ok()?;
-            let mm = tz.get(4..6).and_then(|m| m.parse::<i64>().ok()).unwrap_or(0);
+            let mm = tz
+                .get(4..6)
+                .and_then(|m| m.parse::<i64>().ok())
+                .unwrap_or(0);
             sign * (hh * 60 + mm)
         }
         _ => 0,
@@ -253,26 +284,38 @@ fn parse_time_ms(s: &str) -> Option<u64> {
 fn conversation_bytes(home: &Path, id: &str) -> u64 {
     let conv = home.join("conversations");
     let file = |p: PathBuf| std::fs::metadata(p).map(|m| m.len()).unwrap_or(0);
-    ["db", "db-wal", "db-shm"].iter().map(|ext| file(conv.join(format!("{id}.{ext}")))).sum::<u64>()
+    ["db", "db-wal", "db-shm"]
+        .iter()
+        .map(|ext| file(conv.join(format!("{id}.{ext}"))))
+        .sum::<u64>()
         + file(home.join("annotations").join(format!("{id}.pbtxt")))
         + dir_size(&home.join("brain").join(id))
 }
 
 fn list(home: &Path) -> Result<Vec<SessionSummary>, String> {
-    let Ok(entries) = std::fs::read_dir(home.join("conversations")) else { return Ok(vec![]) };
+    let Ok(entries) = std::fs::read_dir(home.join("conversations")) else {
+        return Ok(vec![]);
+    };
     let mut meta = read_summaries(home);
     let mut rows = vec![];
     for db in entries.flatten().map(|e| e.path()) {
         if db.extension().and_then(|e| e.to_str()) != Some("db") {
             continue;
         }
-        let Some(id) = db.file_stem().and_then(|s| s.to_str()).map(String::from) else { continue };
+        let Some(id) = db.file_stem().and_then(|s| s.to_str()).map(String::from) else {
+            continue;
+        };
         let (usage, model) = conversation_usage(&db);
         let m = meta.remove(&id);
         // 摘要库里没有这条时，用库文件自己的修改时间
         let mtime = ["db", "db-wal"]
             .iter()
-            .filter_map(|ext| std::fs::metadata(db.with_extension(ext)).ok()?.modified().ok())
+            .filter_map(|ext| {
+                std::fs::metadata(db.with_extension(ext))
+                    .ok()?
+                    .modified()
+                    .ok()
+            })
             .map(system_time_ms)
             .max()
             .unwrap_or(0);
@@ -280,14 +323,24 @@ fn list(home: &Path) -> Result<Vec<SessionSummary>, String> {
             parent: m.as_ref().and_then(|m| m.parent.clone()),
             title: m.as_ref().map(|m| m.title.clone()).unwrap_or_default(),
             directory: m.as_ref().map(|m| m.directory.clone()).unwrap_or_default(),
-            model: if model.is_empty() { "—".into() } else { model },
-            updated_ms: m.as_ref().map(|m| m.updated_ms).filter(|&t| t > 0).unwrap_or(mtime),
+            model: if model.is_empty() {
+                "—".into()
+            } else {
+                model
+            },
+            updated_ms: m
+                .as_ref()
+                .map(|m| m.updated_ms)
+                .filter(|&t| t > 0)
+                .unwrap_or(mtime),
             usage,
             id,
         });
     }
     let conv = home.join("conversations");
-    summarize("antigravity", rows, &conv, |id, _| conversation_bytes(home, id))
+    summarize("antigravity", rows, &conv, |id, _| {
+        conversation_bytes(home, id)
+    })
 }
 
 pub fn list_sessions() -> Result<Vec<SessionSummary>, String> {
@@ -332,12 +385,25 @@ mod tests {
         [varint_bytes(field << 3), varint_bytes(v)].concat()
     }
     fn msg(field: u64, body: &[u8]) -> Vec<u8> {
-        [varint_bytes((field << 3) | 2), varint_bytes(body.len() as u64), body.to_vec()].concat()
+        [
+            varint_bytes((field << 3) | 2),
+            varint_bytes(body.len() as u64),
+            body.to_vec(),
+        ]
+        .concat()
     }
 
     /// 一行真实调用的形状：data.1.4 = 用量，data.1.19 = 模型名
     fn blob(input: u64, output: u64, cache_read: u64, thinking: u64, reply: u64) -> Vec<u8> {
-        let usage = [int(1, 1318), int(2, input), int(3, output), int(5, cache_read), int(9, thinking), int(10, reply)].concat();
+        let usage = [
+            int(1, 1318),
+            int(2, input),
+            int(3, output),
+            int(5, cache_read),
+            int(9, thinking),
+            int(10, reply),
+        ]
+        .concat();
         let meta = [int(3, 1318), msg(4, &usage), msg(19, b"gemini-3.8-flash")].concat();
         [msg(2, b"xx"), msg(1, &meta)].concat()
     }
@@ -346,7 +412,10 @@ mod tests {
     #[test]
     fn real_call_maps_to_non_overlapping_buckets() {
         let (u, model) = call_usage(&blob(3_444, 155, 44_849, 31, 124)).unwrap();
-        assert_eq!((u.input, u.output, u.cache_read, u.cache_write), (3_444, 155, 44_849, 0));
+        assert_eq!(
+            (u.input, u.output, u.cache_read, u.cache_write),
+            (3_444, 155, 44_849, 0)
+        );
         assert_eq!(u.total(), 3_444 + 155 + 44_849);
         assert_eq!(model, "gemini-3.8-flash");
     }
@@ -368,7 +437,10 @@ mod tests {
 
     #[test]
     fn file_uris_decode_to_paths() {
-        assert_eq!(file_uri_to_path("file:///D:/%E7%AC%94%E8%AE%B0/notes"), "D:/笔记/notes");
+        assert_eq!(
+            file_uri_to_path("file:///D:/%E7%AC%94%E8%AE%B0/notes"),
+            "D:/笔记/notes"
+        );
         assert_eq!(file_uri_to_path("file:///home/me/p%20q"), "/home/me/p q");
         assert_eq!(file_uri_to_path("file:///D:/100%"), "D:/100%");
     }
@@ -376,9 +448,18 @@ mod tests {
     #[test]
     fn times_parse_with_offsets_and_fractions() {
         // 2026-09-19 08:22:07.622 UTC
-        assert_eq!(parse_time_ms("2026-09-19 08:22:07.6228218+00:00"), Some(1_789_806_127_622));
-        assert_eq!(parse_time_ms("2026-09-19T16:22:07.622+08:00"), Some(1_789_806_127_622));
-        assert_eq!(parse_time_ms("2026-09-19T08:22:07Z"), Some(1_789_806_127_000));
+        assert_eq!(
+            parse_time_ms("2026-09-19 08:22:07.6228218+00:00"),
+            Some(1_789_806_127_622)
+        );
+        assert_eq!(
+            parse_time_ms("2026-09-19T16:22:07.622+08:00"),
+            Some(1_789_806_127_622)
+        );
+        assert_eq!(
+            parse_time_ms("2026-09-19T08:22:07Z"),
+            Some(1_789_806_127_000)
+        );
         assert_eq!(parse_time_ms("garbage"), None);
     }
 }

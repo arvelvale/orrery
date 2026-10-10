@@ -28,13 +28,19 @@ pub(super) fn running_processes() -> HashSet<String> {
         c
     };
     no_window(&mut cmd);
-    let Ok(out) = cmd.output() else { return HashSet::new() };
+    let Ok(out) = cmd.output() else {
+        return HashSet::new();
+    };
     String::from_utf8_lossy(&out.stdout)
         .lines()
         .filter_map(|l| l.split(',').next())
         .map(|n| n.trim().trim_matches('"'))
         // macOS 的 comm 是完整路径，取最后一段
-        .map(|n| n.rsplit(['/', std::path::MAIN_SEPARATOR]).next().unwrap_or(n))
+        .map(|n| {
+            n.rsplit(['/', std::path::MAIN_SEPARATOR])
+                .next()
+                .unwrap_or(n)
+        })
         .map(|n| n.trim_end_matches(".exe").to_ascii_lowercase())
         .filter(|n| !n.is_empty())
         .collect()
@@ -42,10 +48,16 @@ pub(super) fn running_processes() -> HashSet<String> {
 
 /// Claude Code 在 `~/.claude/sessions/<pid>.json` 登记运行中的会话；进程还活着就视为运行中
 pub(super) fn cc_is_running(root: &Path, id: &str) -> bool {
-    let Ok(entries) = fs::read_dir(root.join("sessions")) else { return false };
+    let Ok(entries) = fs::read_dir(root.join("sessions")) else {
+        return false;
+    };
     entries.flatten().any(|e| {
-        let Ok(raw) = fs::read_to_string(e.path()) else { return false };
-        let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) else { return false };
+        let Ok(raw) = fs::read_to_string(e.path()) else {
+            return false;
+        };
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) else {
+            return false;
+        };
         v.get("sessionId").and_then(|s| s.as_str()) == Some(id)
             && v.get("pid").and_then(|p| p.as_u64()).is_some_and(pid_alive)
     })
@@ -89,9 +101,15 @@ mod tests {
     #[test]
     fn running_processes_is_not_empty_and_normalized() {
         let procs = running_processes();
-        assert!(!procs.is_empty(), "取不到进程表：本平台的进程枚举命令调用有问题");
+        assert!(
+            !procs.is_empty(),
+            "取不到进程表：本平台的进程枚举命令调用有问题"
+        );
         for name in &procs {
-            assert!(!name.contains(['/', std::path::MAIN_SEPARATOR]), "进程名里不该留路径：{name}");
+            assert!(
+                !name.contains(['/', std::path::MAIN_SEPARATOR]),
+                "进程名里不该留路径：{name}"
+            );
             assert!(!name.ends_with(".exe"), "进程名里不该留 .exe 后缀：{name}");
             assert_eq!(name, &name.to_ascii_lowercase(), "进程名要统一小写：{name}");
         }
@@ -99,7 +117,10 @@ mod tests {
 
     #[test]
     fn pid_alive_knows_this_process() {
-        assert!(pid_alive(std::process::id() as u64), "当前进程必须被判定为存活");
+        assert!(
+            pid_alive(std::process::id() as u64),
+            "当前进程必须被判定为存活"
+        );
         // 超出各平台 pid 上限，必然不存在
         assert!(!pid_alive(4_294_900_000), "不存在的 pid 不能判成存活");
     }

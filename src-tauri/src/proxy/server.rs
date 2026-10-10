@@ -63,7 +63,11 @@ async fn models(State(state): State<Arc<AppState>>) -> Json<Value> {
     Json(json!({ "object": "list", "data": data }))
 }
 
-async fn chat_completions(state: State<Arc<AppState>>, headers: HeaderMap, body: Json<Value>) -> Response {
+async fn chat_completions(
+    state: State<Arc<AppState>>,
+    headers: HeaderMap,
+    body: Json<Value>,
+) -> Response {
     forward(state, headers, body.0, Wire::Openai, "chat/completions").await
 }
 
@@ -73,7 +77,11 @@ async fn messages(state: State<Arc<AppState>>, headers: HeaderMap, body: Json<Va
 
 fn error_response(status: StatusCode, message: impl Into<String>) -> Response {
     let message = message.into();
-    (status, Json(json!({ "error": { "type": "orrery_proxy", "message": message } }))).into_response()
+    (
+        status,
+        Json(json!({ "error": { "type": "orrery_proxy", "message": message } })),
+    )
+        .into_response()
 }
 
 async fn forward(
@@ -85,16 +93,26 @@ async fn forward(
 ) -> Response {
     state.metrics.request_started();
 
-    let harness = headers.get(HARNESS_HEADER).and_then(|v| v.to_str().ok()).map(str::to_owned);
+    let harness = headers
+        .get(HARNESS_HEADER)
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_owned);
     // 解析路由：读锁范围内拿到需要的值就放锁，不跨 await 持有
     let (url, provider_name, key, model, overridden) = {
         let cfg = state.config.read().unwrap();
-        let requested = body.get("model").and_then(Value::as_str).unwrap_or("").to_string();
+        let requested = body
+            .get("model")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
         let routed = cfg.route_model(harness.as_deref()).map(str::to_owned);
         let model = routed.clone().unwrap_or_else(|| requested.clone());
         if model.is_empty() {
             drop(cfg);
-            return state.metrics.fail(error_response(StatusCode::BAD_REQUEST, "no model in request and no route configured"));
+            return state.metrics.fail(error_response(
+                StatusCode::BAD_REQUEST,
+                "no model in request and no route configured",
+            ));
         }
         let Some((name, provider)) = cfg.provider_for(&model, wire) else {
             drop(cfg);
@@ -108,12 +126,23 @@ async fn forward(
             let hint = if provider.api_key_env.trim().is_empty() {
                 format!("{name}: set an API key in Orrery (Models → provider)")
             } else {
-                format!("{name}: set API key in Orrery, or environment variable {}", provider.api_key_env)
+                format!(
+                    "{name}: set API key in Orrery, or environment variable {}",
+                    provider.api_key_env
+                )
             };
             drop(cfg);
-            return state.metrics.fail(error_response(StatusCode::SERVICE_UNAVAILABLE, hint));
+            return state
+                .metrics
+                .fail(error_response(StatusCode::SERVICE_UNAVAILABLE, hint));
         };
-        (url, name.to_string(), key, model.clone(), routed.is_some_and(|r| r != requested))
+        (
+            url,
+            name.to_string(),
+            key,
+            model.clone(),
+            routed.is_some_and(|r| r != requested),
+        )
     };
 
     if overridden {
@@ -129,11 +158,18 @@ async fn forward(
                 .and_then(|v| v.to_str().ok())
                 .unwrap_or(ANTHROPIC_VERSION)
                 .to_string();
-            req.header("x-api-key", key).header("anthropic-version", version)
+            req.header("x-api-key", key)
+                .header("anthropic-version", version)
         }
     };
     // 这些头由调用方决定语义，原样带上；鉴权头不透传，一律由代理按供应商重建
-    for name in ["accept", "accept-encoding", "user-agent", "anthropic-beta", "openai-beta"] {
+    for name in [
+        "accept",
+        "accept-encoding",
+        "user-agent",
+        "anthropic-beta",
+        "openai-beta",
+    ] {
         if let Some(v) = headers.get(name) {
             req = req.header(name, v.clone());
         }
@@ -149,19 +185,32 @@ async fn forward(
         }
     };
 
-    let status = StatusCode::from_u16(upstream.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
+    let status =
+        StatusCode::from_u16(upstream.status().as_u16()).unwrap_or(StatusCode::BAD_GATEWAY);
     let mut out = Response::builder().status(status);
-    for name in ["content-type", "cache-control", "x-request-id", "anthropic-request-id"] {
+    for name in [
+        "content-type",
+        "cache-control",
+        "x-request-id",
+        "anthropic-request-id",
+    ] {
         if let Some(v) = upstream.headers().get(name) {
-            if let (Ok(n), Ok(v)) = (HeaderName::try_from(name), HeaderValue::from_bytes(v.as_bytes())) {
+            if let (Ok(n), Ok(v)) = (
+                HeaderName::try_from(name),
+                HeaderValue::from_bytes(v.as_bytes()),
+            ) {
                 out = out.header(n, v);
             }
         }
     }
-    state.metrics.finish(&provider_name, &model, status.as_u16());
+    state
+        .metrics
+        .finish(&provider_name, &model, status.as_u16());
 
     // 流式：上游字节来一块转一块，不缓冲整包
-    let stream = upstream.bytes_stream().map(|chunk| chunk.map_err(std::io::Error::other));
+    let stream = upstream
+        .bytes_stream()
+        .map(|chunk| chunk.map_err(std::io::Error::other));
     out.body(Body::from_stream(stream))
         .unwrap_or_else(|e| error_response(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
 }

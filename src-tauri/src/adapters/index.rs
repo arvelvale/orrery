@@ -43,7 +43,9 @@ pub(crate) struct SizeCache {
 
 impl SizeCache {
     fn new(map: HashMap<String, (u64, u64)>) -> Self {
-        Self { map: Mutex::new(map) }
+        Self {
+            map: Mutex::new(map),
+        }
     }
 
     pub(crate) fn get(&self, id: &str, sig: u64) -> Option<u64> {
@@ -59,8 +61,12 @@ impl SizeCache {
     }
 
     fn entries(&self) -> Vec<(String, u64, u64)> {
-        let Ok(map) = self.map.lock() else { return vec![] };
-        map.iter().map(|(k, (sig, b))| (k.clone(), *sig, *b)).collect()
+        let Ok(map) = self.map.lock() else {
+            return vec![];
+        };
+        map.iter()
+            .map(|(k, (sig, b))| (k.clone(), *sig, *b))
+            .collect()
     }
 }
 
@@ -120,7 +126,12 @@ fn load_from(file: Option<&Path>) -> Store {
         .and_then(|p| std::fs::read(p).ok())
         .and_then(|b| serde_json::from_slice::<Snapshot>(&b).ok())
         .filter(|s| s.version == VERSION)
-        .unwrap_or(Snapshot { version: VERSION, sessions: vec![], rollouts: vec![], sizes: vec![] });
+        .unwrap_or(Snapshot {
+            version: VERSION,
+            sessions: vec![],
+            rollouts: vec![],
+            sizes: vec![],
+        });
     if !snap.sessions.is_empty() || !snap.rollouts.is_empty() {
         eprintln!(
             "[orrery] index: {} sessions + {} rollouts loaded",
@@ -131,7 +142,12 @@ fn load_from(file: Option<&Path>) -> Store {
     let store = Store {
         sessions: MemoTable::new(to_map(snap.sessions, &mut dropped)),
         rollouts: MemoTable::new(to_map(snap.rollouts, &mut dropped)),
-        sizes: SizeCache::new(snap.sizes.into_iter().map(|(id, sig, b)| (id, (sig, b))).collect()),
+        sizes: SizeCache::new(
+            snap.sizes
+                .into_iter()
+                .map(|(id, sig, b)| (id, (sig, b)))
+                .collect(),
+        ),
         dirty: AtomicBool::new(false),
         parsed: AtomicUsize::new(0),
     };
@@ -188,8 +204,13 @@ mod tests {
     #[test]
     fn version_mismatch_is_discarded() {
         let bad = serde_json::json!({ "version": VERSION + 1, "sessions": [], "rollouts": [] });
-        let parsed = serde_json::from_value::<Snapshot>(bad).ok().filter(|s| s.version == VERSION);
-        assert!(parsed.is_none(), "版本不符必须整份丢弃，不能当成半份索引继续用");
+        let parsed = serde_json::from_value::<Snapshot>(bad)
+            .ok()
+            .filter(|s| s.version == VERSION);
+        assert!(
+            parsed.is_none(),
+            "版本不符必须整份丢弃，不能当成半份索引继续用"
+        );
     }
 
     #[test]
@@ -246,10 +267,19 @@ mod tests {
         write_to(Some(&file), &snap).unwrap();
 
         let back = load_from(Some(&file));
-        assert!(back.sessions.get(&dead, 9).is_none(), "文件已删除的条目不能留在索引里");
+        assert!(
+            back.sessions.get(&dead, 9).is_none(),
+            "文件已删除的条目不能留在索引里"
+        );
         let got = back.sessions.get(&live, 7).expect("sig 相同应命中缓存");
-        assert_eq!((got.id, got.title, got.usage.input, got.size_bytes), ("abc".into(), "标题".into(), 1200, 42));
-        assert!(back.sessions.get(&live, 8).is_none(), "sig 变了必须当作未命中，重新解析");
+        assert_eq!(
+            (got.id, got.title, got.usage.input, got.size_bytes),
+            ("abc".into(), "标题".into(), 1200, 42)
+        );
+        assert!(
+            back.sessions.get(&live, 8).is_none(),
+            "sig 变了必须当作未命中，重新解析"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

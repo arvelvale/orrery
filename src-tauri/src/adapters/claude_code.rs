@@ -67,13 +67,17 @@ pub fn storage() -> HarnessStorage {
 /// 只收集 `<project>/*.jsonl` 这一层，子 agent 的 jsonl 不算独立会话
 fn collect_session_files(root: &Path) -> Vec<PathBuf> {
     let mut acc = vec![];
-    let Ok(projects) = fs::read_dir(root) else { return acc };
+    let Ok(projects) = fs::read_dir(root) else {
+        return acc;
+    };
     for project in projects.flatten() {
         let dir = project.path();
         if !dir.is_dir() {
             continue;
         }
-        let Ok(entries) = fs::read_dir(&dir) else { continue };
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("jsonl") {
@@ -102,7 +106,12 @@ fn subagent_files(path: &Path) -> Vec<PathBuf> {
 fn session_bytes(path: &Path) -> u64 {
     let main = fs::metadata(path).map(|m| m.len()).unwrap_or(0);
     let companion = path.with_extension("");
-    let mut total = main + if companion.is_dir() { dir_size(&companion) } else { 0 };
+    let mut total = main
+        + if companion.is_dir() {
+            dir_size(&companion)
+        } else {
+            0
+        };
     let id = path.file_stem().and_then(|s| s.to_str());
     // path = <claude>/projects/<project>/<id>.jsonl
     let claude = path.parent().and_then(Path::parent).and_then(Path::parent);
@@ -171,7 +180,9 @@ struct Scan {
 /// 逐行读；先用子串预筛再做 JSON 解析——体积大头是附件/工具输出行，直接跳过
 fn scan_jsonl(path: &Path, want_meta: bool) -> Scan {
     let mut scan = Scan::default();
-    let Ok(file) = fs::File::open(path) else { return scan };
+    let Ok(file) = fs::File::open(path) else {
+        return scan;
+    };
     // message.id → 该调用最后一次出现的 usage
     let mut by_msg: HashMap<String, TokenUsage> = HashMap::new();
 
@@ -205,7 +216,9 @@ fn scan_jsonl(path: &Path, want_meta: bool) -> Scan {
         }
 
         if has_usage {
-            let Some(msg) = v.get("message") else { continue };
+            let Some(msg) = v.get("message") else {
+                continue;
+            };
             if want_meta && scan.model.is_none() {
                 if let Some(m) = msg.get("model").and_then(|m| m.as_str()) {
                     if m != "<synthetic>" {

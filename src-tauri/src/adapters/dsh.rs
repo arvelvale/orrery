@@ -65,7 +65,10 @@ pub fn storage() -> HarnessStorage {
         harness: "dsh".into(),
         connected: true,
         sessions: sessions.len() as u32,
-        session_bytes: sessions.iter().map(|(dir, _)| session_bytes(&home, dir)).sum(),
+        session_bytes: sessions
+            .iter()
+            .map(|(dir, _)| session_bytes(&home, dir))
+            .sum(),
         root_bytes: dir_size(&root),
         root: "~/.dsh/sessions/".into(),
     }
@@ -76,7 +79,12 @@ fn session_bytes(home: &Path, dir: &Path) -> u64 {
     let cache = dir
         .file_name()
         .and_then(|n| n.to_str())
-        .map(|id| home.join("storages").join("session_projcache").join("sessions").join(format!("{id}.json")))
+        .map(|id| {
+            home.join("storages")
+                .join("session_projcache")
+                .join("sessions")
+                .join(format!("{id}.json"))
+        })
         .and_then(|p| fs::metadata(p).ok())
         .map_or(0, |m| m.len());
     dir_size(dir) + cache
@@ -85,9 +93,13 @@ fn session_bytes(home: &Path, dir: &Path) -> u64 {
 /// (会话目录, 要读的日志)；v3 优先
 fn collect_sessions(root: &Path) -> Vec<(PathBuf, PathBuf)> {
     let mut acc = vec![];
-    let Ok(workspaces) = fs::read_dir(root) else { return acc };
+    let Ok(workspaces) = fs::read_dir(root) else {
+        return acc;
+    };
     for ws in workspaces.flatten() {
-        let Ok(entries) = fs::read_dir(ws.path()) else { continue };
+        let Ok(entries) = fs::read_dir(ws.path()) else {
+            continue;
+        };
         for entry in entries.flatten() {
             let dir = entry.path();
             let is_session = dir
@@ -97,7 +109,10 @@ fn collect_sessions(root: &Path) -> Vec<(PathBuf, PathBuf)> {
             if !is_session {
                 continue;
             }
-            let log = [LOG_V3, LOG_V0].iter().map(|f| dir.join(f)).find(|p| p.is_file());
+            let log = [LOG_V3, LOG_V0]
+                .iter()
+                .map(|f| dir.join(f))
+                .find(|p| p.is_file());
             if let Some(log) = log {
                 acc.push((dir, log));
             }
@@ -111,9 +126,13 @@ fn archived_ids(home: &Path) -> HashSet<String> {
         .ok()
         .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
         .and_then(|v| {
-            v.pointer("/global/archivedSessionIds")?.as_array().map(|a| {
-                a.iter().filter_map(|x| x.as_str().map(String::from)).collect()
-            })
+            v.pointer("/global/archivedSessionIds")?
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|x| x.as_str().map(String::from))
+                        .collect()
+                })
         })
         .unwrap_or_default()
 }
@@ -150,7 +169,10 @@ fn parse_session(dir: &Path, log: &Path) -> Option<SessionSummary> {
         let data = v.get("data");
         match ty {
             "session" => {
-                cwd = v.get("cwd").and_then(|c| c.as_str()).map(|c| c.replace('\\', "/"));
+                cwd = v
+                    .get("cwd")
+                    .and_then(|c| c.as_str())
+                    .map(|c| c.replace('\\', "/"));
             }
             "session/title" => {
                 if let Some(t) = data.and_then(|d| d.get("title")).and_then(|t| t.as_str()) {
@@ -213,7 +235,11 @@ fn parse_session(dir: &Path, log: &Path) -> Option<SessionSummary> {
         project: cwd.unwrap_or_default(),
         model: model.unwrap_or_else(|| "—".into()),
         status: "idle".into(),
-        updated_ms: if last_time > 0 { last_time } else { system_time_ms(modified) },
+        updated_ms: if last_time > 0 {
+            last_time
+        } else {
+            system_time_ms(modified)
+        },
         tokens: format_tokens(usage.total()),
         usage,
         excerpt: excerpt.unwrap_or_default(),

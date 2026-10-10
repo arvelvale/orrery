@@ -46,8 +46,11 @@ fn projects_root() -> Option<PathBuf> {
 /// `~/.workbuddy/sessions/<pid>.json`：{pid, sessionId, lastHeartbeat, ...}
 /// 返回还活着的 sessionId 集合
 fn live_sessions() -> HashSet<String> {
-    let Ok(dir) = fs::read_dir(super::home_dir().map(|h| h.join(".workbuddy").join("sessions")).unwrap_or_default())
-    else {
+    let Ok(dir) = fs::read_dir(
+        super::home_dir()
+            .map(|h| h.join(".workbuddy").join("sessions"))
+            .unwrap_or_default(),
+    ) else {
         return HashSet::new();
     };
     dir.flatten()
@@ -107,9 +110,13 @@ pub fn storage() -> HarnessStorage {
 
 fn collect_session_files(root: &Path) -> Vec<PathBuf> {
     let mut acc = vec![];
-    let Ok(dirs) = fs::read_dir(root) else { return acc };
+    let Ok(dirs) = fs::read_dir(root) else {
+        return acc;
+    };
     for dir in dirs.flatten() {
-        let Ok(entries) = fs::read_dir(dir.path()) else { continue };
+        let Ok(entries) = fs::read_dir(dir.path()) else {
+            continue;
+        };
         for entry in entries.flatten() {
             let path = entry.path();
             if path.is_file() && path.extension().and_then(|e| e.to_str()) == Some("jsonl") {
@@ -126,7 +133,11 @@ fn normalize_cwd(cwd: &str) -> String {
     let s = cwd.replace('\\', "/");
     let b = s.as_bytes();
     if b.len() >= 2 && b[0].is_ascii_alphabetic() && b[1] == b':' {
-        return format!("{}:/{}", (b[0] as char).to_ascii_uppercase(), s[2..].trim_start_matches('/'));
+        return format!(
+            "{}:/{}",
+            (b[0] as char).to_ascii_uppercase(),
+            s[2..].trim_start_matches('/')
+        );
     }
     s
 }
@@ -145,7 +156,9 @@ fn parse_session(path: &Path) -> Option<SessionSummary> {
     let mut log: Vec<(String, String)> = vec![];
 
     for line in BufReader::new(file).lines().map_while(Result::ok) {
-        let Ok(v) = serde_json::from_str::<Value>(&line) else { continue };
+        let Ok(v) = serde_json::from_str::<Value>(&line) else {
+            continue;
+        };
         let ts = v.get("timestamp").and_then(Value::as_u64).unwrap_or(0);
         updated_ms = updated_ms.max(ts);
         let role = v.get("role").and_then(Value::as_str).unwrap_or("assistant");
@@ -202,16 +215,27 @@ fn parse_session(path: &Path) -> Option<SessionSummary> {
     let title = if !ai_title.is_empty() {
         ai_title
     } else {
-        user_texts.last().cloned().unwrap_or_else(|| excerpt.clone())
+        user_texts
+            .last()
+            .cloned()
+            .unwrap_or_else(|| excerpt.clone())
     };
     let excerpt = truncate(&excerpt, 200);
 
     Some(SessionSummary {
-        id: path.file_stem().and_then(|s| s.to_str()).unwrap_or_default().to_string(),
+        id: path
+            .file_stem()
+            .and_then(|s| s.to_str())
+            .unwrap_or_default()
+            .to_string(),
         harness: "workbuddy".into(),
         title: truncate(&title, 80),
         project,
-        model: if model.is_empty() { "—".into() } else { model },
+        model: if model.is_empty() {
+            "—".into()
+        } else {
+            model
+        },
         status: "idle".into(),
         updated_ms,
         tokens: format_tokens(usage.total()),
@@ -229,7 +253,9 @@ fn parse_session(path: &Path) -> Option<SessionSummary> {
 /// 那不是用户写的输入，不能当标题也不能当摘要
 fn is_injected(text: &str) -> bool {
     let t = text.trim_start();
-    t.starts_with("<system-reminder") || t.starts_with("<user_info") || t.starts_with("<environment")
+    t.starts_with("<system-reminder")
+        || t.starts_with("<user_info")
+        || t.starts_with("<environment")
 }
 
 fn item_text(v: &Value) -> Option<String> {
@@ -259,7 +285,11 @@ fn line_label(v: &Value, kind: &str, role: &str) -> String {
         .and_then(Value::as_str)
         .or_else(|| v.pointer("/providerData/reasoning").and_then(Value::as_str))
         .unwrap_or("");
-    let text = if text.trim().is_empty() { fallback } else { &text };
+    let text = if text.trim().is_empty() {
+        fallback
+    } else {
+        &text
+    };
     let tag = if kind.is_empty() { role } else { kind };
     truncate(text, 80).replace('\n', " ") + &format!(" [{tag}]")
 }
@@ -282,8 +312,18 @@ fn item_usage(v: &Value) -> Option<TokenUsage> {
         }
         0
     };
-    let input = u(&["input_tokens", "inputTokens", "prompt_tokens", "promptTokens"]);
-    let output = u(&["output_tokens", "outputTokens", "completion_tokens", "completionTokens"]);
+    let input = u(&[
+        "input_tokens",
+        "inputTokens",
+        "prompt_tokens",
+        "promptTokens",
+    ]);
+    let output = u(&[
+        "output_tokens",
+        "outputTokens",
+        "completion_tokens",
+        "completionTokens",
+    ]);
     let cache_read = u(&[
         "cache_read_input_tokens",
         "cacheReadInputTokens",
@@ -303,7 +343,14 @@ fn item_usage(v: &Value) -> Option<TokenUsage> {
         return None;
     }
 
-    let mut usage = TokenUsage { input, output, cache_read, cache_write, calls: 1, ..Default::default() };
+    let mut usage = TokenUsage {
+        input,
+        output,
+        cache_read,
+        cache_write,
+        calls: 1,
+        ..Default::default()
+    };
     let sum = input + output + cache_read + cache_write;
     // 分项之和小于 total：多出来的没有分项可依，单列不猜
     // 分项之和超过 total：说明缓存已含在 input 里（OpenAI 口径），丢掉缓存桶重算，避免重复计数
@@ -324,7 +371,8 @@ mod tests {
     /// 每个用例用自己的目录（id 唯一），并行测试互不干扰。
     /// parse_session 只依赖文件本身，所以不碰 ORRERY_HOME 这种进程级全局状态
     fn write(dir: &str, id: &str, lines: &[&str]) -> PathBuf {
-        let root = std::env::temp_dir().join(format!("orrery-wb-{}-{}-{}", id, dir, std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("orrery-wb-{}-{}-{}", id, dir, std::process::id()));
         let _ = fs::remove_dir_all(&root);
         let proj = root.join(".workbuddy").join("projects").join(dir);
         fs::create_dir_all(&proj).unwrap();
@@ -349,7 +397,8 @@ mod tests {
                 r#"{"id":"00000000-0000-4000-8000-000000000004","timestamp":1790517238822,"type":"ai-title","aiTitle":"示例项目登录排查","sessionId":"00000000-0000-4000-8000-000000000001","cwd":"d:\\code\\acme"}"#,
             ],
         );
-        let f = root.join(".workbuddy/projects/d-code-acme/00000000-0000-4000-8000-000000000001.jsonl");
+        let f =
+            root.join(".workbuddy/projects/d-code-acme/00000000-0000-4000-8000-000000000001.jsonl");
         let s = parse_session(&f).unwrap();
         assert_eq!(s.project, "D:/code/acme", "盘符还原大写、分隔符统一成 /");
         assert_eq!(s.title, "示例项目登录排查", "ai-title 优先于用户输入");
@@ -369,7 +418,8 @@ mod tests {
                 r#"{"timestamp":1790517238822,"type":"message","role":"assistant","content":[{"type":"output_text","text":"助手回复"}],"cwd":"d:\\code\\acme"}"#,
             ],
         );
-        let f = root.join(".workbuddy/projects/d-code-acme/019fdba8-940e-7f20-bfda-365ecb643e52.jsonl");
+        let f =
+            root.join(".workbuddy/projects/d-code-acme/019fdba8-940e-7f20-bfda-365ecb643e52.jsonl");
         let s = parse_session(&f).unwrap();
         assert_eq!(s.title, "真正的提问");
         // 摘要取第一条可见文本，注入块被跳过
@@ -405,7 +455,8 @@ mod tests {
             "019fdba9-940e-7f20-bfda-365ecb643e53",
             &[&reasoning, &call, &message],
         );
-        let f = root.join(".workbuddy/projects/d-code-acme/019fdba9-940e-7f20-bfda-365ecb643e53.jsonl");
+        let f =
+            root.join(".workbuddy/projects/d-code-acme/019fdba9-940e-7f20-bfda-365ecb643e53.jsonl");
         let s = parse_session(&f).unwrap();
         assert_eq!(s.usage.input, 34835, "三个 item 同一个 messageId 只算一次");
         assert_eq!(s.usage.output, 231);
@@ -435,7 +486,10 @@ mod tests {
             "message":{"usage":{"input_tokens":34835,"output_tokens":231,"total_tokens":35066,"cache_read_input_tokens":34944}}
         }))
         .unwrap();
-        assert_eq!(u.cache_read, 0, "34.9k + 34.8k 超过 35k total：缓存已在 input 里");
+        assert_eq!(
+            u.cache_read, 0,
+            "34.9k + 34.8k 超过 35k total：缓存已在 input 里"
+        );
         assert_eq!(u.total(), 35066);
     }
 
@@ -462,7 +516,9 @@ mod tests {
 
     #[test]
     fn injected_context_is_detected() {
-        assert!(is_injected("<system-reminder data-role=\"user-context\">\n…"));
+        assert!(is_injected(
+            "<system-reminder data-role=\"user-context\">\n…"
+        ));
         assert!(is_injected("  <user_info>OS</user_info>"));
         assert!(!is_injected("帮我看下登录流程"));
         assert!(!is_injected(""));

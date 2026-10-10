@@ -8,13 +8,21 @@ use std::path::PathBuf;
 
 #[test]
 fn tool_output_keeps_text_and_screenshots_but_refuses_other_media() {
-    let text =
-        json!([{"type":"input_text","text":"first"},{"type":"input_text","text":"second"}]);
-    assert_eq!(codex::tool_output(&text).unwrap(), ("first\nsecond".to_string(), vec![]));
+    let text = json!([{"type":"input_text","text":"first"},{"type":"input_text","text":"second"}]);
+    assert_eq!(
+        codex::tool_output(&text).unwrap(),
+        ("first\nsecond".to_string(), vec![])
+    );
     let screenshot = json!([{"type":"input_text","text":"shot"},{"type":"input_image","image_url":"data:image/png;base64,aGVsbG8="}]);
     let (output, images) = codex::tool_output(&screenshot).unwrap();
     assert_eq!(output, "shot");
-    assert_eq!(images, vec![Image { media_type: "image/png".into(), data: "aGVsbG8=".into() }]);
+    assert_eq!(
+        images,
+        vec![Image {
+            media_type: "image/png".into(),
+            data: "aGVsbG8=".into()
+        }]
+    );
     let linked = json!([{"type":"input_image","image_url":"https://example.com/a.png"}]);
     assert_eq!(
         codex::tool_output(&linked).unwrap_err(),
@@ -131,14 +139,33 @@ fn sandbox_bidirectional() {
         .filter(|p| codex_adapter::read_head(p).is_some_and(|(id, _, _)| id == with_media.id))
         .map(|p| fs::read_to_string(p).unwrap())
         .collect();
-    assert!(rollout.contains("coral-dune"), "Codex lost the screenshot's text");
-    assert_eq!(media::history_image_refs(&rollout), 2, "both images need a reference in what Codex's model reads");
-    let owned: Vec<_> = fs::read_dir(home.join(".orrery/transfer-media")).unwrap().flatten().map(|e| e.path()).collect();
+    assert!(
+        rollout.contains("coral-dune"),
+        "Codex lost the screenshot's text"
+    );
+    assert_eq!(
+        media::history_image_refs(&rollout),
+        2,
+        "both images need a reference in what Codex's model reads"
+    );
+    let owned: Vec<_> = fs::read_dir(home.join(".orrery/transfer-media"))
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .collect();
     assert_eq!(owned.len(), 1);
-    let owner: Value = serde_json::from_str(&fs::read_to_string(owned[0].join("owner.json")).unwrap()).unwrap();
-    assert_eq!((owner["harness"].as_str(), owner["id"].as_str()), (Some("codex"), Some(with_media.id.as_str())));
+    let owner: Value =
+        serde_json::from_str(&fs::read_to_string(owned[0].join("owner.json")).unwrap()).unwrap();
+    assert_eq!(
+        (owner["harness"].as_str(), owner["id"].as_str()),
+        (Some("codex"), Some(with_media.id.as_str()))
+    );
     assert!(owned[0].join("1.png").is_file() && owned[0].join("2.png").is_file());
-    assert_eq!(fs::read(&media_source).unwrap(), media_bytes, "source changed");
+    assert_eq!(
+        fs::read(&media_source).unwrap(),
+        media_bytes,
+        "source changed"
+    );
     // deleting that Codex session through Orrery takes its images along
     media::release("codex", &with_media.id, false);
     assert!(!owned[0].exists(), "images outlived their session");
@@ -208,7 +235,10 @@ fn sandbox_bidirectional() {
 #[ignore = "reads the real local sessions"]
 fn real_sessions_dry_run() {
     use std::collections::BTreeMap;
-    assert!(std::env::var_os("ORRERY_HOME").is_none(), "meant for the real home");
+    assert!(
+        std::env::var_os("ORRERY_HOME").is_none(),
+        "meant for the real home"
+    );
     let sessions = crate::adapters::list_all_sessions().unwrap();
     for harness in HARNESSES {
         let mut ok = 0;
@@ -216,7 +246,10 @@ fn real_sessions_dry_run() {
         let mut turns = 0;
         let mut to_files: BTreeMap<&str, usize> = BTreeMap::new();
         let mut errors: BTreeMap<String, usize> = BTreeMap::new();
-        for s in sessions.iter().filter(|s| s.harness == harness && s.kind != "subagent") {
+        for s in sessions
+            .iter()
+            .filter(|s| s.harness == harness && s.kind != "subagent")
+        {
             match read(harness, &s.id) {
                 Ok(t) => {
                     ok += 1;
@@ -226,7 +259,11 @@ fn real_sessions_dry_run() {
                         *to_files.entry(target).or_default() += media::count(&t, target);
                     }
                 }
-                Err(e) => *errors.entry(e.split(':').next().unwrap_or("").to_owned()).or_default() += 1,
+                Err(e) => {
+                    *errors
+                        .entry(e.split(':').next().unwrap_or("").to_owned())
+                        .or_default() += 1
+                }
             }
         }
         println!("{harness}: {ok} readable ({turns} turns, {with_images} with inline images), refused {errors:?}, images saved as files per target {to_files:?}");

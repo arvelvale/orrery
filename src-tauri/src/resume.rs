@@ -32,7 +32,10 @@ use std::process::Command;
 
 /// 会话 id 的白名单校验：与 `adapters::cleanup` 同一套口径
 fn valid_id(id: &str) -> bool {
-    (8..=80).contains(&id.len()) && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    (8..=80).contains(&id.len())
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
 }
 
 /// DSH 装了哪个能在终端里跑的 profile。`web` 是浏览器 UI，没有 `--resume`，不算
@@ -50,7 +53,11 @@ fn dsh_terminal_profile() -> Option<String> {
         .collect();
     // tui 是官方的终端 profile，优先它；否则拿字典序第一个，行为可预测
     names.sort();
-    names.iter().find(|n| *n == "tui").cloned().or_else(|| names.first().cloned())
+    names
+        .iter()
+        .find(|n| *n == "tui")
+        .cloned()
+        .or_else(|| names.first().cloned())
 }
 
 /// 只装了 web profile 时的退路：至少把 DSH 的网页界面打开
@@ -73,7 +80,15 @@ fn command_for(harness: &str, id: &str) -> Option<(&'static str, Vec<String>)> {
         "codex" => ("codex", args(&["resume", id])),
         "kimi" => ("kimi", args(&["--session", id])),
         "dsh" => match dsh_terminal_profile() {
-            Some(profile) => ("dsh", vec!["--profile".into(), profile, "--resume".into(), id.to_string()]),
+            Some(profile) => (
+                "dsh",
+                vec![
+                    "--profile".into(),
+                    profile,
+                    "--resume".into(),
+                    id.to_string(),
+                ],
+            ),
             // 只有 web profile：启动网页界面，让用户在里面挑
             None if dsh_has_web_profile() => ("dsh", args(&["--profile", "web"])),
             None => return None,
@@ -90,7 +105,11 @@ fn command_for(harness: &str, id: &str) -> Option<(&'static str, Vec<String>)> {
 /// Windows 执行不了）和 `codex.cmd`。先试无扩展名的话，CreateProcess 会"成功"地
 /// 起一个立刻失败的进程——终端一闪而过，而代码这边还以为成功了（实测踩过）。
 fn resolve_program(name: &str) -> Option<String> {
-    let exts: &[&str] = if cfg!(windows) { &[".exe", ".cmd", ".bat", ""] } else { &[""] };
+    let exts: &[&str] = if cfg!(windows) {
+        &[".exe", ".cmd", ".bat", ""]
+    } else {
+        &[""]
+    };
     let path = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&path) {
         for ext in exts {
@@ -117,7 +136,12 @@ fn spawn_terminal(cwd: &Path, program: &str, args: &[String]) -> Result<(), Stri
         }
         // 回退：新开一个 cmd 窗口，/k 保留窗口好看报错
         // id 已过白名单校验，program 是 PATH 里解析出的真实路径
-        let line = format!("cd /d \"{}\" && \"{}\" {}", cwd.display(), program, args.join(" "));
+        let line = format!(
+            "cd /d \"{}\" && \"{}\" {}",
+            cwd.display(),
+            program,
+            args.join(" ")
+        );
         Command::new("cmd")
             .args(["/c", "start", "", "cmd", "/k", &line])
             .spawn()
@@ -142,14 +166,32 @@ fn spawn_terminal(cwd: &Path, program: &str, args: &[String]) -> Result<(), Stri
     }
     #[cfg(all(unix, not(target_os = "macos")))]
     {
-        let line = format!("cd {:?} && {:?} {}; exec $SHELL", cwd, program, args.join(" "));
-        for term in ["x-terminal-emulator", "gnome-terminal", "konsole", "xfce4-terminal", "alacritty", "xterm"] {
+        let line = format!(
+            "cd {:?} && {:?} {}; exec $SHELL",
+            cwd,
+            program,
+            args.join(" ")
+        );
+        for term in [
+            "x-terminal-emulator",
+            "gnome-terminal",
+            "konsole",
+            "xfce4-terminal",
+            "alacritty",
+            "xterm",
+        ] {
             if resolve_program(term).is_none() {
                 continue;
             }
             let ok = match term {
-                "gnome-terminal" => Command::new(term).args(["--", "sh", "-c", &line]).spawn().is_ok(),
-                _ => Command::new(term).args(["-e", "sh", "-c", &line]).spawn().is_ok(),
+                "gnome-terminal" => Command::new(term)
+                    .args(["--", "sh", "-c", &line])
+                    .spawn()
+                    .is_ok(),
+                _ => Command::new(term)
+                    .args(["-e", "sh", "-c", &line])
+                    .spawn()
+                    .is_ok(),
             };
             if ok {
                 return Ok(());
@@ -198,14 +240,24 @@ mod tests {
         for h in ["cc", "codex", "kimi", "opencode", "antigravity"] {
             let (program, args) = command_for(h, "session_0ed9be17-001b-4642-8b8a").expect(h);
             assert!(!program.is_empty());
-            assert!(args.iter().any(|a| a.contains("0ed9be17")), "{h} 的命令里必须带会话 id");
+            assert!(
+                args.iter().any(|a| a.contains("0ed9be17")),
+                "{h} 的命令里必须带会话 id"
+            );
         }
         assert!(command_for("whatever-tool", "whatever-id").is_none());
     }
 
     #[test]
     fn ids_with_shell_metacharacters_are_rejected() {
-        for bad in ["a", "id with space", "id&&calc", "id\"quote", "id;rm -rf", "../../etc/passwd"] {
+        for bad in [
+            "a",
+            "id with space",
+            "id&&calc",
+            "id\"quote",
+            "id;rm -rf",
+            "../../etc/passwd",
+        ] {
             assert!(!valid_id(bad), "{bad} 不该通过校验");
         }
         assert!(valid_id("session_0ed9be17-001b-4642-8b8a-2f71a7df757c"));
@@ -215,8 +267,14 @@ mod tests {
     #[test]
     fn unknown_harness_and_bad_id_fail_before_touching_the_system() {
         assert_eq!(resume("cc", "x", "."), Err("invalid_id".into()));
-        assert_eq!(resume("nope", "session_0ed9be17-001b", "."), Err("unsupported_harness".into()));
+        assert_eq!(
+            resume("nope", "session_0ed9be17-001b", "."),
+            Err("unsupported_harness".into())
+        );
         // 自己登记的工具没有恢复命令
-        assert_eq!(resume("some-registered-tool", "ses_ffe5f7731d1234", "."), Err("unsupported_harness".into()));
+        assert_eq!(
+            resume("some-registered-tool", "ses_ffe5f7731d1234", "."),
+            Err("unsupported_harness".into())
+        );
     }
 }

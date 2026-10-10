@@ -66,10 +66,17 @@ pub(crate) struct Image {
 pub(crate) fn data_url_image(url: &str) -> Option<Image> {
     let (header, data) = url.split_once(',')?;
     let media = header.strip_prefix("data:")?.strip_suffix(";base64")?;
-    let ok = matches!(media, "image/png" | "image/jpeg" | "image/gif" | "image/webp")
-        && !data.is_empty()
-        && data.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'/' || b == b'=');
-    ok.then(|| Image { media_type: media.to_owned(), data: data.to_owned() })
+    let ok = matches!(
+        media,
+        "image/png" | "image/jpeg" | "image/gif" | "image/webp"
+    ) && !data.is_empty()
+        && data
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'+' || b == b'/' || b == b'=');
+    ok.then(|| Image {
+        media_type: media.to_owned(),
+        data: data.to_owned(),
+    })
 }
 
 /// One piece of a turn, in the order it appeared
@@ -77,11 +84,22 @@ pub(crate) fn data_url_image(url: &str) -> Option<Image> {
 pub(crate) enum Part {
     Text(String),
     /// Base64 image; readers only emit the formats every writer accepts
-    Image { media_type: String, data: String },
-    ToolCall { id: String, name: String, input: String },
+    Image {
+        media_type: String,
+        data: String,
+    },
+    ToolCall {
+        id: String,
+        name: String,
+        input: String,
+    },
     /// `images` are screenshots and the like returned by the tool; they are
     /// saved as files before any writer sees the transcript
-    ToolResult { id: String, output: String, images: Vec<Image> },
+    ToolResult {
+        id: String,
+        output: String,
+        images: Vec<Image>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -104,25 +122,43 @@ pub(crate) struct Transcript {
 
 impl Transcript {
     pub fn has_images(&self) -> bool {
-        self.turns.iter().flat_map(|t| &t.parts).any(|p| matches!(p, Part::Image { .. }))
+        self.turns
+            .iter()
+            .flat_map(|t| &t.parts)
+            .any(|p| matches!(p, Part::Image { .. }))
     }
 }
 
 /// A title from the first thing the user said, when the source has no better one
 pub(crate) fn title_from_turns(turns: &[Turn]) -> Option<String> {
-    turns.iter().filter(|t| t.role == Role::User).flat_map(|t| &t.parts).find_map(|p| match p {
-        Part::Text(text) if !text.trim().is_empty() => Some(text.trim().chars().take(80).collect()),
-        _ => None,
-    })
+    turns
+        .iter()
+        .filter(|t| t.role == Role::User)
+        .flat_map(|t| &t.parts)
+        .find_map(|p| match p {
+            Part::Text(text) if !text.trim().is_empty() => {
+                Some(text.trim().chars().take(80).collect())
+            }
+            _ => None,
+        })
 }
 
 #[derive(Debug)]
 enum Check {
     /// Length and mtime of a source file
-    File { path: PathBuf, len: u64, modified: Option<SystemTime> },
+    File {
+        path: PathBuf,
+        len: u64,
+        modified: Option<SystemTime>,
+    },
     /// One OpenCode session. The database file itself changes whenever OpenCode
     /// writes any session, so only this session's own row and messages count.
-    OpenCodeSession { db: PathBuf, id: String, updated: i64, messages: i64 },
+    OpenCodeSession {
+        db: PathBuf,
+        id: String,
+        updated: i64,
+        messages: i64,
+    },
 }
 
 /// What the source looked like before reading
@@ -135,7 +171,11 @@ impl SourceStamps {
             .iter()
             .map(|p| {
                 let m = fs::metadata(p).map_err(|e| format!("source_read_failed: {e}"))?;
-                Ok(Check::File { path: p.clone(), len: m.len(), modified: m.modified().ok() })
+                Ok(Check::File {
+                    path: p.clone(),
+                    len: m.len(),
+                    modified: m.modified().ok(),
+                })
             })
             .collect::<Result<_, String>>()
             .map(Self)
@@ -143,18 +183,30 @@ impl SourceStamps {
 
     pub fn opencode_session(db: &Path, id: &str) -> Result<Self, String> {
         let (updated, messages) = opencode_session_state(db, id)?.ok_or("session_not_found")?;
-        Ok(Self(vec![Check::OpenCodeSession { db: db.to_owned(), id: id.to_owned(), updated, messages }]))
+        Ok(Self(vec![Check::OpenCodeSession {
+            db: db.to_owned(),
+            id: id.to_owned(),
+            updated,
+            messages,
+        }]))
     }
 
     /// The source must not have changed while we were copying it
     pub fn verify_unchanged(&self) -> Result<(), String> {
         for check in &self.0 {
             let same = match check {
-                Check::File { path, len, modified } => fs::metadata(path)
+                Check::File {
+                    path,
+                    len,
+                    modified,
+                } => fs::metadata(path)
                     .is_ok_and(|after| after.len() == *len && after.modified().ok() == *modified),
-                Check::OpenCodeSession { db, id, updated, messages } => {
-                    opencode_session_state(db, id).ok().flatten() == Some((*updated, *messages))
-                }
+                Check::OpenCodeSession {
+                    db,
+                    id,
+                    updated,
+                    messages,
+                } => opencode_session_state(db, id).ok().flatten() == Some((*updated, *messages)),
             };
             if !same {
                 return Err("source_changed_during_import".into());
@@ -201,7 +253,11 @@ fn check_pair(harness: &str, id: &str, target: &str) -> Result<(), String> {
 /// Claude Code → Codex with no media hands Claude's native file to Codex's
 /// importer as-is. With media it takes the transcript path, so the images
 /// become files instead of being dropped by that importer.
-fn claude_passthrough(harness: &str, id: &str, target: &str) -> Result<Option<claude::ClaudeFile>, String> {
+fn claude_passthrough(
+    harness: &str,
+    id: &str,
+    target: &str,
+) -> Result<Option<claude::ClaudeFile>, String> {
     if (harness, target) != ("cc", "codex") {
         return Ok(None);
     }
@@ -212,7 +268,11 @@ fn claude_passthrough(harness: &str, id: &str, target: &str) -> Result<Option<cl
     }
 }
 
-pub(crate) fn convert_to(harness: &str, id: &str, target: &str) -> Result<ConvertedSession, String> {
+pub(crate) fn convert_to(
+    harness: &str,
+    id: &str,
+    target: &str,
+) -> Result<ConvertedSession, String> {
     static TRANSFER_LOCK: Mutex<()> = Mutex::new(());
     let _guard = TRANSFER_LOCK.try_lock().map_err(|_| "transfer_busy")?;
     check_pair(harness, id, target)?;
@@ -224,12 +284,13 @@ pub(crate) fn convert_to(harness: &str, id: &str, target: &str) -> Result<Conver
         return Err("cwd_missing".into());
     }
     let mut media = media::MediaStore::new()?;
-    let result = media::externalize(&mut transcript, target, &mut media).and_then(|()| match target {
-        "cc" => claude::write(&transcript),
-        "codex" => codex::import_transcript(&transcript),
-        "opencode" => opencode::write(&transcript),
-        _ => Err("unsupported_harness".into()),
-    });
+    let result =
+        media::externalize(&mut transcript, target, &mut media).and_then(|()| match target {
+            "cc" => claude::write(&transcript),
+            "codex" => codex::import_transcript(&transcript),
+            "opencode" => opencode::write(&transcript),
+            _ => Err("unsupported_harness".into()),
+        });
     match &result {
         Ok(done) => media.finish(&done.harness, &done.id),
         Err(_) => media.discard(),
@@ -253,15 +314,17 @@ pub fn preview(harness: &str, id: &str, target: &str) -> Result<TransferPreview,
     if !Path::new(&transcript.cwd).is_dir() {
         return Err("cwd_missing".into());
     }
-    Ok(TransferPreview { images_to_files: media::count(&transcript, target) })
+    Ok(TransferPreview {
+        images_to_files: media::count(&transcript, target),
+    })
 }
 
 /// Claude Code and Codex use UUIDs; OpenCode uses `ses_` plus 26 alphanumerics
 fn valid_id(harness: &str, id: &str) -> bool {
     match harness {
-        "opencode" => {
-            id.strip_prefix("ses_").is_some_and(|rest| rest.len() == 26 && rest.bytes().all(|b| b.is_ascii_alphanumeric()))
-        }
+        "opencode" => id.strip_prefix("ses_").is_some_and(|rest| {
+            rest.len() == 26 && rest.bytes().all(|b| b.is_ascii_alphanumeric())
+        }),
         _ => Uuid::parse_str(id).is_ok(),
     }
 }

@@ -121,12 +121,20 @@ fn resume_session(harness: String, id: String, project: String) -> Result<String
 /// `target` is optional so an older frontend keeps its Claude Code ⇄ Codex default
 /// What a transfer would do, read-only: how many images become files, or why it cannot run
 #[tauri::command(async)]
-fn preview_transfer(harness: String, id: String, target: String) -> Result<transfer::TransferPreview, String> {
+fn preview_transfer(
+    harness: String,
+    id: String,
+    target: String,
+) -> Result<transfer::TransferPreview, String> {
     transfer::preview(&harness, &id, &target)
 }
 
 #[tauri::command(async)]
-fn convert_session(harness: String, id: String, target: Option<String>) -> Result<transfer::ConvertedSession, String> {
+fn convert_session(
+    harness: String,
+    id: String,
+    target: Option<String>,
+) -> Result<transfer::ConvertedSession, String> {
     transfer::convert(&harness, &id, target.as_deref())
 }
 

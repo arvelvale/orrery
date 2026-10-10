@@ -2,14 +2,14 @@
 
 mod antigravity;
 mod claude_code;
-mod workbuddy;
 pub mod cleanup;
 pub(crate) mod codex;
-mod dsh;
 mod custom;
+mod dsh;
 mod index;
 mod kimi_code;
 pub(crate) mod opencode;
+mod workbuddy;
 mod zcode;
 
 use serde::{Deserialize, Serialize};
@@ -198,7 +198,9 @@ pub(crate) struct MemoTable<T> {
 
 impl<T: Clone> MemoTable<T> {
     pub(crate) fn new(map: HashMap<PathBuf, (u64, T)>) -> Self {
-        Self { map: Mutex::new(map) }
+        Self {
+            map: Mutex::new(map),
+        }
     }
 
     pub(crate) fn get(&self, key: &Path, sig: u64) -> Option<T> {
@@ -215,7 +217,9 @@ impl<T: Clone> MemoTable<T> {
 
     /// 落盘用的快照，`keep` 为假的条目直接丢掉（文件已被删除）
     pub(crate) fn entries(&self, keep: impl Fn(&Path) -> bool) -> Vec<(PathBuf, u64, T)> {
-        let Ok(map) = self.map.lock() else { return vec![] };
+        let Ok(map) = self.map.lock() else {
+            return vec![];
+        };
         map.iter()
             .filter(|(k, _)| keep(k))
             .map(|(k, (sig, v))| (k.clone(), *sig, v.clone()))
@@ -223,7 +227,9 @@ impl<T: Clone> MemoTable<T> {
     }
 
     fn forget(&self, removed: &[PathBuf]) -> bool {
-        let Ok(mut map) = self.map.lock() else { return false };
+        let Ok(mut map) = self.map.lock() else {
+            return false;
+        };
         let before = map.len();
         map.retain(|k, _| !removed.iter().any(|r| k.starts_with(r)));
         map.len() != before
@@ -336,7 +342,9 @@ pub(crate) fn codex_home() -> Option<PathBuf> {
 /* ── 共用工具 ── */
 
 pub(crate) fn dir_size(dir: &Path) -> u64 {
-    let Ok(entries) = fs::read_dir(dir) else { return 0 };
+    let Ok(entries) = fs::read_dir(dir) else {
+        return 0;
+    };
     entries
         .flatten()
         .map(|e| match e.file_type() {
@@ -348,7 +356,9 @@ pub(crate) fn dir_size(dir: &Path) -> u64 {
 }
 
 pub(crate) fn system_time_ms(t: SystemTime) -> u64 {
-    t.duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
+    t.duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 pub(crate) fn truncate(s: &str, max: usize) -> String {

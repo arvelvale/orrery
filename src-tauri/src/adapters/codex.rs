@@ -68,10 +68,14 @@ pub fn list_sessions() -> Result<Vec<SessionSummary>, String> {
     let mut children: Vec<(Rollout, u64, u64)> = vec![];
 
     for path in collect_rollouts(&home.join("sessions")) {
-        let Ok(meta) = fs::metadata(&path) else { continue };
+        let Ok(meta) = fs::metadata(&path) else {
+            continue;
+        };
         let bytes = meta.len();
         let mtime_ms = meta.modified().map(system_time_ms).unwrap_or(0);
-        let Some(r) = parse_cached(&path) else { continue };
+        let Some(r) = parse_cached(&path) else {
+            continue;
+        };
         if r.is_subagent && r.parent.is_some() {
             children.push((r, bytes, mtime_ms));
             continue;
@@ -153,7 +157,11 @@ pub fn list_sessions() -> Result<Vec<SessionSummary>, String> {
                 log: vec![],
                 size_bytes: g.bytes,
                 subagents: g.subagents,
-                kind: if g.orphan_subagent { "subagent".into() } else { String::new() },
+                kind: if g.orphan_subagent {
+                    "subagent".into()
+                } else {
+                    String::new()
+                },
                 id,
             }
         })
@@ -199,7 +207,9 @@ pub fn storage() -> HarnessStorage {
 
 pub(crate) fn collect_rollouts(root: &Path) -> Vec<PathBuf> {
     fn walk(dir: &Path, acc: &mut Vec<PathBuf>) {
-        let Ok(entries) = fs::read_dir(dir) else { return };
+        let Ok(entries) = fs::read_dir(dir) else {
+            return;
+        };
         for e in entries.flatten() {
             let p = e.path();
             match e.file_type() {
@@ -226,7 +236,9 @@ pub(crate) fn thread_names(home: &Path) -> HashMap<String, String> {
         return map;
     };
     for line in BufReader::new(file).lines().map_while(Result::ok) {
-        let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(&line) else {
+            continue;
+        };
         if let (Some(id), Some(name)) = (
             v.get("id").and_then(|x| x.as_str()),
             v.get("thread_name").and_then(|x| x.as_str()),
@@ -248,12 +260,14 @@ pub(crate) fn read_head(path: &Path) -> Option<(String, bool, Option<String>)> {
     let p = v.get("payload")?;
     let id = p.get("id")?.as_str()?.to_string();
     let is_sub = p.pointer("/source/subagent").is_some();
-    let parent = p.get("parent_thread_id").and_then(|x| x.as_str()).map(String::from);
+    let parent = p
+        .get("parent_thread_id")
+        .and_then(|x| x.as_str())
+        .map(String::from);
     Some((id, is_sub, parent))
 }
 
 /* ── 按文件缓存：签名不变不重读 ── */
-
 
 fn parse_cached(path: &Path) -> Option<Rollout> {
     let table = &super::store().rollouts;
@@ -273,7 +287,9 @@ fn parse_cached(path: &Path) -> Option<Rollout> {
 /// - guardian 子 agent 的首条"用户消息"是审查指令，不是用户写的
 pub(crate) fn user_text(payload: &serde_json::Value) -> Option<String> {
     fn unwrap_query(t: &str) -> &str {
-        let Some(start) = t.find("<user_query>") else { return t };
+        let Some(start) = t.find("<user_query>") else {
+            return t;
+        };
         let rest = &t[start + "<user_query>".len()..];
         rest.split("</user_query>").next().unwrap_or(rest)
     }
@@ -284,10 +300,15 @@ pub(crate) fn user_text(payload: &serde_json::Value) -> Option<String> {
     };
     let pick = |t: &str| {
         let t = unwrap_query(t).trim();
-        Some(t).filter(|t| !t.is_empty() && !is_injected(t)).map(String::from)
+        Some(t)
+            .filter(|t| !t.is_empty() && !is_injected(t))
+            .map(String::from)
     };
     match payload.get("type").and_then(|t| t.as_str()) {
-        Some("user_message") => payload.get("message").and_then(|m| m.as_str()).and_then(pick),
+        Some("user_message") => payload
+            .get("message")
+            .and_then(|m| m.as_str())
+            .and_then(pick),
         Some("message") if payload.get("role").and_then(|r| r.as_str()) == Some("user") => payload
             .get("content")?
             .as_array()?
@@ -308,7 +329,11 @@ fn to_usage(u: &serde_json::Value) -> TokenUsage {
         n("total_tokens"),
     );
     if input == 0 && output == 0 && total > 0 {
-        return TokenUsage { unsplit: total, calls: 1, ..Default::default() };
+        return TokenUsage {
+            unsplit: total,
+            calls: 1,
+            ..Default::default()
+        };
     }
     TokenUsage {
         input: input.saturating_sub(cached),
@@ -337,8 +362,16 @@ fn parse_rollout(path: &Path) -> Option<Rollout> {
             if contains(line, b"\"session_meta\"") {
                 if let Ok(v) = serde_json::from_slice::<serde_json::Value>(line) {
                     if let Some(p) = v.get("payload") {
-                        r.id = p.get("id").and_then(|x| x.as_str()).unwrap_or("").to_string();
-                        r.cwd = p.get("cwd").and_then(|x| x.as_str()).unwrap_or("").to_string();
+                        r.id = p
+                            .get("id")
+                            .and_then(|x| x.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        r.cwd = p
+                            .get("cwd")
+                            .and_then(|x| x.as_str())
+                            .unwrap_or("")
+                            .to_string();
                         r.is_subagent = p.pointer("/source/subagent").is_some();
                         r.parent = p
                             .get("parent_thread_id")
@@ -362,12 +395,18 @@ fn parse_rollout(path: &Path) -> Option<Rollout> {
         let Ok(v) = serde_json::from_slice::<serde_json::Value>(line) else {
             return true;
         };
-        let ts = v.get("timestamp").and_then(|x| x.as_str()).unwrap_or("").to_string();
+        let ts = v
+            .get("timestamp")
+            .and_then(|x| x.as_str())
+            .unwrap_or("")
+            .to_string();
         let payload = v.get("payload");
 
         if is_record {
             if let (Some(rid), Some(u)) = (
-                payload.and_then(|p| p.get("response_id")).and_then(|x| x.as_str()),
+                payload
+                    .and_then(|p| p.get("response_id"))
+                    .and_then(|x| x.as_str()),
                 payload.and_then(|p| p.get("usage")),
             ) {
                 records.insert(rid.to_string(), (ts, to_usage(u)));
@@ -407,12 +446,19 @@ fn parse_rollout(path: &Path) -> Option<Rollout> {
     }
 
     // 账本 1 覆盖的时间段以它为准，之前的时间段用账本 2
-    let records_from = records.values().map(|(ts, _)| ts.as_str()).min().map(String::from);
+    let records_from = records
+        .values()
+        .map(|(ts, _)| ts.as_str())
+        .min()
+        .map(String::from);
     for (_, u) in records.values() {
         r.usage.add(u);
     }
     for (ts, u) in &counts {
-        if records_from.as_deref().map_or(true, |from| ts.as_str() < from) {
+        if records_from
+            .as_deref()
+            .map_or(true, |from| ts.as_str() < from)
+        {
             r.usage.add(u);
         }
     }

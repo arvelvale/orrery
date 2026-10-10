@@ -66,12 +66,34 @@ fn db_path(home: &Path) -> PathBuf {
 ///   separately; otherwise it is already inside `output_tokens`.
 /// - Cache reads/writes are subtracted from input only when the total shows they
 ///   were inside it (OpenAI-style). Anthropic-style rows keep input as reported.
-fn row_usage(input: u64, output: u64, reasoning: u64, cache_write: u64, cache_read: u64, total: u64) -> TokenUsage {
+fn row_usage(
+    input: u64,
+    output: u64,
+    reasoning: u64,
+    cache_write: u64,
+    cache_read: u64,
+    total: u64,
+) -> TokenUsage {
     let total = if total == 0 { input + output } else { total };
-    let output = if reasoning > 0 && total == input + output + reasoning { output + reasoning } else { output };
+    let output = if reasoning > 0 && total == input + output + reasoning {
+        output + reasoning
+    } else {
+        output
+    };
     let caches = cache_read + cache_write;
-    let input = if input + output == total && caches <= input { input - caches } else { input };
-    TokenUsage { input, output, cache_read, cache_write, unsplit: 0, calls: 1 }
+    let input = if input + output == total && caches <= input {
+        input - caches
+    } else {
+        input
+    };
+    TokenUsage {
+        input,
+        output,
+        cache_read,
+        cache_write,
+        unsplit: 0,
+        calls: 1,
+    }
 }
 
 /// Per-session usage and the most recent model name, from `model_usage`
@@ -149,7 +171,11 @@ fn read_rows(con: &Connection) -> Result<Vec<Row>, String> {
                 parent,
                 title,
                 directory,
-                model: if model.is_empty() { "—".into() } else { model },
+                model: if model.is_empty() {
+                    "—".into()
+                } else {
+                    model
+                },
                 updated_ms,
                 usage,
             }
@@ -219,7 +245,10 @@ mod tests {
     #[test]
     fn openai_style_row_does_not_double_count_cache_reads() {
         let u = row_usage(33_032, 80, 0, 0, 26_496, 33_112);
-        assert_eq!(u.input, 6_536, "input must exclude the 26,496 cached tokens");
+        assert_eq!(
+            u.input, 6_536,
+            "input must exclude the 26,496 cached tokens"
+        );
         assert_eq!(u.cache_read, 26_496);
         assert_eq!(u.output, 80);
         assert_eq!(sum(&u), 33_112, "buckets must add up to the row's total");
@@ -270,8 +299,14 @@ mod tests {
         let rows = read_rows(&con).unwrap();
         assert_eq!(rows.len(), 1);
         let u = &rows[0].usage;
-        assert_eq!(u.calls, 2, "title generation is a real call and must be counted");
-        assert_eq!(u.input + u.output + u.cache_read + u.cache_write, 33_112 + 255);
+        assert_eq!(
+            u.calls, 2,
+            "title generation is a real call and must be counted"
+        );
+        assert_eq!(
+            u.input + u.output + u.cache_read + u.cache_write,
+            33_112 + 255
+        );
         assert_eq!(rows[0].model, "GLM-5.3-Flash");
         assert_eq!(rows[0].directory, "D:/p");
     }

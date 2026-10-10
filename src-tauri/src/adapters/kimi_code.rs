@@ -69,9 +69,13 @@ pub fn storage() -> HarnessStorage {
 /// `<workspace>/session_*/`，且必须有 state.json
 fn collect_session_dirs(root: &Path) -> Vec<PathBuf> {
     let mut acc = vec![];
-    let Ok(workspaces) = fs::read_dir(root) else { return acc };
+    let Ok(workspaces) = fs::read_dir(root) else {
+        return acc;
+    };
     for ws in workspaces.flatten() {
-        let Ok(entries) = fs::read_dir(ws.path()) else { continue };
+        let Ok(entries) = fs::read_dir(ws.path()) else {
+            continue;
+        };
         for entry in entries.flatten() {
             let dir = entry.path();
             let is_session = dir
@@ -122,7 +126,8 @@ fn parse_session(dir: &Path, wires: &[PathBuf]) -> Option<SessionSummary> {
     let title = truncate(title_raw, 48);
     let excerpt = truncate(title_raw, 120);
     // 新版是 Unix 毫秒数字，旧版是 ISO 8601 字符串（本机 91 个会话中 69 个）
-    let as_ms = |v: &serde_json::Value| v.as_u64().or_else(|| v.as_str().and_then(parse_iso8601_ms));
+    let as_ms =
+        |v: &serde_json::Value| v.as_u64().or_else(|| v.as_str().and_then(parse_iso8601_ms));
     let updated_ms = ["updatedAt", "createdAt"]
         .iter()
         .find_map(|k| state.get(*k).and_then(as_ms))
@@ -170,17 +175,28 @@ fn parse_session(dir: &Path, wires: &[PathBuf]) -> Option<SessionSummary> {
 /// 都没有时按所属 workspace 查 `~/.kimi-code/workspaces.json`
 fn project_dir(dir: &Path, state: &serde_json::Value) -> String {
     for key in ["cwd", "workDir"] {
-        if let Some(s) = state.get(key).and_then(|v| v.as_str()).filter(|s| !s.is_empty()) {
+        if let Some(s) = state
+            .get(key)
+            .and_then(|v| v.as_str())
+            .filter(|s| !s.is_empty())
+        {
             return s.replace('\\', "/");
         }
     }
-    let workspace = dir.parent().and_then(|w| w.file_name()).and_then(|n| n.to_str());
+    let workspace = dir
+        .parent()
+        .and_then(|w| w.file_name())
+        .and_then(|n| n.to_str());
     let registry = super::kimi_home().map(|h| h.join("workspaces.json"));
     if let (Some(ws), Some(reg)) = (workspace, registry) {
         if let Some(root) = fs::read_to_string(reg)
             .ok()
             .and_then(|raw| serde_json::from_str::<serde_json::Value>(&raw).ok())
-            .and_then(|v| v.pointer(&format!("/workspaces/{ws}/root"))?.as_str().map(String::from))
+            .and_then(|v| {
+                v.pointer(&format!("/workspaces/{ws}/root"))?
+                    .as_str()
+                    .map(String::from)
+            })
         {
             return root.replace('\\', "/");
         }
@@ -189,7 +205,9 @@ fn project_dir(dir: &Path, state: &serde_json::Value) -> String {
 }
 
 fn scan_wire(path: &Path, usage: &mut TokenUsage, model: &mut Option<String>) {
-    let Ok(file) = fs::File::open(path) else { return };
+    let Ok(file) = fs::File::open(path) else {
+        return;
+    };
     for line in BufReader::new(file).lines() {
         let Ok(line) = line else { continue };
         let is_usage = line.contains("\"type\":\"usage.record\"");
@@ -223,7 +241,13 @@ fn scan_wire(path: &Path, usage: &mut TokenUsage, model: &mut Option<String>) {
 /// `2026-08-14T07:53:40.252Z` / `2026-08-14T15:53:40+08:00` → Unix 毫秒；格式不符返回 None
 fn parse_iso8601_ms(s: &str) -> Option<u64> {
     let b = s.as_bytes();
-    if b.len() < 20 || b[4] != b'-' || b[7] != b'-' || b[10] != b'T' || b[13] != b':' || b[16] != b':' {
+    if b.len() < 20
+        || b[4] != b'-'
+        || b[7] != b'-'
+        || b[10] != b'T'
+        || b[13] != b':'
+        || b[16] != b':'
+    {
         return None;
     }
     let num = |r: std::ops::Range<usize>| s.get(r)?.parse::<i64>().ok();
@@ -233,7 +257,9 @@ fn parse_iso8601_ms(s: &str) -> Option<u64> {
     let mut ms = 0i64;
     if let Some(frac) = rest.strip_prefix('.') {
         let digits: String = frac.chars().take_while(|c| c.is_ascii_digit()).collect();
-        ms = format!("{:0<3}", &digits[..digits.len().min(3)]).parse().ok()?;
+        ms = format!("{:0<3}", &digits[..digits.len().min(3)])
+            .parse()
+            .ok()?;
         rest = &frac[digits.len()..];
     }
     let offset_min = match rest {
@@ -245,7 +271,11 @@ fn parse_iso8601_ms(s: &str) -> Option<u64> {
         _ => return None,
     };
     // days_from_civil（Howard Hinnant）
-    let (yy, mm) = if mo <= 2 { (y - 1, mo + 9) } else { (y, mo - 3) };
+    let (yy, mm) = if mo <= 2 {
+        (y - 1, mo + 9)
+    } else {
+        (y, mo - 3)
+    };
     let era = yy.div_euclid(400);
     let yoe = yy - era * 400;
     let doy = (153 * mm + 2) / 5 + d - 1;
@@ -262,10 +292,19 @@ mod tests {
     #[test]
     fn iso8601() {
         // 与 JS Date.parse 对照
-        assert_eq!(parse_iso8601_ms("2026-08-14T07:53:40.252Z"), Some(1_786_694_020_252));
+        assert_eq!(
+            parse_iso8601_ms("2026-08-14T07:53:40.252Z"),
+            Some(1_786_694_020_252)
+        );
         assert_eq!(parse_iso8601_ms("1970-01-01T00:00:00Z"), Some(0));
-        assert_eq!(parse_iso8601_ms("2026-08-14T15:53:40.252+08:00"), Some(1_786_694_020_252));
-        assert_eq!(parse_iso8601_ms("2024-02-29T12:00:00.5Z"), Some(1_709_208_000_500));
+        assert_eq!(
+            parse_iso8601_ms("2026-08-14T15:53:40.252+08:00"),
+            Some(1_786_694_020_252)
+        );
+        assert_eq!(
+            parse_iso8601_ms("2024-02-29T12:00:00.5Z"),
+            Some(1_709_208_000_500)
+        );
         assert_eq!(parse_iso8601_ms("not a date"), None);
     }
 }

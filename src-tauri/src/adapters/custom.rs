@@ -42,7 +42,9 @@ fn config_path() -> Option<PathBuf> {
 
 /// 读登记表。文件不存在、格式不对都当作没有自定义 harness
 pub(crate) fn entries() -> Vec<Entry> {
-    let Some(raw) = config_path().and_then(|p| std::fs::read(p).ok()) else { return vec![] };
+    let Some(raw) = config_path().and_then(|p| std::fs::read(p).ok()) else {
+        return vec![];
+    };
     let parsed: Vec<Entry> = serde_json::from_slice(&raw).unwrap_or_default();
     parsed
         .into_iter()
@@ -50,7 +52,9 @@ pub(crate) fn entries() -> Vec<Entry> {
         .filter(|e| {
             !e.id.is_empty()
                 && e.id.len() <= 24
-                && e.id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+                && e.id
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
                 && !e.dir.is_empty()
                 && !e.db.is_empty()
         })
@@ -64,9 +68,13 @@ pub(crate) fn is_custom(harness: &str) -> bool {
 
 /// session 表里有没有现成的用量汇总列
 fn has_token_columns(con: &Connection) -> bool {
-    let Ok(mut stmt) = con.prepare("PRAGMA table_info(session)") else { return false };
+    let Ok(mut stmt) = con.prepare("PRAGMA table_info(session)") else {
+        return false;
+    };
     // 先收集再判断：query_map 借着 stmt，不能让迭代器活过它
-    let Ok(rows) = stmt.query_map([], |r| r.get::<_, String>(1)) else { return false };
+    let Ok(rows) = stmt.query_map([], |r| r.get::<_, String>(1)) else {
+        return false;
+    };
     let names: Vec<String> = rows.flatten().collect();
     names.iter().any(|c| c == "tokens_input")
 }
@@ -74,23 +82,36 @@ fn has_token_columns(con: &Connection) -> bool {
 /// 逐条消息累加用量，并记下最后出现的模型名
 fn aggregate_messages(con: &Connection) -> HashMap<String, (TokenUsage, String)> {
     let mut out: HashMap<String, (TokenUsage, String)> = HashMap::new();
-    let Ok(mut stmt) = con.prepare("SELECT session_id, data FROM message ORDER BY time_created") else {
+    let Ok(mut stmt) = con.prepare("SELECT session_id, data FROM message ORDER BY time_created")
+    else {
         return out;
     };
-    let Ok(rows) = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))) else {
+    let Ok(rows) = stmt.query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+    else {
         return out;
     };
     for row in rows.flatten() {
         let (sid, data) = row;
-        let Ok(v) = serde_json::from_str::<serde_json::Value>(&data) else { continue };
+        let Ok(v) = serde_json::from_str::<serde_json::Value>(&data) else {
+            continue;
+        };
         let entry = out.entry(sid).or_default();
-        if let Some(m) = v.get("modelID").and_then(|m| m.as_str()).filter(|m| !m.is_empty()) {
+        if let Some(m) = v
+            .get("modelID")
+            .and_then(|m| m.as_str())
+            .filter(|m| !m.is_empty())
+        {
             entry.1 = m.to_string();
         }
-        let Some(t) = v.get("tokens").filter(|t| t.is_object()) else { continue };
+        let Some(t) = v.get("tokens").filter(|t| t.is_object()) else {
+            continue;
+        };
         let n = |key: &str| t.get(key).and_then(serde_json::Value::as_u64).unwrap_or(0);
         let cache = |key: &str| {
-            t.get("cache").and_then(|c| c.get(key)).and_then(serde_json::Value::as_u64).unwrap_or(0)
+            t.get("cache")
+                .and_then(|c| c.get(key))
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0)
         };
         entry.0.add(&TokenUsage {
             input: n("input"),
@@ -107,7 +128,11 @@ fn aggregate_messages(con: &Connection) -> HashMap<String, (TokenUsage, String)>
 
 fn read_rows(con: &Connection) -> Result<Vec<Row>, String> {
     let from_columns = has_token_columns(con);
-    let mut totals = if from_columns { HashMap::new() } else { aggregate_messages(con) };
+    let mut totals = if from_columns {
+        HashMap::new()
+    } else {
+        aggregate_messages(con)
+    };
 
     let sql = if from_columns {
         "SELECT id, parent_id, COALESCE(title,''), COALESCE(directory,''),
@@ -157,7 +182,9 @@ fn read_rows(con: &Connection) -> Result<Vec<Row>, String> {
 }
 
 fn list_one(entry: &Entry) -> Result<Vec<SessionSummary>, String> {
-    let Some(home) = family_home(&entry.dir) else { return Ok(vec![]) };
+    let Some(home) = family_home(&entry.dir) else {
+        return Ok(vec![]);
+    };
     let db = home.join(&entry.db);
     if !db.is_file() {
         return Ok(vec![]);
@@ -166,7 +193,9 @@ fn list_one(entry: &Entry) -> Result<Vec<SessionSummary>, String> {
         return Err(format!("cannot open {} read-only", db.display()));
     };
     con.execute_batch("BEGIN").map_err(|e| e.to_string())?;
-    summarize(&entry.id, read_rows(&con)?, &db, |id, updated| cached_size(&con, id, updated))
+    summarize(&entry.id, read_rows(&con)?, &db, |id, updated| {
+        cached_size(&con, id, updated)
+    })
 }
 
 pub fn list_sessions() -> Result<Vec<SessionSummary>, String> {
@@ -217,7 +246,9 @@ mod tests {
             .filter(|e| {
                 !e.id.is_empty()
                     && e.id.len() <= 24
-                    && e.id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+                    && e.id
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
                     && !e.dir.is_empty()
                     && !e.db.is_empty()
             })
@@ -229,10 +260,12 @@ mod tests {
     #[test]
     fn token_columns_are_detected() {
         let con = Connection::open_in_memory().unwrap();
-        con.execute_batch("CREATE TABLE session(id TEXT, tokens_input INT)").unwrap();
+        con.execute_batch("CREATE TABLE session(id TEXT, tokens_input INT)")
+            .unwrap();
         assert!(has_token_columns(&con));
         let bare = Connection::open_in_memory().unwrap();
-        bare.execute_batch("CREATE TABLE session(id TEXT, title TEXT)").unwrap();
+        bare.execute_batch("CREATE TABLE session(id TEXT, title TEXT)")
+            .unwrap();
         assert!(!has_token_columns(&bare));
     }
 

@@ -46,12 +46,18 @@ fn find_session_dir(root: &Path, id: &str) -> Option<PathBuf> {
 }
 
 pub(super) fn kimi_targets(root: &Path, id: &str) -> Targets {
-    let Some(dir) = find_session_dir(root, id) else { return (vec![], vec![], vec![]) };
+    let Some(dir) = find_session_dir(root, id) else {
+        return (vec![], vec![], vec![]);
+    };
     let mut index = vec![];
     if file_mentions(&root.join("session_index.jsonl"), id) {
         index.push("session_index.jsonl".into());
     }
-    if let Some(ws) = dir.parent().and_then(|p| p.file_name()).and_then(|n| n.to_str()) {
+    if let Some(ws) = dir
+        .parent()
+        .and_then(|p| p.file_name())
+        .and_then(|n| n.to_str())
+    {
         if file_mentions(&root.join("file-history").join(ws), id) {
             index.push(format!("file-history/{ws}"));
         }
@@ -60,9 +66,15 @@ pub(super) fn kimi_targets(root: &Path, id: &str) -> Targets {
 }
 
 pub(super) fn dsh_targets(root: &Path, id: &str) -> Targets {
-    let Some(dir) = find_session_dir(root, id) else { return (vec![], vec![], vec![]) };
+    let Some(dir) = find_session_dir(root, id) else {
+        return (vec![], vec![], vec![]);
+    };
     let mut files = vec![dir];
-    let cache = root.join("storages").join("session_projcache").join("sessions").join(format!("{id}.json"));
+    let cache = root
+        .join("storages")
+        .join("session_projcache")
+        .join("sessions")
+        .join(format!("{id}.json"));
     if cache.is_file() {
         files.push(cache);
     }
@@ -115,7 +127,12 @@ mod tests {
         fs::write(proj.join("ses_target_1.jsonl"), b"{}").unwrap();
         fs::create_dir_all(proj.join("ses_target_1")).unwrap();
         fs::write(proj.join("ses_other_2.jsonl"), b"{}").unwrap();
-        for (extra, hit) in [("file-history", true), ("session-env", true), ("tasks", true), ("shell-snapshots", false)] {
+        for (extra, hit) in [
+            ("file-history", true),
+            ("session-env", true),
+            ("tasks", true),
+            ("shell-snapshots", false),
+        ] {
             let dir = root.join(extra).join("ses_target_1");
             fs::create_dir_all(&dir).unwrap();
             if !hit {
@@ -126,7 +143,12 @@ mod tests {
 
         let rel: Vec<String> = cc_files(&root, "ses_target_1")
             .iter()
-            .map(|f| f.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/"))
+            .map(|f| {
+                f.strip_prefix(&root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
             .collect();
         assert_eq!(
             rel,
@@ -141,9 +163,20 @@ mod tests {
         // 每条会话只收自己的附属目录，不会把别人的收进来
         let other: Vec<String> = cc_files(&root, "ses_other_2")
             .iter()
-            .map(|f| f.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/"))
+            .map(|f| {
+                f.strip_prefix(&root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
             .collect();
-        assert_eq!(other, ["projects/D--code-recipe-box/ses_other_2.jsonl", "file-history/ses_other_2"]);
+        assert_eq!(
+            other,
+            [
+                "projects/D--code-recipe-box/ses_other_2.jsonl",
+                "file-history/ses_other_2"
+            ]
+        );
         // 没有主 jsonl 的 id：附属目录不该被收进来（否则会删到别人的历史）
         fs::create_dir_all(root.join("file-history").join("ses_nofile_3")).unwrap();
         assert!(cc_files(&root, "ses_nofile_3").is_empty());
@@ -154,7 +187,8 @@ mod tests {
     /// 子 agent 的 rollout 要连父会话一起删，父 id 也要进 threads（官方 CLI 按 id 逐个调）
     #[test]
     fn codex_targets_collect_children_and_parent_id() {
-        let root = std::env::temp_dir().join(format!("orrery-codex-targets-{}", std::process::id()));
+        let root =
+            std::env::temp_dir().join(format!("orrery-codex-targets-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
         let day = root.join("sessions").join("2026").join("09").join("27");
         fs::create_dir_all(&day).unwrap();
@@ -173,28 +207,56 @@ mod tests {
             if let Some(p) = parent_id {
                 payload["parent_thread_id"] = serde_json::json!(p);
             }
-            serde_json::to_string(&serde_json::json!({ "type": "session_meta", "payload": payload })).unwrap()
+            serde_json::to_string(
+                &serde_json::json!({ "type": "session_meta", "payload": payload }),
+            )
+            .unwrap()
         };
-        fs::write(day.join(format!("rollout-{parent}.jsonl")), head(parent, false, None)).unwrap();
-        fs::write(sub.join(format!("rollout-{child}.jsonl")), head(child, true, Some(parent))).unwrap();
-        fs::write(sub.join(format!("rollout-{stranger}.jsonl")), head(stranger, true, Some("nope"))).unwrap();
+        fs::write(
+            day.join(format!("rollout-{parent}.jsonl")),
+            head(parent, false, None),
+        )
+        .unwrap();
+        fs::write(
+            sub.join(format!("rollout-{child}.jsonl")),
+            head(child, true, Some(parent)),
+        )
+        .unwrap();
+        fs::write(
+            sub.join(format!("rollout-{stranger}.jsonl")),
+            head(stranger, true, Some("nope")),
+        )
+        .unwrap();
 
         let ctx = Ctx::with_running(Default::default());
         let (files, index, threads) = codex_targets(&root, parent, &ctx);
-        let mut rel: Vec<String> =
-            files.iter().map(|f| f.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/")).collect();
+        let mut rel: Vec<String> = files
+            .iter()
+            .map(|f| {
+                f.strip_prefix(&root)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect();
         rel.sort();
         assert_eq!(
             rel,
-            ["sessions/2026/09/26/rollout-019fdba9-940e-7f20-bfda-365ecb643e53.jsonl",
-             "sessions/2026/09/27/rollout-019fdba8-940e-7f20-bfda-365ecb643e52.jsonl"]
+            [
+                "sessions/2026/09/26/rollout-019fdba9-940e-7f20-bfda-365ecb643e53.jsonl",
+                "sessions/2026/09/27/rollout-019fdba8-940e-7f20-bfda-365ecb643e52.jsonl"
+            ]
         );
         // 父会话自己也要进 threads，子 agent 跟在后面（官方 CLI 按 id 逐个调）
         assert_eq!(threads, [parent.to_string(), child.to_string()]);
         assert!(index.is_empty(), "没写 session_index 就什么都不改");
 
         // 会话不存在时不返回文件，但也不该报错
-        assert!(codex_targets(&root, "019fdbaa-940e-7f20-bfda-365ecb643e99", &ctx).0.is_empty());
+        assert!(
+            codex_targets(&root, "019fdbaa-940e-7f20-bfda-365ecb643e99", &ctx)
+                .0
+                .is_empty()
+        );
         let _ = fs::remove_dir_all(&root);
     }
 }

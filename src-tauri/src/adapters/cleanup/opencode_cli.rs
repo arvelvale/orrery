@@ -2,7 +2,7 @@
 //! 所以规划是只读查库，执行只能走官方 CLI（详见 `cleanup` 模块文档第 5 条）。
 
 use super::super::{data_dir, system_time_ms};
-use super::{no_window, strip_verbatim, Ctx, Mode, Plan, Outcome, ACTIVE_WINDOW_MS};
+use super::{no_window, strip_verbatim, Ctx, Mode, Outcome, Plan, ACTIVE_WINDOW_MS};
 use crate::adapters::opencode;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -10,7 +10,10 @@ use std::time::SystemTime;
 
 /// 只读查库：会话在不在、子 agent 有哪些、多大、最近什么时候写过
 pub(super) fn plan_opencode(mut p: Plan, ctx: &Ctx) -> Plan {
-    let Some(db) = opencode::opencode_home().map(|h| h.join(opencode::DB)).filter(|d| d.is_file()) else {
+    let Some(db) = opencode::opencode_home()
+        .map(|h| h.join(opencode::DB))
+        .filter(|d| d.is_file())
+    else {
         p.blocked = Some("not_found".into());
         return p;
     };
@@ -27,8 +30,15 @@ pub(super) fn plan_opencode(mut p: Plan, ctx: &Ctx) -> Plan {
         return p;
     }
     p.directory = sessions[0].2.clone();
-    p.bytes = sessions.iter().map(|(id, updated, _)| opencode::cached_size(&con, id, *updated)).sum();
-    let last_write = sessions.iter().map(|(_, updated, _)| *updated).max().unwrap_or(0);
+    p.bytes = sessions
+        .iter()
+        .map(|(id, updated, _)| opencode::cached_size(&con, id, *updated))
+        .sum();
+    let last_write = sessions
+        .iter()
+        .map(|(_, updated, _)| *updated)
+        .max()
+        .unwrap_or(0);
     p.cli_sessions = sessions.into_iter().map(|(id, _, _)| id).collect();
 
     let now = system_time_ms(SystemTime::now());
@@ -45,22 +55,37 @@ pub(super) fn plan_opencode(mut p: Plan, ctx: &Ctx) -> Plan {
 }
 
 /// 根会话及其所有后代：(id, time_updated, directory)，父在前子在后
-pub(super) fn opencode_tree(con: &rusqlite::Connection, root: &str) -> Result<Vec<(String, u64, String)>, String> {
+pub(super) fn opencode_tree(
+    con: &rusqlite::Connection,
+    root: &str,
+) -> Result<Vec<(String, u64, String)>, String> {
     let mut stmt = con
         .prepare("SELECT id, parent_id, COALESCE(time_updated, time_created, 0), COALESCE(directory,'') FROM session")
         .map_err(|e| e.to_string())?;
     let rows: Vec<(String, Option<String>, u64, String)> = stmt
-        .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get::<_, i64>(2)?.max(0) as u64, r.get(3)?)))
+        .query_map([], |r| {
+            Ok((
+                r.get(0)?,
+                r.get(1)?,
+                r.get::<_, i64>(2)?.max(0) as u64,
+                r.get(3)?,
+            ))
+        })
         .map_err(|e| e.to_string())?
         .collect::<Result<_, _>>()
         .map_err(|e| e.to_string())?;
-    let Some(first) = rows.iter().find(|r| r.0 == root) else { return Ok(vec![]) };
+    let Some(first) = rows.iter().find(|r| r.0 == root) else {
+        return Ok(vec![]);
+    };
     let mut out = vec![(first.0.clone(), first.2, first.3.clone())];
     // 逐层展开；`out` 既是结果也是队列，出现过的 id 不再加入，防 parent_id 成环
     let mut i = 0;
     while i < out.len() {
         let parent = out[i].0.clone();
-        for r in rows.iter().filter(|r| r.1.as_deref() == Some(parent.as_str())) {
+        for r in rows
+            .iter()
+            .filter(|r| r.1.as_deref() == Some(parent.as_str()))
+        {
             if !out.iter().any(|o| o.0 == r.0) {
                 out.push((r.0.clone(), r.2, r.3.clone()));
             }
@@ -73,10 +98,17 @@ pub(super) fn opencode_tree(con: &rusqlite::Connection, root: &str) -> Result<Ve
 /// 找 opencode 原生可执行文件：`ORRERY_OPENCODE_BIN` → PATH 里的 opencode →
 /// npm 全局包里的二进制（Windows 上 PATH 里只有 `opencode.cmd` 壳，与 codex 同理）
 pub(crate) fn opencode_bin() -> Option<PathBuf> {
-    if let Some(p) = std::env::var_os("ORRERY_OPENCODE_BIN").map(PathBuf::from).filter(|p| p.is_file()) {
+    if let Some(p) = std::env::var_os("ORRERY_OPENCODE_BIN")
+        .map(PathBuf::from)
+        .filter(|p| p.is_file())
+    {
         return Some(p);
     }
-    let exe_name = if cfg!(windows) { "opencode.exe" } else { "opencode" };
+    let exe_name = if cfg!(windows) {
+        "opencode.exe"
+    } else {
+        "opencode"
+    };
     let path = std::env::var_os("PATH")?;
     for dir in std::env::split_paths(&path) {
         let exe = dir.join(exe_name);
@@ -97,9 +129,12 @@ pub(crate) fn opencode_bin() -> Option<PathBuf> {
 /// `--pure` 不加载第三方插件
 fn opencode_cmd(bin: &Path, home: &Path, args: &[&str]) -> std::process::Command {
     let mut cmd = std::process::Command::new(bin);
-    cmd.args(args).arg("--pure").stdin(std::process::Stdio::null());
+    cmd.args(args)
+        .arg("--pure")
+        .stdin(std::process::Stdio::null());
     if let Some(data) = home.parent() {
-        cmd.env("XDG_DATA_HOME", strip_verbatim(data)).current_dir(strip_verbatim(home));
+        cmd.env("XDG_DATA_HOME", strip_verbatim(data))
+            .current_dir(strip_verbatim(home));
     }
     no_window(&mut cmd);
     cmd
@@ -114,7 +149,9 @@ pub(super) fn execute_opencode(p: &Plan, mode: Mode, stamp: &str, o: &mut Outcom
     // 回收站模式：每条都导出成功才删，任何一条导不出来就整条放弃
     if mode == Mode::Trash {
         // 每条会话一个目录，同一批删多条时各自的 RESTORE.txt 互不覆盖
-        let Some(dir) = data_dir().map(|d| d.join("exports").join("opencode").join(stamp).join(&p.id)) else {
+        let Some(dir) =
+            data_dir().map(|d| d.join("exports").join("opencode").join(stamp).join(&p.id))
+        else {
             o.error = Some("export:cannot resolve ~/.orrery".into());
             return;
         };
@@ -123,7 +160,9 @@ pub(super) fn execute_opencode(p: &Plan, mode: Mode, stamp: &str, o: &mut Outcom
             return;
         }
         for id in &p.cli_sessions {
-            let out = opencode_cmd(&bin, &home, &["export", id]).stderr(std::process::Stdio::null()).output();
+            let out = opencode_cmd(&bin, &home, &["export", id])
+                .stderr(std::process::Stdio::null())
+                .output();
             let json = match out {
                 Ok(out) if out.status.success() => out.stdout,
                 Ok(out) => {
@@ -138,7 +177,11 @@ pub(super) fn execute_opencode(p: &Plan, mode: Mode, stamp: &str, o: &mut Outcom
             // 导出内容必须是这条会话本身，否则宁可不删
             let exported_id = serde_json::from_slice::<serde_json::Value>(&json)
                 .ok()
-                .and_then(|v| v.pointer("/info/id").and_then(|s| s.as_str()).map(String::from));
+                .and_then(|v| {
+                    v.pointer("/info/id")
+                        .and_then(|s| s.as_str())
+                        .map(String::from)
+                });
             if exported_id.as_deref() != Some(id.as_str()) {
                 o.error = Some(format!("export:{id}: unexpected output"));
                 return;
@@ -166,7 +209,11 @@ pub(super) fn execute_opencode(p: &Plan, mode: Mode, stamp: &str, o: &mut Outcom
     }
     let left = opencode_remaining(&home, &p.cli_sessions);
     if !left.is_empty() {
-        o.error = Some(format!("cli:{} of {} sessions still in OpenCode", left.len(), p.cli_sessions.len()));
+        o.error = Some(format!(
+            "cli:{} of {} sessions still in OpenCode",
+            left.len(),
+            p.cli_sessions.len()
+        ));
         return;
     }
     o.ok = true;
@@ -174,11 +221,15 @@ pub(super) fn execute_opencode(p: &Plan, mode: Mode, stamp: &str, o: &mut Outcom
 
 /// 这些 id 里还留在 OpenCode 库里的
 fn opencode_remaining(home: &Path, ids: &[String]) -> Vec<String> {
-    let Some(con) = opencode::open(&home.join(opencode::DB)) else { return ids.to_vec() };
+    let Some(con) = opencode::open(&home.join(opencode::DB)) else {
+        return ids.to_vec();
+    };
     ids.iter()
         .filter(|id| {
-            con.query_row("SELECT 1 FROM session WHERE id = ?1", [id.as_str()], |_| Ok(()))
-                .is_ok()
+            con.query_row("SELECT 1 FROM session WHERE id = ?1", [id.as_str()], |_| {
+                Ok(())
+            })
+            .is_ok()
         })
         .cloned()
         .collect()
@@ -192,7 +243,10 @@ pub(super) fn restore_notes(p: &Plan, dir: &Path) -> String {
     );
     s.push_str(&format!("cd \"{}\"\n", p.directory));
     for id in &p.cli_sessions {
-        s.push_str(&format!("opencode import \"{}\"\n", dir.join(format!("{id}.json")).display()));
+        s.push_str(&format!(
+            "opencode import \"{}\"\n",
+            dir.join(format!("{id}.json")).display()
+        ));
     }
     s
 }
@@ -215,7 +269,11 @@ mod tests {
              INSERT INTO session VALUES ('b', 'a', 1, 1, '');",
         )
         .unwrap();
-        let ids: Vec<String> = opencode_tree(&con, "root").unwrap().into_iter().map(|r| r.0).collect();
+        let ids: Vec<String> = opencode_tree(&con, "root")
+            .unwrap()
+            .into_iter()
+            .map(|r| r.0)
+            .collect();
         assert_eq!(ids, ["root", "kid", "grandkid"]);
         assert_eq!(opencode_tree(&con, "a").unwrap().len(), 2, "成环也要停下");
         assert!(opencode_tree(&con, "missing").unwrap().is_empty());

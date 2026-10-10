@@ -25,10 +25,19 @@ struct Seen {
 type Recorder = Arc<Mutex<Vec<Seen>>>;
 
 async fn record(path: &str, seen: &Recorder, headers: &HeaderMap, body: &Value) {
-    let h = |k: &str| headers.get(k).and_then(|v| v.to_str().ok()).map(str::to_owned);
+    let h = |k: &str| {
+        headers
+            .get(k)
+            .and_then(|v| v.to_str().ok())
+            .map(str::to_owned)
+    };
     seen.lock().unwrap().push(Seen {
         path: path.into(),
-        model: body.get("model").and_then(Value::as_str).unwrap_or("").into(),
+        model: body
+            .get("model")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .into(),
         authorization: h("authorization"),
         api_key: h("x-api-key"),
         anthropic_version: h("anthropic-version"),
@@ -36,7 +45,11 @@ async fn record(path: &str, seen: &Recorder, headers: &HeaderMap, body: &Value) 
     });
 }
 
-async fn upstream_chat(State(seen): State<Recorder>, headers: HeaderMap, Json(body): Json<Value>) -> Response {
+async fn upstream_chat(
+    State(seen): State<Recorder>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
     record("chat/completions", &seen, &headers, &body).await;
     if body.get("stream").and_then(Value::as_bool) == Some(true) {
         // 分三次发送，每块之间留间隔：代理必须边收边转，不能等全部结束
@@ -53,12 +66,21 @@ async fn upstream_chat(State(seen): State<Recorder>, headers: HeaderMap, Json(bo
             .unwrap();
     }
     if body.get("model").and_then(Value::as_str) == Some("boom") {
-        return (axum::http::StatusCode::TOO_MANY_REQUESTS, Json(json!({ "error": "rate limited" }))).into_response();
+        return (
+            axum::http::StatusCode::TOO_MANY_REQUESTS,
+            Json(json!({ "error": "rate limited" })),
+        )
+            .into_response();
     }
-    Json(json!({ "id": "resp_1", "model": body["model"], "object": "chat.completion" })).into_response()
+    Json(json!({ "id": "resp_1", "model": body["model"], "object": "chat.completion" }))
+        .into_response()
 }
 
-async fn upstream_messages(State(seen): State<Recorder>, headers: HeaderMap, Json(body): Json<Value>) -> Response {
+async fn upstream_messages(
+    State(seen): State<Recorder>,
+    headers: HeaderMap,
+    Json(body): Json<Value>,
+) -> Response {
     record("messages", &seen, &headers, &body).await;
     Json(json!({ "id": "msg_1", "model": body["model"], "type": "message" })).into_response()
 }
@@ -98,7 +120,11 @@ fn sandbox_home(dir: &std::path::Path, upstream: &str) {
         }
     });
     std::fs::create_dir_all(dir.join(".orrery")).unwrap();
-    std::fs::write(dir.join(".orrery").join("proxy.json"), serde_json::to_string_pretty(&cfg).unwrap()).unwrap();
+    std::fs::write(
+        dir.join(".orrery").join("proxy.json"),
+        serde_json::to_string_pretty(&cfg).unwrap(),
+    )
+    .unwrap();
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -112,9 +138,16 @@ async fn forwards_streams_and_reports_errors() {
     std::env::set_var("ORRERY_TEST_ANTHROPIC_KEY", "test-anthropic-key");
 
     // listen 端口写 0 会让系统分配，status() 里能拿到实际端口
-    let status = tokio::task::spawn_blocking(orrery_lib::proxy::start).await.unwrap().unwrap();
+    let status = tokio::task::spawn_blocking(orrery_lib::proxy::start)
+        .await
+        .unwrap()
+        .unwrap();
     let base = format!("http://{}", status.listen);
-    assert!(status.running, "proxy should be running: {}", status.message);
+    assert!(
+        status.running,
+        "proxy should be running: {}",
+        status.message
+    );
 
     let client = reqwest::Client::new();
 
@@ -131,9 +164,18 @@ async fn forwards_streams_and_reports_errors() {
     assert_eq!(body["model"], "kimi-test-model");
     let last = seen.lock().unwrap().last().cloned().unwrap();
     assert_eq!(last.path, "chat/completions");
-    assert_eq!(last.model, "kimi-test-model", "route should override the requested model");
-    assert_eq!(last.authorization.as_deref(), Some("Bearer test-openai-key"));
-    assert!(last.api_key.is_none(), "openai wire must not send x-api-key");
+    assert_eq!(
+        last.model, "kimi-test-model",
+        "route should override the requested model"
+    );
+    assert_eq!(
+        last.authorization.as_deref(),
+        Some("Bearer test-openai-key")
+    );
+    assert!(
+        last.api_key.is_none(),
+        "openai wire must not send x-api-key"
+    );
 
     // 2. 不带 harness 头 → 保留请求里的模型
     client
@@ -156,7 +198,10 @@ async fn forwards_streams_and_reports_errors() {
     assert_eq!(last.path, "messages");
     assert_eq!(last.api_key.as_deref(), Some("test-anthropic-key"));
     assert_eq!(last.anthropic_version.as_deref(), Some("2023-06-01"));
-    assert!(last.authorization.is_none(), "anthropic wire must not send Authorization");
+    assert!(
+        last.authorization.is_none(),
+        "anthropic wire must not send Authorization"
+    );
 
     // 4. 流式：分块到达，不是最后一次性返回
     let r = client
@@ -165,7 +210,10 @@ async fn forwards_streams_and_reports_errors() {
         .send()
         .await
         .unwrap();
-    assert_eq!(r.headers().get("content-type").unwrap(), "text/event-stream");
+    assert_eq!(
+        r.headers().get("content-type").unwrap(),
+        "text/event-stream"
+    );
     let mut chunks = 0;
     let mut text = String::new();
     let started = std::time::Instant::now();
@@ -180,10 +228,17 @@ async fn forwards_streams_and_reports_errors() {
         chunks += 1;
         text.push_str(&String::from_utf8_lossy(&chunk));
     }
-    assert!(chunks >= 2, "expected chunked passthrough, got {chunks} chunk(s)");
+    assert!(
+        chunks >= 2,
+        "expected chunked passthrough, got {chunks} chunk(s)"
+    );
     assert!(text.contains("[DONE]"), "stream body: {text}");
     // 第一块应在最后一块之前明显到达（上游每块间隔 60ms，共 3 块）
-    assert!(first_chunk_at.unwrap() < Duration::from_millis(150), "first chunk took {:?}", first_chunk_at);
+    assert!(
+        first_chunk_at.unwrap() < Duration::from_millis(150),
+        "first chunk took {:?}",
+        first_chunk_at
+    );
     assert!(seen.lock().unwrap().last().unwrap().stream);
 
     // 5. 上游错误码原样透传
@@ -207,22 +262,51 @@ async fn forwards_streams_and_reports_errors() {
     let body: Value = r.json().await.unwrap();
     let msg = body["error"]["message"].as_str().unwrap();
     assert!(msg.contains("ORRERY_TEST_ANTHROPIC_KEY"), "{msg}");
-    assert!(!msg.contains("test-anthropic-key"), "error must not leak the key: {msg}");
+    assert!(
+        !msg.contains("test-anthropic-key"),
+        "error must not leak the key: {msg}"
+    );
 
     // 7. /health 与状态计数
-    let health: Value = client.get(format!("{base}/health")).send().await.unwrap().json().await.unwrap();
+    let health: Value = client
+        .get(format!("{base}/health"))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
     assert_eq!(health["status"], "ok");
-    let status = tokio::task::spawn_blocking(orrery_lib::proxy::status).await.unwrap();
+    let status = tokio::task::spawn_blocking(orrery_lib::proxy::status)
+        .await
+        .unwrap();
     assert!(status.requests >= 6, "requests={}", status.requests);
     assert!(status.failures >= 2, "failures={}", status.failures);
-    assert_eq!(status.last_request.as_ref().unwrap().provider, "fake-openai");
-    assert!(status.providers.iter().any(|p| p.name == "fake-openai" && p.key_present));
-    assert!(status.providers.iter().any(|p| p.name == "fake-anthropic" && !p.key_present));
+    assert_eq!(
+        status.last_request.as_ref().unwrap().provider,
+        "fake-openai"
+    );
+    assert!(status
+        .providers
+        .iter()
+        .any(|p| p.name == "fake-openai" && p.key_present));
+    assert!(status
+        .providers
+        .iter()
+        .any(|p| p.name == "fake-anthropic" && !p.key_present));
 
     // 8. 停止后端口不再接受新连接
-    tokio::task::spawn_blocking(orrery_lib::proxy::stop).await.unwrap().unwrap();
+    tokio::task::spawn_blocking(orrery_lib::proxy::stop)
+        .await
+        .unwrap()
+        .unwrap();
     tokio::time::sleep(Duration::from_millis(300)).await;
-    assert!(client.get(format!("{base}/health")).timeout(Duration::from_secs(2)).send().await.is_err());
+    assert!(client
+        .get(format!("{base}/health"))
+        .timeout(Duration::from_secs(2))
+        .send()
+        .await
+        .is_err());
 
     std::fs::remove_dir_all(&tmp).ok();
 }
