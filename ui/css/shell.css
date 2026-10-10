@@ -19,20 +19,10 @@
   min-width: 140px;
 }
 .brand-mark {
-  width: 20px;
-  height: 20px;
-  border: 1.5px solid var(--nav);
-  border-radius: 50%;
-  position: relative;
-}
-.brand-mark::after {
-  content: "";
-  position: absolute;
-  left: 3px; right: 3px; top: 5px;
-  height: 5px;
-  border-top: 1.5px solid var(--nav);
-  border-radius: 50% 50% 0 0;
-  transform: rotate(-18deg);
+  width: 26px;
+  height: 26px;
+  flex: none;
+  display: block;
 }
 .brand-name {
   font-weight: 650;

@@ -62,6 +62,9 @@ export function renderStatus() {
     kimi: "~/.kimi-code/sessions/",
     dsh: "~/.dsh/sessions/",
     codex: "~/.codex/sessions/",
+    opencode: "~/.local/share/opencode/",
+    zcode: "~/.zcode/cli/",
+    antigravity: "~/.gemini/antigravity-cli/",
     workbuddy: "~/.workbuddy/projects/",
   };
   const cards = [
@@ -90,7 +93,7 @@ export function renderStatus() {
           [t("status.sessions"), String(list.length)],
           [t("status.disk"), st && st.connected ? formatBytes(st.sessionBytes) : t("storage.notConnected")],
           [t("status.defaultModel"), state.routes[hid] || "—"],
-          [t("status.scanPath"), paths[hid]],
+          [t("status.scanPath"), paths[hid] || "—"],
           [t("status.access"), t("status.readLocal")],
         ],
       };

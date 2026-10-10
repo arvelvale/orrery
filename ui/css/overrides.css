@@ -38,7 +38,7 @@
 .storage-rows { display: grid; gap: 8px; }
 .storage-row {
   display: grid;
-  grid-template-columns: 8ch 1fr 64px;
+  grid-template-columns: 11ch 1fr 64px;
   align-items: center;
   gap: 10px;
   font-family: var(--mono);
