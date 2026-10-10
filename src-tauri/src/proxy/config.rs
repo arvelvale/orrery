@@ -165,11 +165,11 @@ fn default_providers() -> BTreeMap<String, Provider> {
 fn default_models() -> Vec<ModelEntry> {
     vec![
         ModelEntry {
-            id: "claude-opus-4.7".into(),
+            id: "claude-opus-5.5".into(),
             provider: "anthropic".into(),
         },
         ModelEntry {
-            id: "claude-sonnet-4.6".into(),
+            id: "claude-sonnet-5.5".into(),
             provider: "anthropic".into(),
         },
         ModelEntry {
@@ -177,15 +177,15 @@ fn default_models() -> Vec<ModelEntry> {
             provider: "moonshot".into(),
         },
         ModelEntry {
-            id: "gpt-5.2".into(),
+            id: "gpt-6-astra".into(),
             provider: "openai".into(),
         },
         ModelEntry {
-            id: "gpt-5.3-codex".into(),
+            id: "gpt-6-sol".into(),
             provider: "openai".into(),
         },
         ModelEntry {
-            id: "deepseek-v3.2".into(),
+            id: "deepseek-v4.1-flash".into(),
             provider: "deepseek".into(),
         },
     ]
@@ -395,17 +395,19 @@ mod tests {
     fn unknown_model_uses_prefix_or_fails() {
         let cfg = ProxyConfig::default();
         assert_eq!(
-            cfg.provider_for("claude-sonnet-4.6", Wire::Anthropic)
+            cfg.provider_for("claude-sonnet-5.5", Wire::Anthropic)
                 .unwrap()
                 .0,
             "anthropic"
         );
         assert_eq!(
-            cfg.provider_for("deepseek-v3.2", Wire::Openai).unwrap().0,
+            cfg.provider_for("deepseek-v4.1-flash", Wire::Openai)
+                .unwrap()
+                .0,
             "deepseek"
         );
         assert!(cfg.provider_for("llama-3", Wire::Openai).is_none());
-        assert_eq!(cfg.owner_of("gpt-5.2"), Some("openai"));
+        assert_eq!(cfg.owner_of("gpt-6-astra"), Some("openai"));
     }
 
     #[test]
@@ -423,11 +425,11 @@ mod tests {
     fn route_lookup_prefers_harness_then_default() {
         let mut cfg = ProxyConfig::default();
         cfg.routes
-            .insert("default".into(), "claude-sonnet-4.6".into());
+            .insert("default".into(), "claude-sonnet-5.5".into());
         cfg.routes.insert("kimi".into(), "kimi-k3".into());
         assert_eq!(cfg.route_model(Some("kimi")), Some("kimi-k3"));
-        assert_eq!(cfg.route_model(Some("dsh")), Some("claude-sonnet-4.6"));
-        assert_eq!(cfg.route_model(None), Some("claude-sonnet-4.6"));
+        assert_eq!(cfg.route_model(Some("dsh")), Some("claude-sonnet-5.5"));
+        assert_eq!(cfg.route_model(None), Some("claude-sonnet-5.5"));
         cfg.routes.remove("default");
         assert_eq!(cfg.route_model(None), None);
     }
@@ -435,9 +437,9 @@ mod tests {
     #[test]
     fn remove_model_clears_routes() {
         let mut cfg = ProxyConfig::default();
-        cfg.routes.insert("cc".into(), "claude-sonnet-4.6".into());
-        cfg.remove_model("claude-sonnet-4.6");
-        assert!(!cfg.has_model("claude-sonnet-4.6"));
+        cfg.routes.insert("cc".into(), "claude-sonnet-5.5".into());
+        cfg.remove_model("claude-sonnet-5.5");
+        assert!(!cfg.has_model("claude-sonnet-5.5"));
         assert!(!cfg.routes.contains_key("cc"));
     }
 
