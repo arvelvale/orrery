@@ -6,7 +6,7 @@
 
 **AI コーディングエージェントのための、ローカルファーストなコックピット。**
 
-手元の Claude Code・Kimi Code・DSH（DeepSeek）・Codex・OpenCode・Z Code・Antigravity・WorkBuddy のセッションをひとつのウィンドウに集約します。トークン、ディスク使用量、プロジェクト、サブエージェントまで一目で把握でき、不要なセッションは削除できます（Z Code と WorkBuddy は読み取り専用）。各ハーネスをひとつのローカルモデルプロキシ経由にまとめられます。データは PC の外に出ません。
+手元の Claude Code・Kimi Code・DSH（DeepSeek）・Codex・OpenCode・Z Code・Antigravity・WorkBuddy・StepCode のセッションをひとつのウィンドウに集約します。トークン、ディスク使用量、プロジェクト、サブエージェントまで一目で把握でき、不要なセッションは削除できます（Z Code と WorkBuddy は読み取り専用）。各ハーネスをひとつのローカルモデルプロキシ経由にまとめられます。データは PC の外に出ません。
 
 <p>
   <a href="https://arvelvale.github.io/orrery/"><img alt="Website" src="https://img.shields.io/badge/website-arvelvale.github.io%2Forrery-0B6BCB?style=flat-square" /></a>
@@ -28,6 +28,7 @@
   <img alt="Kimi Code" src="https://img.shields.io/badge/Kimi%20Code-対応済み-0F9D6E?style=flat-square" />
   <img alt="DSH" src="https://img.shields.io/badge/DSH%20(DeepSeek)-対応済み-0F9D6E?style=flat-square" />
   <img alt="Codex" src="https://img.shields.io/badge/Codex-対応済み-0F9D6E?style=flat-square" />
+  <img alt="StepCode" src="https://img.shields.io/badge/StepCode-対応済み-0F9D6E?style=flat-square" />
 </p>
 
 [English](README.md) · [简体中文](README.zh-CN.md) · **日本語**
@@ -61,6 +62,7 @@ Orrery は、各ツールがすでにディスクへ書き出しているデー�
 | セッションハブ：Z Code | ✅ | `~/.zcode/cli/db/db.sqlite` を読み取り専用で参照。サイズには各セッションのモデル I/O ログ・成果物・画像キャッシュを含みます（ディスク使用量の大半はこちら） |
 | セッションハブ：Antigravity CLI | ✅ | `~/.gemini/antigravity-cli/` を読み取り専用で参照。会話ごとの SQLite と `conversation_summaries.db` から読み、使用量は呼び出しごとの protobuf 記録から復号。`agy --conversation` で再開 |
 | セッションハブ：WorkBuddy | ✅ | `~/.workbuddy/projects/<作業ディレクトリ>/<sessionId>.jsonl` を読み取り専用で参照。タイトルはセッション自身の `ai-title` を採ります。削除はまだ未対応 |
+| セッションハブ：StepCode | ✅ | `~/.stepcode/agent/sessions/--<cwd>--/<タイムスタンプ>_<id>.jsonl`。サブエージェントのセッションは時間包含関係で親セッションに統合します。削除と再開に対応 |
 | ネイティブセッション変換：Claude Code・Codex・OpenCode の相互変換 | ✅ | 会話をほかの 2 つのツールのいずれかの履歴にコピーして再開できます。元のセッションは残ります。公式のインポート手段があるツールにはそれを使います（Codex app-server、`opencode import`）。相手にそのまま入らない画像（ツール結果内のスクリーンショット、Codex へ送る画像）は `~/.orrery/transfer-media` にファイルとして保存し、元の位置にパスを残します。相手側のモデルはファイル読み取りツールで開けます。変換前に枚数を表示します。内部の非表示の推論はコピーしません |
 | セッションハブ：自分で登録したツール | ✅ | `~/.orrery/harnesses.json` に登録すると、同じ方式でその SQLite を読み取り専用で参照します |
 | 正確なトークン集計 | ✅ | API 呼び出し単位で重複排除し、入力 / キャッシュ書込 / キャッシュ読込 / 出力に分割 |
@@ -70,7 +72,7 @@ Orrery は、各ツールがすでにディスクへ書き出しているデー�
 | 高速起動 | ✅ | 解析結果をディスク上のインデックスに保存し、再起動後は変更されたファイルだけ読み直します（188 セッションで 5.5 秒 → 0.12 秒）|
 | セッションを削除してディスクを空ける | ✅ | 1 件または複数選択、容量順に並べ替え可；ごみ箱または完全削除；各ツールのインデックスも整理 |
 | ローカルモデルプロキシ（`127.0.0.1:8787`） | ✅ | 実際に転送します。OpenAI / Anthropic 両形式、ストリーミング透過、アプリから起動・停止。実プロバイダとの疎通も確認済み |
-| ターミナルで再開 | ✅ | セッションの作業ディレクトリでターミナルを開き、そのツール自身の再開コマンドを実行します。DSH は web プロファイルのみの場合は Web UI を開きます。登録したツールには再開コマンドがありません |
+| ターミナルで再開 | ✅ | セッションの作業ディレクトリでターミナルを開き、そのツール自身の再開コマンドを実行します。DSH は web プロファイルのみの場合は Web UI を開きます。StepCode はセッションファイルのパスで再開するため、ファイルが `~/.stepcode/agent/sessions/` から消えている場合は再スキャンが必要です。登録したツールには再開コマンドがありません |
 
 <img src=".github/assets/screenshot-status.ja.png" alt="Orrery ステータス画面とストレージ内訳" width="100%" />
 
@@ -85,6 +87,7 @@ Orrery は、各ツールがすでにディスクへ書き出しているデー�
 | **DSH** | マルチフレーム zstd ログ内の `assistant/message` イベントの `data.usage` | アップグレードしたセッションには同じ履歴の v0 と v3 のログが両方残る | 両方ある場合は v3 のみ読む |
 | **Codex** | `token_count` イベント（新しい版では `token_usage_record` も） | `total_token_usage` はプロセス単位で再開時にリセット、`input_tokens` はキャッシュ分を含む、古い `token_count` はコンテキスト圧縮の呼び出しを記録しない | 呼び出し単位で重複排除して合算し、`token_usage_record` がある区間はそちらを優先、入力からキャッシュ分を差し引く |
 | **WorkBuddy** | 各 item の `message.usage`（元の記録は `providerData.rawUsage`） | 1 回のリクエストが message / function_call / reasoning 複数の item に分割され、同じ `providerData.messageId` と同じ使用量を共有します。プロバイダー側のフィールド名も一定しない | `providerData.messageId` で重複排除して合算（同じ id は 1 回）。内訳と `total` の差は「内訳なし」として扱い、推測で割りません。内訳が `total` を超える場合はキャッシュが input に含まれる扱いにします |
+| **StepCode** | assistant 項目の `message.usage`、および `compaction` / `branch_summary` の `usage` | `input` / `cacheRead` / `cacheWrite` / `output` の 4 つの枠は重ならないのでそのまま対応します。`reasoning` は現在 `output` に含まれます。`toolResult` 内の使用量はサブエージェントのもので、サブエージェントは独自のセッションファイルを持つため二重に数えます | 4 つの枠をそのまま加算し、assistant 項目 1 件を 1 呼び出しとして数え、サブエージェントのセッションファイルを時間包含関係で親に統合します。4 枠の外の差は推測せず「内訳なし」とします |
 
 セッション合計は、メインエージェントとすべてのサブエージェントの和です。検証方法：
 
@@ -95,6 +98,8 @@ Orrery は、各ツールがすでにディスクへ書き出しているデー�
 初期の Codex alpha 版のセッションは内訳のない合計値しか持たないため、推測せず「内訳なし」として表示します。
 
 OpenCode は SQLite の `session.tokens_*` 集計値を使用し、独立した推論トークンを output に加算します。子孫エージェントはルートに統合し、API 呼び出し回数は未取得のため表示しません。独立 SQL によるセッション単位の照合と `opencode stats` の確認済み：53 件を 41 セッションと 12 サブエージェントに統合。input 108.4M、cache read 1853.0M、cache write 1.2M が一致し、output 4.7M には推論 1.3M を含みます。サイズは message/part/event の UTF-8 データ量であり、SQLite から回収可能な容量ではありません。Windows デスクトップで検証済み、macOS/Linux の実機は未検証です。既存のスクリーンショットは今回の対応前のものです。
+
+StepCode は `scripts/verify-stepcode.mjs` でセッション単位に照合します。sessions ルート以下のすべての `.jsonl` を独立に再集計し、内訳・呼び出し回数・統合されたサブエージェント数・サイズを比較します。メイン 4 セッション + サブエージェント 12 ファイルの 4 項目がすべて一致し、input 2.4M、cache read 103.1M、output 753.4K、内訳なし 0、呼び出し 934 回が吻合しました。全ファイルの合計も各行の和と突き合わせるため、サブエージェントの二重計算や取りこぼしは不一致として現れます。12 個のサブエージェントはすべて時間包含関係で親に統合されました。Windows デスクトップで検証済み、macOS/Linux の実機は未検証です。
 
 既知の制限：公式記録は `--resume` でリセットされるため、Orrery は会話ログから合計を再構築しています。公式記録にはタイトル生成など会話ログに残らない副次的な呼び出しも含まれるため、Orrery の Claude Code 合計は 1〜5% ほど少なく出ることがあります。
 
@@ -144,18 +149,19 @@ orrery/
 ├─ ui/                      # index.html · styles.css · app.js · i18n.js（WebView とブラウザで共用）
 ├─ src-tauri/
 │  └─ src/
-│     ├─ adapters/
+│     ├─ adapters/           # ハーネスごとに 1 ファイル、共通モデルとキャッシュ
 │     │  ├─ mod.rs          # SessionSummary、TokenUsage、キャッシュ、共通処理
-│     │  ├─ claude_code.rs
-│     │  ├─ kimi_code.rs
-│     │  ├─ dsh.rs
-│     │  ├─ codex.rs
-│     │  └─ cleanup.rs      # セッション削除とインデックス整理
+│     │  ├─ claude_code.rs · kimi_code.rs · dsh.rs · codex.rs · opencode.rs
+│     │  ├─ zcode.rs · antigravity.rs · workbuddy.rs · stepcode.rs · custom.rs
+│     │  ├─ index.rs        # ディスク上の解析キャッシュ（~/.orrery/index.json）
+│     │  └─ cleanup/        # セッション削除、ハーネス別の対象解決、実行中プロセスの監視
 │     ├─ proxy/             # ローカルモデルプロキシ
 │     │  ├─ mod.rs         # 起動・停止・状態
 │     │  ├─ config.rs      # プロバイダーとルート（~/.orrery/proxy.json）
 │     │  ├─ server.rs      # HTTP 面と上流への転送
 │     │  └─ state.rs       # カウンター、直近のリクエストとエラー
+│     ├─ resume.rs          # ハーネスごとの再開コマンド、ターミナルで実行
+│     ├─ transfer/          # ハーネス間の会話移行
 │     └─ lib.rs             # Tauri コマンド
 ├─ scripts/preview.mjs      # 依存ゼロの静的プレビュー
 ├─ docs/                    # 設計ドキュメント（中国語）
@@ -227,6 +233,7 @@ set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 | Z Code | 未対応（読み取り専用） | 変更なし |
 | WorkBuddy | 未対応（読み取り専用 ― セッションファイルは WorkBuddy 自身が書きます） | 変更なし |
 | Antigravity | `conversations/<id>.db`（`-wal`/`-shm` を含む）、`brain/<id>/`、`annotations/<id>.pbtxt`、子会話も同様 | —（agy 自身の履歴にタイトルが残ることがあり、開くと新しい会話になります） |
+| StepCode | `sessions/--<cwd>--/<ts>_<id>.jsonl` と、それに統合されたサブエージェントの `.jsonl` | — |
 
 > [!TIP]
 > セッションを削除する前に、そのツールを終了してください。実行中の Kimi Code や Codex が削除した項目をインデックスに書き戻す可能性があります。

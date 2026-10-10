@@ -6,7 +6,7 @@
 
 **本地优先的 AI 编程 Agent 驾驶舱。**
 
-把本机所有 Claude Code、Kimi Code、DSH（DeepSeek）、Codex、OpenCode、Z Code、Antigravity、WorkBuddy 会话收进一个窗口：token、磁盘占用、项目、子 agent 一眼看清。不要的会话可以直接删掉（Z Code 和 WorkBuddy 为只读），各个 harness 还能统一走一个本地模型代理。数据不出本机。
+把本机所有 Claude Code、Kimi Code、DSH（DeepSeek）、Codex、OpenCode、Z Code、Antigravity、WorkBuddy、StepCode 会话收进一个窗口：token、磁盘占用、项目、子 agent 一眼看清。不要的会话可以直接删掉（Z Code 和 WorkBuddy 为只读），各个 harness 还能统一走一个本地模型代理。数据不出本机。
 
 <p>
   <a href="https://arvelvale.github.io/orrery/"><img alt="Website" src="https://img.shields.io/badge/website-arvelvale.github.io%2Forrery-0B6BCB?style=flat-square" /></a>
@@ -28,6 +28,7 @@
   <img alt="Kimi Code" src="https://img.shields.io/badge/Kimi%20Code-已接入-0F9D6E?style=flat-square" />
   <img alt="DSH" src="https://img.shields.io/badge/DSH%20(DeepSeek)-已接入-0F9D6E?style=flat-square" />
   <img alt="Codex" src="https://img.shields.io/badge/Codex-已接入-0F9D6E?style=flat-square" />
+  <img alt="StepCode" src="https://img.shields.io/badge/StepCode-已接入-0F9D6E?style=flat-square" />
 </p>
 
 [English](README.md) · **简体中文** · [日本語](README.ja.md)
@@ -61,6 +62,7 @@ Orrery 只读取各工具本来就写在磁盘上的数据，汇总到一块面�
 | 会话中枢：Z Code | ✅ | 只读 `~/.zcode/cli/db/db.sqlite`；体积包含每个会话的模型 I/O 日志、产物和图片缓存——这些才是它磁盘占用的大头 |
 | 会话中枢：Antigravity CLI | ✅ | 只读 `~/.gemini/antigravity-cli/`：每个对话一个 SQLite，外加 `conversation_summaries.db`；用量从每次调用的 protobuf 记录里解出；用 `agy --conversation` 恢复 |
 | 会话中枢：WorkBuddy | ✅ | 只读 `~/.workbuddy/projects/<工作目录>/<sessionId>.jsonl`；标题取会话自己的 `ai-title`；暂不提供删除 |
+| 会话中枢：StepCode | ✅ | `~/.stepcode/agent/sessions/--<cwd>--/<时间戳>_<id>.jsonl`；子 agent 会话按时间包含关系折进父会话；支持删除与恢复 |
 | 原生会话转换：Claude Code、Codex、OpenCode 三家互转 | ✅ | 将对话复制进另外两家任一工具的原生历史并从那里恢复；来源保留。目标有官方导入入口的一律走官方入口（Codex app-server、`opencode import`）。目标放不下的图片（工具结果里的截图、要进 Codex 的任何图片）存成文件放在 `~/.orrery/transfer-media`，原位置留下路径，目标里的模型可以用读文件工具打开；转换前页面会告诉你有几张。内部隐藏推理不复制 |
 | 会话中枢：自己登记的 OpenCode 系工具 | ✅ | 在 `~/.orrery/harnesses.json` 里登记，Orrery 用同一套方式只读它的 SQLite——分支版本和自用版本都能接 |
 | 准确的 token 统计 | ✅ | 按 API 调用去重，拆成输入 / 缓存写 / 缓存读 / 输出 |
@@ -70,7 +72,7 @@ Orrery 只读取各工具本来就写在磁盘上的数据，汇总到一块面�
 | 冷启动秒开 | ✅ | 解析结果落盘成索引，重启后只重读变动过的文件（188 个会话：5.5s → 0.12s）|
 | 删除会话，腾出磁盘空间 | ✅ | 单条或多选，可按占用排序；回收站或永久删除；同时清理各工具自己的索引 |
 | 本地模型代理（`127.0.0.1:8787`） | ✅ | 真实转发，OpenAI 与 Anthropic 两种形状，流式透传，可在应用里启停；已与真实供应商联调 |
-| 在终端恢复会话 | ✅ | 在会话的工作目录起终端，执行该工具自己的恢复命令。DSH 只装了 web profile 时改为打开它的网页界面；自己登记的工具没有恢复命令 |
+| 在终端恢复会话 | ✅ | 在会话的工作目录起终端，执行该工具自己的恢复命令。DSH 只装了 web profile 时改为打开它的网页界面；StepCode 按会话文件路径恢复，文件已经不在 `~/.stepcode/agent/sessions/` 里时要先重新扫描；自己登记的工具没有恢复命令 |
 
 <img src=".github/assets/screenshot-status.zh-CN.png" alt="Orrery 状态页与存储统计" width="100%" />
 
@@ -85,6 +87,7 @@ Orrery 只读取各工具本来就写在磁盘上的数据，汇总到一块面�
 | **DSH** | 多帧 zstd 日志里 `assistant/message` 事件的 `data.usage` | 升级过的会话同时留着 v0 和 v3 两份同一段历史 | 两份都在时只读 v3 |
 | **Codex** | `token_count` 事件，新版另有 `token_usage_record` | `total_token_usage` 按进程累计、恢复会话后清零；`input_tokens` 已包含缓存命中；旧的 `token_count` 漏记上下文压缩调用 | 按调用去重累加，有 `token_usage_record` 的时段以它为准，输入减去缓存命中 |
 | **WorkBuddy** | 每个 item 的 `message.usage`，原始记录在 `providerData.rawUsage` | 一次请求会拆成 message / function_call / reasoning 多个 item，共用同一个 `providerData.messageId` 和同一份用量；供应商的字段名也不统一 | 按 `providerData.messageId` 去重累加（同一个 id 只算一次）；分项与 `total` 的差额记为「未分项」而不猜比例，分项超过 `total` 时按「缓存已含在 input 里」处理 |
+| **StepCode** | assistant 条目的 `message.usage`，外加 `compaction` / `branch_summary` 上的 `usage` | `input` / `cacheRead` / `cacheWrite` / `output` 四个桶互不重叠，直接对应；`reasoning` 目前算在 `output` 里；`toolResult` 里那份额是子 agent 的，子 agent 另有会话文件，计了就是双倍 | 四个桶直接相加，每条 assistant 条目算一次调用，子 agent 会话文件按时间包含关系折进父会话；四桶之外的差额记为「未分项」而不猜 |
 
 会话总量 = 主 agent + 全部子 agent。核对方式：
 
@@ -95,6 +98,8 @@ Orrery 只读取各工具本来就写在磁盘上的数据，汇总到一块面�
 早期 Codex alpha 版本的会话只记了总数、没有分项，Orrery 把这部分单独显示为"未拆分"，不做猜测。
 
 OpenCode 使用 SQLite `session.tokens_*` 累计值，推理是独立的一桶，并入 output；子 agent 递归并入根会话，API 调用次数暂不展示。独立 SQL 逐会话对账及 `opencode stats` 核对通过：53 条记录合并为 41 条会话、12 个子 agent；input 108.4M、cache read 1853.0M、cache write 1.2M 一致，output 4.7M 包含推理 1.3M。会话体积是 message/part/event 的 UTF-8 内容字节数，不代表 SQLite 可回收空间。已验证 Windows 桌面，macOS/Linux 尚未真机验证；现有截图早于此次接入。
+
+StepCode 用 `scripts/verify-stepcode.mjs` 逐会话核对：脚本独立重算 sessions 根目录下每个 `.jsonl` 的分项、调用次数、折叠进来的子 agent 数和会话体积。4 条主会话 + 12 个子 agent 文件四项全部一致；input 2.4M、cache read 103.1M、output 753.4K、未分项 0、934 次调用吻合。脚本还会把所有文件的总量和 Orrery 各行之和对比，子 agent 被重复计算或漏掉都会在这里露出来。12 个子 agent 全部按时间包含关系折进了父会话。已验证 Windows 桌面，macOS/Linux 尚未真机验证。
 
 已知限制：官方记账在 `--resume` 后会清零，所以 Orrery 改为从对话记录重新累加。官方记账还包含生成标题这类不写进对话记录的后台调用，所以 Orrery 算出的 Claude Code 总量可能少 1–5%。
 
@@ -144,18 +149,19 @@ orrery/
 ├─ ui/                      # index.html · styles.css · app.js · i18n.js（WebView 与浏览器共用）
 ├─ src-tauri/
 │  └─ src/
-│     ├─ adapters/
+│     ├─ adapters/           # 每个 harness 一个文件，外加共用模型与缓存
 │     │  ├─ mod.rs          # SessionSummary、TokenUsage、缓存与共用工具
-│     │  ├─ claude_code.rs
-│     │  ├─ kimi_code.rs
-│     │  ├─ dsh.rs
-│     │  ├─ codex.rs
-│     │  └─ cleanup.rs      # 删除会话与索引清理
+│     │  ├─ claude_code.rs · kimi_code.rs · dsh.rs · codex.rs · opencode.rs
+│     │  ├─ zcode.rs · antigravity.rs · workbuddy.rs · stepcode.rs · custom.rs
+│     │  ├─ index.rs        # 落盘解析缓存（~/.orrery/index.json）
+│     │  └─ cleanup/        # 删除会话、按 harness 解析目标文件、进程占用保护
 │     ├─ proxy/             # 本地模型代理
 │     │  ├─ mod.rs         # 启停与状态
 │     │  ├─ config.rs      # 供应商与路由（~/.orrery/proxy.json）
 │     │  ├─ server.rs      # HTTP 面与上游转发
 │     │  └─ state.rs       # 计数、最近请求、最近错误
+│     ├─ resume.rs          # 各 harness 的恢复命令，在终端里执行
+│     ├─ transfer/          # 会话在 harness 之间迁移
 │     └─ lib.rs             # Tauri 命令
 ├─ scripts/preview.mjs      # 零依赖静态预览
 ├─ docs/                    # 设计文档
@@ -227,6 +233,7 @@ set ANTHROPIC_BASE_URL=http://127.0.0.1:8787
 | Z Code | 暂不支持（只读） | 不修改 |
 | WorkBuddy | 暂不支持（只读——会话文件由 WorkBuddy 自己写） | 不修改 |
 | Antigravity | `conversations/<id>.db`（及 `-wal`/`-shm`）、`brain/<id>/`、`annotations/<id>.pbtxt`，子对话同理 | —（agy 自己的历史列表可能还留着标题，打开只会开新对话） |
+| StepCode | `sessions/--<cwd>--/<ts>_<id>.jsonl`，以及折进它的子 agent `.jsonl` 文件 | — |
 | 登记的工具 | 暂不支持（只读） | 不修改 |
 
 > [!TIP]

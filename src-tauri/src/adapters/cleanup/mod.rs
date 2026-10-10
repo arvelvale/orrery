@@ -33,6 +33,7 @@
 //! | codex | 该 id 的所有 rollout + 以它为父的子 agent rollout | sqlite（经 `codex delete`）、`session_index.jsonl` 行（兜底） |
 //! | opencode | 无（全在 `opencode.db`） | 经 `opencode session delete` |
 //! | antigravity | `conversations/<id>.db`(-wal/-shm)、`brain/<id>/`、`annotations/<id>.pbtxt`，及子对话的同类文件 | 无 |
+//! | stepcode | `sessions/--<cwd>--/<ts>_<id>.jsonl` 及折叠的子 agent jsonl | 无 |
 //!
 //! Antigravity（agy，2026-09 版沙盒实测）：`conversation_summaries.db` 是 agy 的库，我们不写。
 //! 对话文件删掉后 agy 照常启动；`--conversation <已删 id>` 只提示 not found 并开新对话。
@@ -40,6 +41,10 @@
 //! 所以它的历史列表里可能还留着标题——删除前在对话框里说明。
 //! 正在打开的对话：agy 会独占 `presence/<id>.lock`（旧锁文件不会被清，要看的是能否打开，
 //! 实测一个 agy 进程恰好锁一个文件）；Unix 上是建议锁、打得开，退回到 10 分钟写入窗口
+//!
+//! StepCode：官方文档明说"Sessions can be removed by deleting their `.jsonl` files"，
+//! 没有需要清理的文本索引，也不写任何别人的数据库。恢复命令见 `resume.rs`
+//! （只能走 jsonl 绝对路径，沙盒实测 id 形式查不到）。
 
 //! # 模块划分
 //!
@@ -74,7 +79,7 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
-use targets::{cc_files, codex_targets, dsh_targets, kimi_targets};
+use targets::{cc_files, codex_targets, dsh_targets, kimi_targets, stepcode_targets};
 
 /// 最近这么久内有写入的会话视为可能正在使用
 pub const ACTIVE_WINDOW_MS: u64 = 10 * 60 * 1000;
@@ -221,6 +226,7 @@ fn plan(t: &Target, ctx: &Ctx) -> Plan {
         "dsh" => dsh_targets(&root, &t.id),
         "codex" => codex_targets(&root, &t.id, ctx),
         "antigravity" => agy_targets(&root, &t.id),
+        "stepcode" => stepcode_targets(&root, &t.id),
         _ => {
             p.blocked = Some("invalid".into());
             return p;
@@ -274,6 +280,7 @@ fn plan(t: &Target, ctx: &Ctx) -> Plan {
     let proc = match t.harness.as_str() {
         "kimi" => Some("kimi"),
         "codex" => Some("codex"),
+        "stepcode" => Some("step"),
         _ => None,
     };
     // agy 的摘要库会留着标题：不阻止删除，但要让用户事先知道
@@ -296,6 +303,7 @@ fn harness_root(harness: &str) -> Option<PathBuf> {
         "dsh" => dsh_home(),
         "codex" => codex_home(),
         "antigravity" => antigravity::agy_home(),
+        "stepcode" => super::stepcode_agent_dir().map(|d| d.join("sessions")),
         _ => None,
     }?;
     root.is_dir().then_some(root)
@@ -363,6 +371,102 @@ pub(super) fn backup_stamp() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// StepCode：主 jsonl + 折叠的子 agent jsonl，没有索引文件，也不走官方 CLI
+    #[test]
+    fn stepcode_targets_collect_the_session_and_its_subagents() {
+        let root = std::env::temp_dir().join(format!("orrery-step-targets-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let sessions = root.join("sessions");
+        let dir = sessions.join("--D--code-recipe--");
+        fs::create_dir_all(&dir).unwrap();
+        let parent = "01a12010-5077-70de-838d-3f8e8537716b";
+        let child = "subagent-c0aed0ba-ca71-4f4e-a50f-cf26113130d3";
+        let stranger = "01a12099-5077-70de-838d-3f8e8537716b";
+        let head = |id: &str, ts: &str| {
+            serde_json::to_string(&serde_json::json!({
+                "type": "session", "version": 3, "id": id, "timestamp": ts, "cwd": "D:\\code\\recipe"
+            }))
+            .unwrap()
+        };
+        let tail = |ts: &str| {
+            serde_json::to_string(&serde_json::json!({
+                "type": "message", "id": "m1", "parentId": null, "timestamp": ts,
+                "message": { "role": "user", "content": "x" }
+            }))
+            .unwrap()
+        };
+        let write = |name: &str, id: &str, ts: &str, tail_ts: &str| {
+            fs::write(
+                dir.join(name),
+                format!("{}\n{}", head(id, ts), tail(tail_ts)),
+            )
+            .unwrap();
+        };
+        write(
+            &format!("2026-10-09T09-48-22-520Z_{parent}.jsonl"),
+            parent,
+            "2026-10-09T09:48:22.520Z",
+            "2026-10-09T09:50:00.000Z",
+        );
+        write(
+            &format!("2026-10-09T09-49-00-000Z_{child}.jsonl"),
+            child,
+            "2026-10-09T09:49:00.000Z",
+            "2026-10-09T09:49:30.000Z",
+        );
+        // 区间完全不重叠的子 agent：父会话不在本机，不该被捎带删掉
+        let orphan = "subagent-99999999-2222-3333-4444-555555555555";
+        write(
+            &format!("2026-10-09T11-49-00-000Z_{orphan}.jsonl"),
+            orphan,
+            "2026-10-09T11:49:00.000Z",
+            "2026-10-09T11:49:30.000Z",
+        );
+        write(
+            &format!("2026-10-09T12-48-22-520Z_{stranger}.jsonl"),
+            stranger,
+            "2026-10-09T12:48:22.520Z",
+            "2026-10-09T12:50:00.000Z",
+        );
+
+        let (files, index, threads) = targets::stepcode_targets(&sessions, parent);
+        let mut rel: Vec<String> = files
+            .iter()
+            .map(|f| {
+                f.strip_prefix(&sessions)
+                    .unwrap()
+                    .to_string_lossy()
+                    .replace('\\', "/")
+            })
+            .collect();
+        rel.sort();
+        assert_eq!(
+            rel,
+            [
+                format!("--D--code-recipe--/2026-10-09T09-48-22-520Z_{parent}.jsonl"),
+                format!("--D--code-recipe--/2026-10-09T09-49-00-000Z_{child}.jsonl"),
+            ],
+            "只收主会话和区间落在它里面的子 agent"
+        );
+        assert!(index.is_empty(), "StepCode 没有要清理的文本索引");
+        assert!(threads.is_empty(), "不走官方 CLI");
+        assert!(
+            targets::stepcode_targets(&sessions, "01a12000-5077-70de-838d-3f8e8537716b")
+                .0
+                .is_empty()
+        );
+
+        // 匹配不到父会话的子 agent 会单独列出来，删它就只删它自己：区间必然包住自己，
+        // 漏掉这个判断就会把自己再收一遍——同一个文件在计划里出现两次，体积算双倍，
+        // 永久删除还会在第二次 remove_file 上直接失败
+        let (files, _, _) = targets::stepcode_targets(&sessions, orphan);
+        assert_eq!(
+            files,
+            [dir.join(format!("2026-10-09T11-49-00-000Z_{orphan}.jsonl"))]
+        );
+        let _ = fs::remove_dir_all(&root);
+    }
 
     #[test]
     fn zcode_plan_is_read_only_without_resolving_files() {

@@ -17,3 +17,6 @@ src-tauri/*.log
 Thumbs.db
 .vscode/
 .idea/
+
+# StepCode 自己的项目目录（计划文件等），不属于本项目
+.stepcode/

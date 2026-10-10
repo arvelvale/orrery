@@ -6,7 +6,7 @@
 
 **A local-first cockpit for your AI coding agents.**
 
-Every Claude Code, Kimi Code, DSH (DeepSeek), Codex, OpenCode, Z Code, Antigravity and WorkBuddy session on your machine in one window: tokens, disk usage, projects, subagents. Delete what you no longer need (Z Code and WorkBuddy are read-only), and route every harness through one local model proxy. Nothing leaves your computer.
+Every Claude Code, Kimi Code, DSH (DeepSeek), Codex, OpenCode, Z Code, Antigravity, WorkBuddy and StepCode session on your machine in one window: tokens, disk usage, projects, subagents. Delete what you no longer need (Z Code and WorkBuddy are read-only), and route every harness through one local model proxy. Nothing leaves your computer.
 
 <p>
   <a href="https://arvelvale.github.io/orrery/"><img alt="Website" src="https://img.shields.io/badge/website-arvelvale.github.io%2Forrery-0B6BCB?style=flat-square" /></a>
@@ -32,6 +32,7 @@ Every Claude Code, Kimi Code, DSH (DeepSeek), Codex, OpenCode, Z Code, Antigravi
   <img alt="Z Code" src="https://img.shields.io/badge/Z%20Code-connected-0F9D6E?style=flat-square" />
   <img alt="Antigravity" src="https://img.shields.io/badge/Antigravity-connected-0F9D6E?style=flat-square" />
   <img alt="WorkBuddy" src="https://img.shields.io/badge/WorkBuddy-connected-0F9D6E?style=flat-square" />
+  <img alt="StepCode" src="https://img.shields.io/badge/StepCode-connected-0F9D6E?style=flat-square" />
 </p>
 
 **English** · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
@@ -65,6 +66,7 @@ Orrery reads what the harnesses already write to disk and puts it all on one boa
 | Session hub: Z Code | ✅ | Read-only `~/.zcode/cli/db/db.sqlite`; size includes each session's model I/O log, artifacts and image cache, which are most of its disk footprint |
 | Session hub: Antigravity CLI | ✅ | Read-only `~/.gemini/antigravity-cli/`: one SQLite per conversation plus `conversation_summaries.db`; usage decoded from each call's protobuf record; resume with `agy --conversation` |
 | Session hub: WorkBuddy | ✅ | Read-only `~/.workbuddy/projects/<work-dir>/<sessionId>.jsonl`; the title comes from the session's own `ai-title`; delete is not offered yet |
+| Session hub: StepCode | ✅ | `~/.stepcode/agent/sessions/--<cwd>--/<timestamp>_<id>.jsonl`; subagent sessions folded into the parent by time containment; delete and resume supported |
 | Native session transfer: Claude Code, Codex and OpenCode | ✅ | Copy a conversation into any of the other two tools' own history and resume it there; the source stays in place. Each target is written through its own importer where one exists (`codex` app-server, `opencode import`). Images the target can't hold inline (screenshots in tool results, any image bound for Codex) are saved as files under `~/.orrery/transfer-media` with their path left in place, and the target's model can open them with its file-reading tool; the transfer page says how many before you convert. Hidden reasoning is not copied |
 | Session hub: your own OpenCode-style tool | ✅ | Register it in `~/.orrery/harnesses.json` and Orrery reads its SQLite the same way — handy for forks and private builds |
 | Accurate token accounting | ✅ | Deduplicated per API call, split into input / cache write / cache read / output |
@@ -74,7 +76,7 @@ Orrery reads what the harnesses already write to disk and puts it all on one boa
 | Instant cold start | ✅ | The parsed index is kept on disk, so a restart only re-reads files that changed (188 sessions: 5.5s → 0.12s) |
 | Delete sessions to free disk space | ✅ | Pick one or many, sort by size; Recycle Bin or permanent; each tool's own index is cleaned too |
 | Local model proxy (`127.0.0.1:8787`) | ✅ | Real forwarding, OpenAI and Anthropic shapes, streaming passthrough, start/stop from the app; verified against live providers |
-| Resume in terminal | ✅ | Opens a terminal in the session's folder and runs that harness's own resume command. DSH falls back to its web UI when only the `web` profile is installed; registered tools have no resume command |
+| Resume in terminal | ✅ | Opens a terminal in the session's folder and runs that harness's own resume command. DSH falls back to its web UI when only the `web` profile is installed; StepCode resumes by session-file path, so a session whose file has left `~/.stepcode/agent/sessions/` needs a rescan first; registered tools have no resume command |
 
 <img src=".github/assets/screenshot-status.en.png" alt="Orrery status page with storage breakdown" width="100%" />
 
@@ -92,6 +94,7 @@ Every harness records usage per API call, and none of them can simply be added u
 | **Z Code** | `model_usage`, one row per API call | `input_tokens` already contains cache reads, and `turn_usage` leaves out side calls such as title generation | Sums every call in `model_usage`, and uses each row's `computed_total_tokens` to decide whether caches and reasoning are inside input/output, so the buckets always add up to the provider's total |
 | **Antigravity** | `gen_metadata`, one protobuf row per API call | Output already includes thinking tokens; cache reads are reported separately from input | Sums input, output, cache write and cache read directly; cancelled calls with no usage are not counted |
 | **WorkBuddy** | `message.usage` on each item, with `providerData.rawUsage` as the original record | One request is split into several items (message / function_call / reasoning) that share one `providerData.messageId` and the same usage; the bucket field names vary by provider | Sums per `providerData.messageId` (a shared id counts once); the gap between the buckets and `total_tokens` is shown as *unsplit* rather than split by guesswork, and buckets that overshoot `total` are treated as cache already inside input |
+| **StepCode** | `message.usage` on assistant entries, plus the `usage` on `compaction` / `branch_summary` | `input` / `cacheRead` / `cacheWrite` / `output` are disjoint, so they map straight across; `reasoning` is currently inside `output`; the usage inside a `toolResult` belongs to a subagent that has its own session file and would be double-counted | Sums the four buckets directly, counts every assistant entry as one call, folds subagent session files into their parent, and puts anything beyond the four buckets into *unsplit* instead of guessing |
 | **Registered tool** | `session.tokens_*` when present, otherwise the `tokens` object on each message | Older OpenCode forks have no token columns on the session | Detects which layout the database uses and sums accordingly; reasoning always folds into output |
 
 The session total adds up the main agent and every subagent. How it was checked:
@@ -103,6 +106,8 @@ The session total adds up the main agent and every subagent. How it was checked:
 Old Codex alpha sessions only stored a total without a breakdown. Orrery shows that part as *unsplit* instead of guessing.
 
 OpenCode was checked per session against independent SQL and `opencode stats`: 53 records become 41 sessions plus 12 folded subagents. Input 108.4M, cache read 1853.0M and cache write 1.2M agree; output 4.7M includes 1.3M reasoning tokens. Session size measures UTF-8 payload bytes in message/part/event, not reclaimable SQLite file space. Windows desktop verified; macOS/Linux remain untested on hardware. Existing screenshots predate this adapter.
+
+StepCode was checked per session with `scripts/verify-stepcode.mjs`, which re-sums every `.jsonl` under the sessions root on its own and compares buckets, call count, folded-subagent count and session size. 4 main sessions plus 12 subagent files agree on all four; input 2.4M, cache read 103.1M, output 753.4K, `unsplit` 0 and 934 calls match. The same script checks the grand total across every file, so a subagent counted twice or dropped shows up as a mismatch. All 12 subagents folded into a parent by time containment. Windows desktop verified; macOS/Linux remain untested on hardware.
 
 Known limits: the ledger resets on `--resume`, so Orrery rebuilds totals from the transcript instead. The ledger also counts side calls that never reach the transcript, such as title generation, so Orrery's Claude Code totals can read about 1–5% lower.
 
@@ -152,18 +157,19 @@ orrery/
 ├─ ui/                      # index.html · styles.css · app.js · i18n.js (shared by WebView and browser)
 ├─ src-tauri/
 │  └─ src/
-│     ├─ adapters/
+│     ├─ adapters/           # one file per harness, plus the shared model and cache
 │     │  ├─ mod.rs          # SessionSummary, TokenUsage, cache, shared helpers
-│     │  ├─ claude_code.rs
-│     │  ├─ kimi_code.rs
-│     │  ├─ dsh.rs
-│     │  ├─ codex.rs
-│     │  └─ cleanup.rs      # session deletion and index cleanup
+│     │  ├─ claude_code.rs · kimi_code.rs · dsh.rs · codex.rs · opencode.rs
+│     │  ├─ zcode.rs · antigravity.rs · workbuddy.rs · stepcode.rs · custom.rs
+│     │  ├─ index.rs        # on-disk parse cache (~/.orrery/index.json)
+│     │  └─ cleanup/        # session deletion, per-harness target resolution, running-process guard
 │     ├─ proxy/             # local model proxy
 │     │  ├─ mod.rs         # start / stop / status
 │     │  ├─ config.rs      # providers and routes (~/.orrery/proxy.json)
 │     │  ├─ server.rs      # HTTP surface and upstream forwarding
 │     │  └─ state.rs       # counters, last request, last error
+│     ├─ resume.rs          # per-harness resume commands, run in a terminal
+│     ├─ transfer/          # conversation transfer between harnesses
 │     └─ lib.rs             # Tauri commands
 ├─ scripts/preview.mjs      # zero-dependency static preview
 ├─ docs/                    # design docs (Chinese)
@@ -235,6 +241,7 @@ Every session is just files on disk, so Orrery can remove the ones you no longer
 | Z Code | Not supported (read-only) | No changes |
 | WorkBuddy | Not supported (read-only — WorkBuddy writes its own session files) | No changes |
 | Antigravity | `conversations/<id>.db` (+ `-wal`/`-shm`), `brain/<id>/`, `annotations/<id>.pbtxt`, and the same for child conversations | — (agy's own history list may still show the title; opening it starts a new conversation) |
+| StepCode | `sessions/--<cwd>--/<ts>_<id>.jsonl` plus the subagent `.jsonl` files folded into it | — |
 | Registered tool | Not supported (read-only) | No changes |
 
 > [!TIP]

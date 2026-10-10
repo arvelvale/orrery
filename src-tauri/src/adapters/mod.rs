@@ -9,6 +9,7 @@ mod dsh;
 mod index;
 mod kimi_code;
 pub(crate) mod opencode;
+pub(crate) mod stepcode;
 mod workbuddy;
 mod zcode;
 
@@ -58,6 +59,12 @@ pub struct SessionSummary {
 /// OpenCode（SQLite session 累计值）：input = tokens_input；cache_write =
 /// tokens_cache_write；cache_read = tokens_cache_read；output = tokens_output +
 /// tokens_reasoning（独立桶）；unsplit = 0。递归合并子 agent；calls 暂无可靠口径，保留 0。
+///
+/// StepCode（`message.usage`）：input / cache_read / cache_write / output 四桶直接取，
+/// 互不重叠（实测 `totalTokens ==` 四桶之和，599/599 条）；unsplit = totalTokens −
+/// 四桶之和，只有供应商把 reasoning 单独记账时才非 0。`compaction` /
+/// `branch_summary` 的 usage 计入；toolResult 里子 agent 的用量不计（子 agent 有
+/// 各自的会话文件，折叠进来会双倍）。
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct TokenUsage {
     pub input: u64,
@@ -103,7 +110,7 @@ pub struct HarnessStorage {
 type Adapter = (&'static str, fn() -> Result<Vec<SessionSummary>, String>);
 
 pub fn list_all_sessions() -> Result<Vec<SessionSummary>, String> {
-    let adapters: [Adapter; 9] = [
+    let adapters: [Adapter; 10] = [
         ("cc", claude_code::list_sessions),
         ("kimi", kimi_code::list_sessions),
         ("dsh", dsh::list_sessions),
@@ -112,6 +119,7 @@ pub fn list_all_sessions() -> Result<Vec<SessionSummary>, String> {
         ("zcode", zcode::list_sessions),
         ("antigravity", antigravity::list_sessions),
         ("workbuddy", workbuddy::list_sessions),
+        ("stepcode", stepcode::list_sessions),
         ("custom", custom::list_sessions),
     ];
     let mut out = Vec::new();
@@ -150,6 +158,7 @@ pub fn storage_stats() -> Vec<HarnessStorage> {
         zcode::storage(),
         antigravity::storage(),
         workbuddy::storage(),
+        stepcode::storage(),
     ]
     .into_iter()
     .chain(custom::storage())
@@ -337,6 +346,11 @@ pub(crate) fn dsh_home() -> Option<PathBuf> {
 }
 pub(crate) fn codex_home() -> Option<PathBuf> {
     tool_home("CODEX_HOME", ".codex")
+}
+
+/// StepCode 的 agent 目录（`sessions/` 的父目录）。只给 `resume.rs` 反查会话文件用
+pub(crate) fn stepcode_agent_dir() -> Option<PathBuf> {
+    tool_home("STEP_CODING_AGENT_DIR", ".stepcode/agent")
 }
 
 /* ── 共用工具 ── */

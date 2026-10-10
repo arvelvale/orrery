@@ -4,9 +4,9 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Orrery — every AI coding agent, one cockpit</title>
-<meta name="description" content="A local-first desktop cockpit for AI coding agents. Every Claude Code, Codex, OpenCode, Kimi Code, DSH, Z Code, Antigravity and WorkBuddy session on your machine in one window." />
+<meta name="description" content="A local-first desktop cockpit for AI coding agents. Every Claude Code, Codex, OpenCode, Kimi Code, DSH, Z Code, Antigravity, WorkBuddy and StepCode session on your machine in one window." />
 <meta property="og:title" content="Orrery — every AI coding agent, one cockpit" />
-<meta property="og:description" content="Sessions, tokens and disk usage from eight agent tools in one local window. Clean up, resume, or move a conversation to another tool. Nothing leaves your computer." />
+<meta property="og:description" content="Sessions, tokens and disk usage from nine agent tools in one local window. Clean up, resume, or move a conversation to another tool. Nothing leaves your computer." />
 <meta property="og:image" content="https://arvelvale.github.io/orrery/assets/screenshot-status.en.png" />
 <meta name="theme-color" content="#070B16" />
 <link rel="icon" href="logo.svg" type="image/svg+xml" />
@@ -487,12 +487,14 @@ main { position: relative; overflow-x: clip; }
       <circle r="13" fill="#18D39A" opacity=".22"/><circle r="5.5" fill="#18D39A"/><text x="12" y="4">ANTIGRAVITY</text></g>
     <g><animateMotion dur="40s" begin="-32.0s" repeatCount="indefinite" path="M1000,330 A300,88 0 1 0 400,330 A300,88 0 1 0 1000,330Z"/>
       <circle r="13" fill="#4C9BFF" opacity=".22"/><circle r="5.5" fill="#4C9BFF"/><text x="12" y="4">WBUDDY</text></g>
+    <g><animateMotion dur="40s" begin="-52.0s" repeatCount="indefinite" path="M1000,330 A300,88 0 1 0 400,330 A300,88 0 1 0 1000,330Z"/>
+      <circle r="13" fill="#FFB547" opacity=".22"/><circle r="5.5" fill="#FFB547"/><text x="12" y="4">STEPCODE</text></g>
       </g>
     </svg>
   </div>
   <div class="wrap hero">
     <div class="lamps" aria-hidden="true">
-      <span class="lamp run"><i></i>CC</span><span class="lamp idle"><i></i>KIMI</span><span class="lamp idle"><i></i>DSH</span><span class="lamp run"><i></i>CODEX</span><span class="lamp idle"><i></i>OPENCODE</span><span class="lamp idle"><i></i>ZCODE</span><span class="lamp idle"><i></i>ANTIGRAVITY</span><span class="lamp idle"><i></i>WBUDDY</span>
+      <span class="lamp run"><i></i>CC</span><span class="lamp idle"><i></i>KIMI</span><span class="lamp idle"><i></i>DSH</span><span class="lamp run"><i></i>CODEX</span><span class="lamp idle"><i></i>OPENCODE</span><span class="lamp idle"><i></i>ZCODE</span><span class="lamp idle"><i></i>ANTIGRAVITY</span><span class="lamp idle"><i></i>WBUDDY</span><span class="lamp idle"><i></i>STEPCODE</span>
     </div>
     <h1 data-i18n="hero.title">Every AI coding agent, one cockpit.</h1>
     <p class="lede" data-i18n="hero.lede">Orrery reads the sessions your agent tools already keep on disk — tokens, disk usage, projects — and lets you clean up, resume, or move a conversation to another tool. Nothing leaves your computer.</p>
@@ -516,7 +518,7 @@ main { position: relative; overflow-x: clip; }
     <section id="features" aria-labelledby="features-title">
       <div class="section-head reveal">
         <p class="eyebrow mono" data-i18n="features.eyebrow">What it does</p>
-        <h2 id="features-title" data-i18n="features.title">Eight tools keep sessions in eight different places. Orrery puts them on one board.</h2>
+        <h2 id="features-title" data-i18n="features.title">Nine tools keep sessions in nine different places. Orrery puts them on one board.</h2>
       </div>
 
       <div class="feature wide">
@@ -533,7 +535,7 @@ main { position: relative; overflow-x: clip; }
             </div></li>
           </ul>
         </div>
-        <div class="shot reveal" style="max-width: 1002px"><img data-shot="status" width="2000" height="654" alt="Disk usage per tool, the model proxy and a tool's own card" loading="lazy" /></div>
+        <div class="shot reveal" style="max-width: 1002px"><img data-shot="status" width="2000" height="700" alt="Disk usage per tool, the model proxy and a tool's own card" loading="lazy" /></div>
       </div>
 
       <div class="feature wide">
@@ -734,6 +736,7 @@ const TOOLS = [
   ["Antigravity CLI", 1, 1, 1, 0],
   ["Z Code", 1, 0, 0, 0],
   ["WorkBuddy", 1, 0, 0, 0],
+  ["StepCode", 1, 1, 1, 0],
 ];
 
 const I18N = {
@@ -744,7 +747,7 @@ const I18N = {
     "hero.lede": "Orrery 读取各家 Agent 工具本来就存在你磁盘上的会话：token、磁盘占用、项目一目了然，还能清理、在终端恢复，或把一段对话迁到另一个工具接着聊。数据不出本机。",
     "cta.download": "下载", "cta.all": "全部下载", "cta.free": "免费开源 · MIT",
     "features.eyebrow": "能做什么",
-    "features.title": "八个工具把会话存在八个地方，Orrery 把它们放到一块看板上。",
+    "features.title": "9 个工具把会话存在 9 个地方，Orrery 把它们放到一块看板上。",
     "f1.title": "每一条会话，都算得清。",
     "f1.body": "所有工具的所有会话，标题、项目、模型、token、磁盘占用都在同一个列表里，可以一起搜索。磁盘空间花在了哪个工具、哪个项目上，一眼就能看到。",
     "f1.fact1": "token 按 API 调用去重计数：输入 · 缓存写入 · 缓存读取 · 输出",
@@ -779,7 +782,7 @@ const I18N = {
     "hero.lede": "Orrery は、各エージェントツールがもともとディスクに残しているセッションを読み取ります。トークン、ディスク使用量、プロジェクトをひと目で把握し、整理、ターミナルでの再開、別のツールへの会話の引き継ぎができます。データは PC の外に出ません。",
     "cta.download": "ダウンロード", "cta.all": "すべてのダウンロード", "cta.free": "無料・オープンソース · MIT",
     "features.eyebrow": "できること",
-    "features.title": "8 つのツールが 8 つの場所に残すセッションを、ひとつのボードに。",
+    "features.title": "9 つのツールが 9 つの場所に残すセッションを、ひとつのボードに。",
     "f1.title": "すべてのセッションを、正確に。",
     "f1.body": "すべてのツールのすべてのセッションについて、タイトル、プロジェクト、モデル、トークン、ディスク使用量をひとつのリストで検索できます。容量をどのツールのどのプロジェクトが使っているか、すぐに分かります。",
     "f1.fact1": "トークンは API 呼び出しごとに 1 回だけ計上：入力 · キャッシュ書き込み · キャッシュ読み取り · 出力",

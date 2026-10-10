@@ -4,6 +4,7 @@
 //! 官方 CLI 要按 id 逐个调，所以规划和执行都需要它。
 
 use super::{file_mentions, Ctx};
+use crate::adapters::stepcode;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -110,6 +111,45 @@ pub(super) fn codex_targets(root: &Path, id: &str, ctx: &Ctx) -> Targets {
         index.push("session_index.jsonl".into());
     }
     (files, index, threads)
+}
+
+/// StepCode：主 jsonl + 折叠进来的子 agent jsonl。没有索引文件要改
+pub(super) fn stepcode_targets(root: &Path, id: &str) -> Targets {
+    let mut out = vec![];
+    // 每个 cwd 目录下找 header id 命中的主会话，以及时间落在它区间内的子 agent
+    let Ok(dirs) = fs::read_dir(root) else {
+        return (vec![], vec![], vec![]);
+    };
+    for dir in dirs.flatten().map(|e| e.path()).filter(|p| p.is_dir()) {
+        let Ok(entries) = fs::read_dir(&dir) else {
+            continue;
+        };
+        let mut files: Vec<PathBuf> = entries.flatten().map(|e| e.path()).collect();
+        files.sort();
+        let Some(main) = files
+            .iter()
+            .find(|f| stepcode::head_id(f).as_deref() == Some(id))
+        else {
+            continue;
+        };
+        out.push(main.clone());
+        // 匹配不到父会话的子 agent 会以 kind = "subagent" 单独列出，它自己就是全部目标。
+        // 它的区间必然包住自己，不去掉就会把自己再收一遍——同一个文件在计划里出现两次，
+        // 体积算双倍，永久删除还会在第二次 remove_file 上直接失败
+        if !stepcode::is_subagent_file(main) {
+            let (ma, mb) = stepcode::time_span(main);
+            for f in files.iter().filter(|f| stepcode::is_subagent_file(f)) {
+                let (a, b) = stepcode::time_span(f);
+                if a >= ma && b <= mb {
+                    out.push(f.clone());
+                }
+            }
+        }
+        break;
+    }
+    // 同一个文件出现两次会让体积算双倍、永久删除第二次直接失败，兜底去重
+    out.dedup();
+    (out, vec![], vec![])
 }
 
 #[cfg(test)]

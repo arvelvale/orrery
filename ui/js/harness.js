@@ -14,6 +14,7 @@ export const HARNESS = {
   zcode: { id: "zcode", label: "ZCODE", name: "Z Code", badge: "zcode" },
   antigravity: { id: "antigravity", label: "ANTIGRAVITY", name: "Antigravity", badge: "antigravity" },
   workbuddy: { id: "workbuddy", label: "WBUDDY", name: "WorkBuddy", badge: "workbuddy" },
+  stepcode: { id: "stepcode", label: "STEPCODE", name: "StepCode", badge: "stepcode" },
 };
 
 export const HARNESS_IDS = Object.keys(HARNESS);
@@ -21,9 +22,11 @@ export const HARNESS_IDS = Object.keys(HARNESS);
 /*
  * 能在 Orrery 里删除、也能在终端恢复的 harness。其余（Z Code、WorkBuddy、
  * 自己登记的工具）只读：不给复选框、不给删除/恢复按钮，详情里直接说去哪里管理
- * ——别让人点了才发现做不了
+ * ——别让人点了才发现做不了。
+ * StepCode 恢复走 jsonl 绝对路径（按 id 恢复官方不支持，见 `resume.rs`），
+ * 会话文件不在 sessions 根目录里时后端返回 `session_file_missing`
  */
-const MANAGEABLE = new Set(["cc", "kimi", "dsh", "codex", "opencode", "antigravity"]);
+const MANAGEABLE = new Set(["cc", "kimi", "dsh", "codex", "opencode", "antigravity", "stepcode"]);
 
 export const canManage = (s) => MANAGEABLE.has(s.harness);
 

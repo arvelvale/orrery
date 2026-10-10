@@ -275,6 +275,34 @@ const SEED_SESSIONS = [
       ["ok", "generate covers in batches of 20"],
     ],
   },
+  {
+    // StepCode：子 agent 折叠进父会话（时间包含推断，格式里没有父 id），
+    // 恢复命令走 jsonl 绝对路径；没有活会话登记，所以一律 idle
+    id: "01a1205b-35cd-77c7-93d9-141138d6aea9",
+    harness: "stepcode",
+    title: {
+      en: "ledger-cli · Split the import into idempotent batches",
+      "zh-CN": "ledger-cli · 把导入拆成可重试的批次",
+      ja: "ledger-cli · インポートを幂等なバッチに分割",
+    },
+    excerpt: {
+      en: "Re-running the import duplicates rows; make each batch replayable.",
+      "zh-CN": "重跑导入会产生重复行，让每个批次都可以安全重放。",
+      ja: "インポートを再実行すると行が重複する。各バッチを再実行安全にする。",
+    },
+    project: "~/code/ledger-cli",
+    model: "step-5-preview",
+    status: "idle",
+    ago: 42 * MIN,
+    usage: { input: 8_910, cache_write: 0, cache_read: 41_600, output: 2_780, calls: 19 },
+    sizeBytes: 2_408_192,
+    subagents: 1,
+    log: [
+      ["hi", "帮我把导入做成可重试的"],
+      ["ok", "read import.ts"],
+      ["ok", "subagent finished the backfill"],
+    ],
+  },
 ];
 
 const DEFAULT_ROUTES = {

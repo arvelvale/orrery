@@ -93,6 +93,8 @@ export async function resumeSession(s) {
     if (code.startsWith("cli_missing:")) toast(t("toast.resumeNoCli", { cli: code.split(":")[1] }));
     else if (code === "dsh_no_terminal_profile") toast(t("toast.resumeDshProfile"));
     else if (code === "cwd_missing") toast(t("toast.resumeNoCwd", { path: s.project }));
+    // StepCode 按 jsonl 路径恢复，文件没了就只能重新扫描
+    else if (code === "session_file_missing") toast(t("toast.resumeNoSessionFile"));
     else if (code === "unsupported_harness") toast(t("toast.resumeUnsupported"));
     else toast(t("toast.resumeFailed", { msg: code.slice(0, 80) }));
   }

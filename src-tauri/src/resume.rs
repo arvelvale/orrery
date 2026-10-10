@@ -10,6 +10,14 @@
 //! | dsh      | `dsh --profile <profile> --resume <id>` | `session-<uuid>`（与 dsh 自己投影缓存的文件名一致） |
 //! | opencode | `opencode --session <id>`             | `ses_xxx` |
 //! | antigravity | `agy --conversation <id>`          | UUID |
+//! | stepcode | `step --session <jsonl 绝对路径>`     | `subagent-<uuid>` 或 UUID |
+//!
+//! StepCode 的坑（2026-10-09 沙盒实测，复制真实 sessions 目录后跑）：按 id 恢复**不可用**。
+//! `--session <uuid>` / `--resume <uuid>` / `--session-id <uuid>` 全部回报
+//! "No session found matching '<uuid>'"（`--session-id` 还会另建一条新会话），只有
+//! `step -c`（续最近一条）和 `step --session <jsonl 绝对路径>` 有效。所以这里传的是
+//! 会话文件的绝对路径——由后端 `stepcode::session_file` 从 sessions 根目录按 id 反查，
+//! 不接受前端传路径。反查不到就返回 `session_file_missing`。
 //!
 //! DSH 的坑：`--resume` 不是启动器的参数，而是转发给被引导的 profile 应用。实测本机
 //! 只装了 `web` profile，而 web 应用没有 `--resume`（它在浏览器界面里选会话）。所以
@@ -95,6 +103,11 @@ fn command_for(harness: &str, id: &str) -> Option<(&'static str, Vec<String>)> {
         },
         "opencode" => ("opencode", args(&["--session", id])),
         "antigravity" => ("agy", args(&["--conversation", id])),
+        // StepCode 只能按文件路径恢复，路径由后端反查（见模块头部的实测记录）
+        "stepcode" => {
+            let path = super::adapters::stepcode::session_file(id)?;
+            ("step", args(&["--session", &path.to_string_lossy()]))
+        }
         _ => return None,
     })
 }
@@ -211,6 +224,10 @@ pub fn resume(harness: &str, id: &str, project: &str) -> Result<String, String> 
         if harness == "dsh" {
             return Err("dsh_no_terminal_profile".into());
         }
+        // StepCode 只能按文件路径恢复；路径反查不到说明会话文件已经不在 sessions 根目录里
+        if harness == "stepcode" {
+            return Err("session_file_missing".into());
+        }
         return Err("unsupported_harness".into());
     };
     let Some(program) = resolve_program(name) else {
@@ -237,6 +254,7 @@ mod tests {
     #[test]
     fn every_supported_harness_has_a_command() {
         // dsh 取决于本机装了哪个 profile，单独测
+        // stepcode 取决于本机有没有会话文件，单独测
         for h in ["cc", "codex", "kimi", "opencode", "antigravity"] {
             let (program, args) = command_for(h, "session_0ed9be17-001b-4642-8b8a").expect(h);
             assert!(!program.is_empty());
@@ -246,6 +264,15 @@ mod tests {
             );
         }
         assert!(command_for("whatever-tool", "whatever-id").is_none());
+    }
+
+    /// StepCode 反查不到会话文件时给的是 session_file_missing，不是 unsupported_harness
+    #[test]
+    fn stepcode_without_a_session_file_says_so() {
+        assert_eq!(
+            resume("stepcode", "019fdba8-940e-7f20-bfda-365ecb643e52", "."),
+            Err("session_file_missing".into())
+        );
     }
 
     #[test]

@@ -66,6 +66,7 @@ export function renderStatus() {
     zcode: "~/.zcode/cli/",
     antigravity: "~/.gemini/antigravity-cli/",
     workbuddy: "~/.workbuddy/projects/",
+    stepcode: "~/.stepcode/agent/sessions/",
   };
   const cards = [
     {
