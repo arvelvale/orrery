@@ -4,7 +4,7 @@
 
 # Orrery
 
-**本地优先的 AI 编程 Agent 驾驶舱。**
+**本地优先的 AI 编程 Agent 管理面板。**
 
 把本机所有 Claude Code、Kimi Code、DSH（DeepSeek）、Codex、OpenCode、Z Code、Antigravity、WorkBuddy、StepCode 会话收进一个窗口：token、磁盘占用、项目、子 agent 一眼看清。不要的会话可以直接删掉（Z Code 和 WorkBuddy 为只读），各个 harness 还能统一走一个本地模型代理。数据不出本机。
 

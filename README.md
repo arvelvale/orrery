@@ -4,7 +4,7 @@
 
 # Orrery
 
-**A local-first cockpit for your AI coding agents.**
+**A local-first dashboard for your AI coding agents.**
 
 Every Claude Code, Kimi Code, DSH (DeepSeek), Codex, OpenCode, Z Code, Antigravity, WorkBuddy and StepCode session on your machine in one window: tokens, disk usage, projects, subagents. Delete what you no longer need (Z Code and WorkBuddy are read-only), and route every harness through one local model proxy. Nothing leaves your computer.
 
