@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.6.0",
   "type": "module",
-  "description": "Personal agent harness cockpit — session hub + model proxy",
+  "description": "Personal agent harness dashboard — session hub + model proxy",
   "scripts": {
     "dev": "tauri dev",
     "preview": "node scripts/preview.mjs",

@@ -15,7 +15,7 @@ export const LOCALES = [
 
 const MESSAGES = {
   en: {
-    "doc.title": "Orrery · Agent Cockpit",
+    "doc.title": "Orrery · Agent Dashboard",
     "lang.label": "Language",
 
     "header.annunciator": "System status annunciator",
@@ -273,7 +273,7 @@ const MESSAGES = {
   },
 
   "zh-CN": {
-    "doc.title": "Orrery · Agent 驾驶舱",
+    "doc.title": "Orrery · Agent 管理面板",
     "lang.label": "语言",
 
     "header.annunciator": "系统状态告示牌",
@@ -531,7 +531,7 @@ const MESSAGES = {
   },
 
   ja: {
-    "doc.title": "Orrery · エージェントコックピット",
+    "doc.title": "Orrery · エージェントダッシュボード",
     "lang.label": "言語",
 
     "header.annunciator": "システム状態アナンシエーター",
